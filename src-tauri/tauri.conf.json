@@ -1,0 +1,49 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicholasoxford/tauri-v2-docs/main/schemas/tauri.conf.schema.json",
+  "productName": "PRO MAX OS",
+  "version": "2.0.0",
+  "identifier": "com.promaxos.app",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "PRO MAX OS",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 1100,
+        "minHeight": 700,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true,
+        "transparent": false,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": []
+  },
+  "plugins": {
+    "shell": {
+      "open": true
+    }
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "app": { "name": "PRO MAX OS", "tagline": "انٹرپرائز ریسورس پلاننگ سسٹم", "version": "ورژن 2.0.0" },
+  "nav": {
+    "dashboard": "ڈیش بورڈ", "sales": "سیلز", "customers": "صارفین",
+    "invoices": "انوائسز", "inventory": "انوینٹری", "products": "مصنوعات",
+    "production": "پیداوار", "purchases": "خریداری", "suppliers": "سپلائرز",
+    "accounting": "اکاؤنٹنگ", "hr": "انسانی وسائل", "payroll": "تنخواہ",
+    "expenses": "اخراجات", "reports": "رپورٹس", "settings": "سیٹنگز",
+    "machines": "مشینیں", "quality": "کوالٹی", "operations": "آپریشنز",
+    "maintenance": "دیکھ بھال", "tools": "ٹولز", "alerts": "الرٹس",
+    "logout": "لاگ آؤٹ", "profile": "پروفائل"
+  },
+  "common": {
+    "save": "محفوظ کریں", "cancel": "منسوخ کریں", "delete": "حذف کریں", "edit": "ترمیم کریں",
+    "create": "بنائیں", "search": "تلاش کریں", "filter": "فلٹر", "print": "پرنٹ",
+    "export": "برآمد", "import": "درآمد", "upload": "اپ لوڈ", "download": "ڈاؤن لوڈ",
+    "yes": "ہاں", "no": "نہیں", "confirm": "تصدیق کریں", "close": "بند کریں",
+    "loading": "لوڈ ہو رہا ہے...", "noData": "کوئی ڈیٹا نہیں",
+    "success": "کامیاب", "error": "خرابی", "warning": "انتباہ",
+    "back": "واپس", "next": "اگلا", "submit": "جمع کروائیں", "reset": "ری سیٹ",
+    "actions": "کارروائیاں", "status": "حالت", "date": "تاریخ",
+    "fromDate": "تاریخ سے", "toDate": "تاریخ تک", "notes": "نوٹس",
+    "total": "کل", "subtotal": "ذیلی کل", "discount": "رعایت",
+    "vat": "ویٹ", "paid": "ادا شدہ", "remaining": "باقی",
+    "active": "فعال", "inactive": "غیر فعال", "all": "تمام"
+  },
+  "auth": {
+    "login": "لاگ ان", "username": "صارف نام", "password": "پاس ورڈ",
+    "rememberMe": "مجھے یاد رکھیں", "forgotPassword": "پاس ورڈ بھول گئے؟",
+    "loginBtn": "سائن ان", "loggingIn": "سائن ان ہو رہا ہے...",
+    "changePassword": "پاس ورڈ تبدیل کریں", "currentPassword": "موجودہ پاس ورڈ",
+    "newPassword": "نیا پاس ورڈ", "confirmPassword": "پاس ورڈ کی تصدیق کریں"
+  },
+  "dashboard": {
+    "title": "ڈیش بورڈ", "dailyBrief": "یومیہ خلاصہ",
+    "revenue": "آمدنی", "expenses": "اخراجات", "profit": "منافع",
+    "pendingInvoices": "زیر التواء انوائسز", "overdueAmount": "واجب الادا رقم",
+    "inventoryValue": "انوینٹری ویلیو", "lowStock": "کم اسٹاک",
+    "productionToday": "آج کی پیداوار", "wasteToday": "آج کا ضیاع",
+    "topCustomers": "بہترین صارفین", "recentInvoices": "حالیہ انوائسز"
+  },
+  "customer": {
+    "title": "صارفین", "newCustomer": "نیا صارف", "editCustomer": "صارف میں ترمیم",
+    "code": "کوڈ", "name": "نام", "phone": "فون", "email": "ای میل",
+    "address": "پتہ", "vatNumber": "ویٹ نمبر",
+    "creditLimit": "کریڈٹ حد", "balance": "بیلنس",
+    "paymentTerms": "ادائیگی کی شرائط", "statement": "بیان",
+    "type": "قسم", "credit": "قرض", "cash": "نقد"
+  },
+  "invoice": {
+    "title": "انوائسز", "newInvoice": "نئی انوائس", "invoiceNo": "انوائس نمبر",
+    "customer": "صارف", "items": "اشیاء", "qty": "مقدار",
+    "unitPrice": "فی یونٹ قیمت", "total": "کل",
+    "paymentType": "ادائیگی کی قسم", "cash": "نقد", "credit": "قرض",
+    "status": "حالت", "draft": "مسودہ", "posted": "پوسٹ شدہ", "void": "منسوخ"
+  },
+  "production": {
+    "title": "پیداوار", "orders": "پیداوار کے آرڈر", "newOrder": "نیا آرڈر",
+    "prodNo": "آرڈر نمبر", "shift": "شفٹ", "machine": "مشین",
+    "goodQty": "اچھی مقدار", "wasteQty": "ضائع مقدار"
+  },
+  "accounting": {
+    "title": "اکاؤنٹنگ", "accounts": "اکاؤنٹس کا چارٹ", "journal": "جرنل اندراجات",
+    "trialBalance": "آزمائشی بیلنس", "incomeStatement": "آمدنی کا بیان",
+    "balanceSheet": "بیلنس شیٹ", "accountCode": "اکاؤنٹ کوڈ",
+    "debit": "ڈیبٹ", "credit": "کریڈٹ", "balance": "بیلنس"
+  },
+  "hr": {
+    "title": "انسانی وسائل", "employees": "ملازمین", "newEmployee": "نیا ملازم",
+    "code": "کوڈ", "name": "نام", "job": "عہدہ",
+    "nationality": "قومیت", "salary": "تنخواہ", "phone": "فون"
+  },
+  "inventory": {
+    "title": "انوینٹری", "items": "اشیاء", "newItem": "نئی چیز",
+    "code": "کوڈ", "name": "نام", "kind": "قسم",
+    "onHand": "ہاتھ پر", "reorderLevel": "دوبارہ آرڈر کی سطح",
+    "movements": "حرکت"
+  },
+  "reports": { "title": "رپورٹس", "aging": "عمر رسیدہ رپورٹ", "lowStock": "کم اسٹاک رپورٹ", "dailyClosing": "یومیہ بندش" },
+  "settings": { "title": "سیٹنگز", "company": "کمپنی کی معلومات", "users": "صارفین", "backup": "بیک اپ" },
+  "license": {
+    "activate": "لائسنس فعال کریں", "enterKey": "لائسنس کلید درج کریں",
+    "activateBtn": "فعال کریں", "activating": "فعال ہو رہا ہے...",
+    "valid": "لائسنس درست", "invalid": "غلط لائسنس",
+    "customerName": "صارف", "type": "قسم", "expiry": "میعاد ختم ہونے کی تاریخ",
+    "daysRemaining": "باقی دن", "perpetual": "مستقل", "subscription": "رکنیت"
+  },
+  "language": { "ar": "العربية", "en": "English", "hi": "हिन्दी", "ur": "اردو" },
+  "mode": {
+    "title": "ورک موڈ", "subtitle": "اپنے کاموں کے لیے موزوں موڈ منتخب کریں",
+    "power": "پاور", "stability": "استحکام", "focus": "فوکس",
+    "creative": "تخلیقی", "night": "رات", "professional": "پیشہ ورانہ",
+    "powerDesc": "زیادہ سے زیادہ کارکردگی اور پیداوری", "stabilityDesc": "کام میں استحکام اور توازن",
+    "focusDesc": "کوئی خلفشار نہیں - مکمل توجہ", "creativeDesc": "ڈیزائن میں تخلیقی صلاحیت",
+    "nightDesc": "رات کو آنکھوں پر آرام دہ", "professionalDesc": "خوبصورت کارپوریٹ انٹرفیس"
+  }
+}

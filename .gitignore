@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+src-tauri/target/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+*.pdb
+
+# Tauri generated
+src-tauri/gen/
+
+# Environment / secrets
+promax.secrets.json
+.env
+.env.local
+
+# Installers
+*.msi
+*.exe
+
+# Lock files
+package-lock.json
+
+# Logs
+*.log
+
+# Coverage
+coverage/
+
+# TypeScript
+*.tsbuildinfo

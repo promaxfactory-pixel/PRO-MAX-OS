@@ -1,0 +1,325 @@
+use rusqlite::params;
+use serde::{Deserialize, Serialize};
+use tauri::State;
+
+use crate::db::DbState;
+
+fn fetch_item(conn: &rusqlite::Connection, id: i64) -> Result<InventoryItem, String> {
+    conn.query_row(
+        "SELECT ii.id, ii.code, ii.name_ar, ii.name_en, ii.kind, ii.uom, ii.product_id, ii.qty_on_hand, ii.avg_cost_milli, ii.reorder_level, ii.supplier_id, ii.notes, ii.active FROM inventory_items ii WHERE ii.id=?1",
+        params![id],
+        |row| {
+            Ok(InventoryItem {
+                id: row.get(0)?, code: row.get(1)?, name_ar: row.get(2)?, name_en: row.get(3)?,
+                kind: row.get(4)?, uom: row.get(5)?, product_id: row.get(6)?,
+                qty_on_hand: row.get(7)?, avg_cost_milli: row.get(8)?, reorder_level: row.get(9)?,
+                supplier_id: row.get(10)?, notes: row.get(11)?, active: row.get(12)?,
+            })
+        },
+    ).map_err(|e| e.to_string())
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct InventoryItem {
+    pub id: i64,
+    pub code: Option<String>,
+    pub name_ar: Option<String>,
+    pub name_en: Option<String>,
+    pub kind: String,
+    pub uom: String,
+    pub product_id: Option<i64>,
+    pub qty_on_hand: f64,
+    pub avg_cost_milli: f64,
+    pub reorder_level: f64,
+    pub supplier_id: Option<i64>,
+    pub notes: Option<String>,
+    pub active: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct InventoryMovement {
+    pub id: i64,
+    pub ts: String,
+    pub item_id: i64,
+    pub product_name: Option<String>,
+    pub mtype: String,
+    pub qty_in: f64,
+    pub qty_out: f64,
+    pub unit_cost_milli: i64,
+    pub ref_type: Option<String>,
+    pub ref_id: Option<i64>,
+    pub location: Option<String>,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateItemInput {
+    pub code: Option<String>,
+    pub name_ar: Option<String>,
+    pub name_en: Option<String>,
+    pub kind: Option<String>,
+    pub uom: Option<String>,
+    pub product_id: Option<i64>,
+    pub qty_on_hand: Option<f64>,
+    pub avg_cost_milli: Option<f64>,
+    pub reorder_level: Option<f64>,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateItemInput {
+    pub code: Option<String>,
+    pub name_ar: Option<String>,
+    pub name_en: Option<String>,
+    pub kind: Option<String>,
+    pub uom: Option<String>,
+    pub product_id: Option<i64>,
+    pub reorder_level: Option<f64>,
+    pub supplier_id: Option<i64>,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AdjustStockInput {
+    pub item_id: i64,
+    pub qty_change: f64,
+    pub unit_cost_milli: Option<i64>,
+    pub notes: Option<String>,
+}
+
+#[tauri::command]
+pub fn list_inventory_items(state: State<'_, DbState>) -> Result<Vec<InventoryItem>, String> {
+    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT ii.id, ii.code, ii.name_ar, ii.name_en, ii.kind, ii.uom, ii.product_id, ii.qty_on_hand, ii.avg_cost_milli, ii.reorder_level, ii.supplier_id, ii.notes, ii.active
+             FROM inventory_items ii WHERE ii.active = 1 ORDER BY ii.name_ar",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(InventoryItem {
+                id: row.get(0)?,
+                code: row.get(1)?,
+                name_ar: row.get(2)?,
+                name_en: row.get(3)?,
+                kind: row.get(4)?,
+                uom: row.get(5)?,
+                product_id: row.get(6)?,
+                qty_on_hand: row.get(7)?,
+                avg_cost_milli: row.get(8)?,
+                reorder_level: row.get(9)?,
+                supplier_id: row.get(10)?,
+                notes: row.get(11)?,
+                active: row.get(12)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(items)
+}
+
+#[tauri::command]
+pub fn get_inventory_item(state: State<'_, DbState>, id: i64) -> Result<InventoryItem, String> {
+    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    conn.query_row(
+        "SELECT ii.id, ii.code, ii.name_ar, ii.name_en, ii.kind, ii.uom, ii.product_id, ii.qty_on_hand, ii.avg_cost_milli, ii.reorder_level, ii.supplier_id, ii.notes, ii.active
+         FROM inventory_items ii WHERE ii.id = ?1",
+        params![id],
+        |row| {
+            Ok(InventoryItem {
+                id: row.get(0)?,
+                code: row.get(1)?,
+                name_ar: row.get(2)?,
+                name_en: row.get(3)?,
+                kind: row.get(4)?,
+                uom: row.get(5)?,
+                product_id: row.get(6)?,
+                qty_on_hand: row.get(7)?,
+                avg_cost_milli: row.get(8)?,
+                reorder_level: row.get(9)?,
+                supplier_id: row.get(10)?,
+                notes: row.get(11)?,
+                active: row.get(12)?,
+            })
+        },
+    )
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn create_inventory_item(
+    state: State<'_, DbState>,
+    input: CreateItemInput,
+) -> Result<InventoryItem, String> {
+    let conn = state.0.lock().map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "INSERT INTO inventory_items (code, name_ar, name_en, kind, uom, product_id, qty_on_hand, avg_cost_milli, reorder_level, notes)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        params![
+            input.code,
+            input.name_ar,
+            input.name_en,
+            input.kind.unwrap_or_else(|| "raw".to_string()),
+            input.uom.unwrap_or_else(|| "pcs".to_string()),
+            input.product_id,
+            input.qty_on_hand.unwrap_or(0.0),
+            input.avg_cost_milli.unwrap_or(0.0),
+            input.reorder_level.unwrap_or(0.0),
+            input.notes,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let id = conn.last_insert_rowid();
+    fetch_item(&conn, id)
+}
+
+#[tauri::command]
+pub fn update_inventory_item(
+    state: State<'_, DbState>,
+    id: i64,
+    input: UpdateItemInput,
+) -> Result<InventoryItem, String> {
+    let conn = state.0.lock().map_err(|e| e.to_string())?;
+
+    let mut sets = Vec::new();
+    let mut values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+
+    if let Some(v) = &input.code {
+        sets.push("code = ?");
+        values.push(Box::new(v.clone()));
+    }
+    if let Some(v) = &input.name_ar {
+        sets.push("name_ar = ?");
+        values.push(Box::new(v.clone()));
+    }
+    if let Some(v) = &input.name_en {
+        sets.push("name_en = ?");
+        values.push(Box::new(v.clone()));
+    }
+    if let Some(v) = &input.kind {
+        sets.push("kind = ?");
+        values.push(Box::new(v.clone()));
+    }
+    if let Some(v) = &input.uom {
+        sets.push("uom = ?");
+        values.push(Box::new(v.clone()));
+    }
+    if let Some(v) = input.product_id {
+        sets.push("product_id = ?");
+        values.push(Box::new(v));
+    }
+    if let Some(v) = input.reorder_level {
+        sets.push("reorder_level = ?");
+        values.push(Box::new(v));
+    }
+    if let Some(v) = input.supplier_id {
+        sets.push("supplier_id = ?");
+        values.push(Box::new(v));
+    }
+    if let Some(v) = &input.notes {
+        sets.push("notes = ?");
+        values.push(Box::new(v.clone()));
+    }
+
+    if sets.is_empty() {
+        return fetch_item(&conn, id);
+    }
+
+    let sql = format!(
+        "UPDATE inventory_items SET {} WHERE id = ?",
+        sets.join(", ")
+    );
+    values.push(Box::new(id));
+
+    let params_ref: Vec<&dyn rusqlite::types::ToSql> = values.iter().map(|v| v.as_ref()).collect();
+    conn.execute(&sql, params_ref.as_slice())
+        .map_err(|e| e.to_string())?;
+
+    fetch_item(&conn, id)
+}
+
+#[tauri::command]
+pub fn adjust_stock(
+    state: State<'_, DbState>,
+    input: AdjustStockInput,
+) -> Result<InventoryItem, String> {
+    let conn = state.0.lock().map_err(|e| e.to_string())?;
+
+    let (qty_in, qty_out) = if input.qty_change >= 0.0 {
+        (input.qty_change, 0.0)
+    } else {
+        (0.0, input.qty_change.abs())
+    };
+
+    conn.execute(
+        "UPDATE inventory_items SET qty_on_hand = qty_on_hand + ?1 WHERE id = ?2",
+        params![input.qty_change, input.item_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "INSERT INTO inventory_movements (ts, item_id, mtype, qty_in, qty_out, unit_cost_milli, notes)
+         VALUES (datetime('now'), ?1, 'adjustment', ?2, ?3, ?4, ?5)",
+        params![
+            input.item_id,
+            qty_in,
+            qty_out,
+            input.unit_cost_milli.unwrap_or(0),
+            input.notes,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    fetch_item(&conn, input.item_id)
+}
+
+#[tauri::command]
+pub fn get_inventory_movements(
+    state: State<'_, DbState>,
+    item_id: i64,
+) -> Result<Vec<InventoryMovement>, String> {
+    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT im.id, im.ts, im.item_id, p.name_ar, im.mtype, im.qty_in, im.qty_out, im.unit_cost_milli, im.ref_type, im.ref_id, im.location, im.notes
+             FROM inventory_movements im
+             LEFT JOIN inventory_items ii ON im.item_id = ii.id
+             LEFT JOIN products p ON ii.product_id = p.id
+             WHERE im.item_id = ?1
+             ORDER BY im.id DESC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rows = stmt
+        .query_map(params![item_id], |row| {
+            Ok(InventoryMovement {
+                id: row.get(0)?,
+                ts: row.get(1)?,
+                item_id: row.get(2)?,
+                product_name: row.get(3)?,
+                mtype: row.get(4)?,
+                qty_in: row.get(5)?,
+                qty_out: row.get(6)?,
+                unit_cost_milli: row.get(7)?,
+                ref_type: row.get(8)?,
+                ref_id: row.get(9)?,
+                location: row.get(10)?,
+                notes: row.get(11)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+
+    let mut movements = Vec::new();
+    for row in rows {
+        movements.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(movements)
+}

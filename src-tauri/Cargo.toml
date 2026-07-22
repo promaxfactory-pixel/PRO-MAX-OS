@@ -1,0 +1,51 @@
+[package]
+name = "promax-os"
+version = "2.0.0"
+description = "PRO MAX OS - Professional Manufacturing ERP System"
+authors = ["Mayadeen Bahla National Company"]
+edition = "2021"
+default-run = "promax-os"
+
+[lib]
+name = "promax_os_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[[bin]]
+name = "promax-os"
+path = "src/main.rs"
+
+[[bin]]
+name = "promax-mcp"
+path = "src/bin/mcp_server.rs"
+
+[[bin]]
+name = "promax-api"
+path = "src/bin/api_server.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.31", features = ["bundled"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+calamine = "0.26"
+quick-xml = { version = "0.36", features = ["serialize"] }
+base64 = "0.22"
+sha2 = "0.10"
+argon2 = "0.5"
+jsonwebtoken = "9"
+rand = "0.8"
+reqwest = { version = "0.12", features = ["json", "blocking", "rustls-tls"] }
+tokio = { version = "1", features = ["io-util", "io-std", "rt", "sync", "macros"] }
+pdf-extract = "0.7"
+image = "0.25"
+actix-web = "4"
+actix-cors = "0.7"
+actix-rt = "2"

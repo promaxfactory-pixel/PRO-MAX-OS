@@ -1,0 +1,127 @@
+{
+  "app": { "name": "PRO MAX OS", "tagline": "نظام إدارة المؤسسات المتكامل", "version": "الإصدار 2.0.0" },
+  "nav": {
+    "dashboard": "لوحة التحكم", "sales": "المبيعات", "customers": "العملاء",
+    "invoices": "الفواتير", "inventory": "المخزون", "products": "المنتجات",
+    "production": "الإنتاج", "purchases": "المشتريات", "suppliers": "الموردين",
+    "accounting": "المحاسبة", "hr": "الموارد البشرية", "payroll": "الرواتب",
+    "expenses": "المصروفات", "reports": "التقارير", "settings": "الإعدادات",
+    "machines": "المكائن", "quality": "الجودة", "operations": "التشغيل",
+    "maintenance": "الصيانة", "tools": "الأدوات", "alerts": "التنبيهات",
+    "logout": "تسجيل خروج", "profile": "الملف الشخصي"
+  },
+  "common": {
+    "save": "حفظ", "cancel": "إلغاء", "delete": "حذف", "edit": "تعديل",
+    "create": "إنشاء", "search": "بحث", "filter": "تصفية", "print": "طباعة",
+    "export": "تصدير", "import": "استيراد", "upload": "رفع", "download": "تحميل",
+    "yes": "نعم", "no": "لا", "confirm": "تأكيد", "close": "إغلاق",
+    "loading": "جاري التحميل...", "noData": "لا توجد بيانات",
+    "success": "تم بنجاح", "error": "خطأ", "warning": "تحذير",
+    "back": "رجوع", "next": "التالي", "submit": "إرسال", "reset": "إعادة تعيين",
+    "actions": "إجراءات", "status": "الحالة", "date": "التاريخ",
+    "fromDate": "من تاريخ", "toDate": "إلى تاريخ", "notes": "ملاحظات",
+    "total": "المجموع", "subtotal": "المجموع الفرعي", "discount": "الخصم",
+    "vat": "الضريبة", "paid": "مدفوع", "remaining": "المتبقي",
+    "active": "نشط", "inactive": "غير نشط", "all": "الكل"
+  },
+  "auth": {
+    "login": "تسجيل الدخول", "username": "اسم المستخدم", "password": "كلمة المرور",
+    "rememberMe": "تذكرني", "forgotPassword": "نسيت كلمة المرور؟",
+    "loginBtn": "دخول", "loggingIn": "جاري تسجيل الدخول...",
+    "changePassword": "تغيير كلمة المرور", "currentPassword": "كلمة المرور الحالية",
+    "newPassword": "كلمة المرور الجديدة", "confirmPassword": "تأكيد كلمة المرور"
+  },
+  "dashboard": {
+    "title": "لوحة التحكم", "dailyBrief": "الموجز اليومي",
+    "revenue": "الإيرادات", "expenses": "المصروفات", "profit": "الأرباح",
+    "pendingInvoices": "فواتير معلقة", "overdueAmount": "مبالغ متأخرة",
+    "inventoryValue": "قيمة المخزون", "lowStock": "مخزون منخفض",
+    "productionToday": "إنتاج اليوم", "wasteToday": "هدر اليوم",
+    "topCustomers": "أفضل العملاء", "recentInvoices": "آخر الفواتير",
+    "salesTrend": "اتجاه المبيعات", "productionTrend": "اتجاه الإنتاج"
+  },
+  "customer": {
+    "title": "العملاء", "newCustomer": "عميل جديد", "editCustomer": "تعديل عميل",
+    "code": "الكود", "name": "الاسم", "phone": "الهاتف", "email": "البريد",
+    "address": "العنوان", "vatNumber": "الرقم الضريبي",
+    "creditLimit": "حد الائتمان", "balance": "الرصيد",
+    "paymentTerms": "شروط الدفع", "statement": "كشف حساب",
+    "type": "النوع", "credit": "ائتمان", "cash": "نقدي",
+    "makePayment": "تسجيل دفعة"
+  },
+  "invoice": {
+    "title": "الفواتير", "newInvoice": "فاتورة جديدة", "invoiceNo": "رقم الفاتورة",
+    "customer": "العميل", "items": "الأصناف", "qty": "الكمية",
+    "unitPrice": "سعر الوحدة", "total": "المجموع",
+    "paymentType": "نوع الدفع", "cash": "نقدي", "credit": "آجل",
+    "bankTransfer": "تحويل بنكي", "cheque": "شيك",
+    "status": "الحالة", "draft": "مسودة", "posted": "مرسلة", "void": "ملغية",
+    "print": "طباعة الفاتورة"
+  },
+  "production": {
+    "title": "الإنتاج", "orders": "أوامر الإنتاج", "newOrder": "أمر إنتاج جديد",
+    "prodNo": "رقم الأمر", "shift": "الوردية", "machine": "المكينة",
+    "operator": "المشغل", "supervisor": "المشرف",
+    "runMinutes": "دقائق التشغيل", "downtime": "وقت التوقف",
+    "goodQty": "الكمية الجيدة", "wasteQty": "الكمية التالفة",
+    "batchNo": "رقم التشغيلة", "qualityStatus": "حالة الجودة",
+    "liveProduction": "الإنتاج المباشر"
+  },
+  "accounting": {
+    "title": "المحاسبة", "accounts": "دليل الحسابات", "journal": "قيود اليومية",
+    "trialBalance": "ميزان المراجعة", "incomeStatement": "قائمة الدخل",
+    "balanceSheet": "الميزانية العمومية", "newEntry": "قيد جديد",
+    "accountCode": "رمز الحساب", "accountName": "اسم الحساب",
+    "debit": "مدين", "credit": "دائن", "balance": "الرصيد"
+  },
+  "hr": {
+    "title": "الموارد البشرية", "employees": "الموظفين", "newEmployee": "موظف جديد",
+    "code": "الكود", "name": "الاسم", "job": "المسمى الوظيفي",
+    "nationality": "الجنسية", "salary": "الراتب", "allowances": "البدلات",
+    "phone": "الهاتف", "passport": "رقم الجواز",
+    "passportExpiry": "انتهاء الجواز", "residenceExpiry": "انتهاء الإقامة",
+    "visaExpiry": "انتهاء التأشيرة", "contractEnd": "نهاية العقد"
+  },
+  "inventory": {
+    "title": "المخزون", "items": "الأصناف", "newItem": "صنف جديد",
+    "code": "الكود", "name": "الاسم", "kind": "النوع",
+    "finished": "منتج تام", "raw": "مادة خام", "packaging": "تغليف",
+    "spare": "قطعة غيار", "consumable": "مستهلك",
+    "onHand": "الرصيد", "reorderLevel": "حد إعادة الطلب",
+    "avgCost": "متوسط التكلفة", "movements": "حركة المخزون",
+    "adjustStock": "تسوية مخزون", "transfer": "تحويل مخزون"
+  },
+  "reports": {
+    "title": "التقارير", "aging": "تقادم العملاء", "lowStock": "المخزون المنخفض",
+    "vatReturn": "إقرار الضريبة", "dailyClosing": "الإغلاق اليومي",
+    "ownerSummary": "ملخص المالك", "inventoryMargin": "هامش المخزون",
+    "salesByCustomer": "المبيعات حسب العميل", "unpaidInvoices": "الفواتير غير المدفوعة"
+  },
+  "settings": {
+    "title": "الإعدادات", "company": "بيانات الشركة", "users": "المستخدمين",
+    "backup": "النسخ الاحتياطي", "renewals": "التجديدات",
+    "companyName": "اسم الشركة", "vatNumber": "الرقم الضريبي",
+    "crNumber": "رقم السجل", "address": "العنوان", "phone": "الهاتف",
+    "email": "البريد الإلكتروني", "currency": "العملة",
+    "fiscalYear": "بداية السنة المالية", "bankDetails": "الحساب البنكي"
+  },
+  "license": {
+    "activate": "تفعيل البرنامج", "enterKey": "أدخل مفتاح التفعيل",
+    "activateBtn": "تفعيل", "activating": "جاري التفعيل...",
+    "valid": "الترخيص ساري", "invalid": "الترخيص غير صالح",
+    "expired": "انتهت الصلاحية", "hardwareMismatch": "مرتبط بجهاز آخر",
+    "customerName": "العميل", "type": "النوع", "expiry": "تاريخ الانتهاء",
+    "daysRemaining": "الأيام المتبقية", "maxUsers": "عدد المستخدمين",
+    "perpetual": "دائم", "subscription": "اشتراك", "trial": "تجريبي",
+    "enterprise": "مؤسسة", "contactSupport": "لم تحصل على المفتاح؟ تواصل مع الدعم"
+  },
+  "language": { "ar": "العربية", "en": "English", "hi": "हिन्दी", "ur": "اردو" },
+  "mode": {
+    "title": "وضع العمل", "subtitle": "اختر الوضع المناسب لمهامك",
+    "power": "القوة", "stability": "الثبات", "focus": "التركيز",
+    "creative": "الإبداع", "night": "الليل", "professional": "الاحترافية",
+    "powerDesc": "أقصى أداء وإنتاجية", "stabilityDesc": "ثبات واستقرار في العمل",
+    "focusDesc": "بدون تشتيت - تركيز تام", "creativeDesc": "إلهام وإبداع في التصميم",
+    "nightDesc": "مريح للعين في الليل", "professionalDesc": "واجهة شركات أنيقة"
+  }
+}

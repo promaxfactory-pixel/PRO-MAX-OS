@@ -1,0 +1,97 @@
+{
+  "app": { "name": "PRO MAX OS", "tagline": "एंटरप्राइज़ रिसोर्स प्लानिंग सिस्टम", "version": "संस्करण 2.0.0" },
+  "nav": {
+    "dashboard": "डैशबोर्ड", "sales": "बिक्री", "customers": "ग्राहक",
+    "invoices": "चालान", "inventory": "इन्वेंटरी", "products": "उत्पाद",
+    "production": "उत्पादन", "purchases": "खरीद", "suppliers": "आपूर्तिकर्ता",
+    "accounting": "लेखांकन", "hr": "मानव संसाधन", "payroll": "पेरोल",
+    "expenses": "व्यय", "reports": "रिपोर्ट", "settings": "सेटिंग्स",
+    "machines": "मशीनें", "quality": "गुणवत्ता", "operations": "संचालन",
+    "maintenance": "रखरखाव", "tools": "उपकरण", "alerts": "सतर्कता",
+    "logout": "लॉग आउट", "profile": "प्रोफ़ाइल"
+  },
+  "common": {
+    "save": "सहेजें", "cancel": "रद्द करें", "delete": "हटाएं", "edit": "संपादित करें",
+    "create": "बनाएं", "search": "खोजें", "filter": "फ़िल्टर", "print": "प्रिंट",
+    "export": "निर्यात", "import": "आयात", "upload": "अपलोड", "download": "डाउनलोड",
+    "yes": "हाँ", "no": "नहीं", "confirm": "पुष्टि करें", "close": "बंद करें",
+    "loading": "लोड हो रहा है...", "noData": "कोई डेटा नहीं",
+    "success": "सफल", "error": "त्रुटि", "warning": "चेतावनी",
+    "back": "वापस", "next": "अगला", "submit": "जमा करें", "reset": "रीसेट",
+    "actions": "कार्रवाई", "status": "स्थिति", "date": "तारीख",
+    "fromDate": "तारीख से", "toDate": "तारीख तक", "notes": "नोट्स",
+    "total": "कुल", "subtotal": "उप-योग", "discount": "छूट",
+    "vat": "वैट", "paid": "भुगतान किया", "remaining": "शेष",
+    "active": "सक्रिय", "inactive": "निष्क्रिय", "all": "सभी"
+  },
+  "auth": {
+    "login": "लॉगिन", "username": "उपयोगकर्ता नाम", "password": "पासवर्ड",
+    "rememberMe": "मुझे याद रखें", "forgotPassword": "पासवर्ड भूल गए?",
+    "loginBtn": "साइन इन", "loggingIn": "साइन इन हो रहा है...",
+    "changePassword": "पासवर्ड बदलें", "currentPassword": "वर्तमान पासवर्ड",
+    "newPassword": "नया पासवर्ड", "confirmPassword": "पासवर्ड की पुष्टि करें"
+  },
+  "dashboard": {
+    "title": "डैशबोर्ड", "dailyBrief": "दैनिक सारांश",
+    "revenue": "राजस्व", "expenses": "व्यय", "profit": "लाभ",
+    "pendingInvoices": "लंबित चालान", "overdueAmount": "अतिदेय राशि",
+    "inventoryValue": "इन्वेंटरी मूल्य", "lowStock": "कम स्टॉक",
+    "productionToday": "आज का उत्पादन", "wasteToday": "आज की बर्बादी",
+    "topCustomers": "शीर्ष ग्राहक", "recentInvoices": "हाल के चालान"
+  },
+  "customer": {
+    "title": "ग्राहक", "newCustomer": "नया ग्राहक", "editCustomer": "ग्राहक संपादित करें",
+    "code": "कोड", "name": "नाम", "phone": "फ़ोन", "email": "ईमेल",
+    "address": "पता", "vatNumber": "वैट नंबर",
+    "creditLimit": "क्रेडिट सीमा", "balance": "शेष",
+    "paymentTerms": "भुगतान शर्तें", "statement": "विवरण",
+    "type": "प्रकार", "credit": "उधार", "cash": "नकद"
+  },
+  "invoice": {
+    "title": "चालान", "newInvoice": "नया चालान", "invoiceNo": "चालान नं.",
+    "customer": "ग्राहक", "items": "वस्तुएं", "qty": "मात्रा",
+    "unitPrice": "इकाई मूल्य", "total": "कुल",
+    "paymentType": "भुगतान प्रकार", "cash": "नकद", "credit": "उधार",
+    "status": "स्थिति", "draft": "ड्राफ्ट", "posted": "पोस्ट किया", "void": "रद्द"
+  },
+  "production": {
+    "title": "उत्पादन", "orders": "उत्पादन आदेश", "newOrder": "नया आदेश",
+    "prodNo": "आदेश क्र.", "shift": "शिफ्ट", "machine": "मशीन",
+    "goodQty": "अच्छी मात्रा", "wasteQty": "बर्बाद मात्रा"
+  },
+  "accounting": {
+    "title": "लेखांकन", "accounts": "खातों का चार्ट", "journal": "जर्नल प्रविष्टियां",
+    "trialBalance": "परीक्षण शेष", "incomeStatement": "आय विवरण",
+    "balanceSheet": "बैलेंस शीट", "accountCode": "खाता कोड",
+    "debit": "डेबिट", "credit": "क्रेडिट", "balance": "शेष"
+  },
+  "hr": {
+    "title": "मानव संसाधन", "employees": "कर्मचारी", "newEmployee": "नया कर्मचारी",
+    "code": "कोड", "name": "नाम", "job": "पद",
+    "nationality": "राष्ट्रीयता", "salary": "वेतन", "phone": "फ़ोन"
+  },
+  "inventory": {
+    "title": "इन्वेंटरी", "items": "वस्तुएं", "newItem": "नई वस्तु",
+    "code": "कोड", "name": "नाम", "kind": "प्रकार",
+    "onHand": "हाथ पर", "reorderLevel": "पुनः आदेश स्तर",
+    "movements": "हलचल"
+  },
+  "reports": { "title": "रिपोर्ट", "aging": "आयु रिपोर्ट", "lowStock": "कम स्टॉक रिपोर्ट", "dailyClosing": "दैनिक समापन" },
+  "settings": { "title": "सेटिंग्स", "company": "कंपनी जानकारी", "users": "उपयोगकर्ता", "backup": "बैकअप" },
+  "license": {
+    "activate": "लाइसेंस सक्रिय करें", "enterKey": "लाइसेंस कुंजी दर्ज करें",
+    "activateBtn": "सक्रिय करें", "activating": "सक्रिय हो रहा है...",
+    "valid": "लाइसेंस वैध", "invalid": "अमान्य लाइसेंस",
+    "customerName": "ग्राहक", "type": "प्रकार", "expiry": "समाप्ति तिथि",
+    "daysRemaining": "शेष दिन", "perpetual": "स्थायी", "subscription": "सदस्यता"
+  },
+  "language": { "ar": "العربية", "en": "English", "hi": "हिन्दी", "ur": "اردو" },
+  "mode": {
+    "title": "कार्य मोड", "subtitle": "अपने कार्यों के अनुरूप मोड चुनें",
+    "power": "पावर", "stability": "स्थिरता", "focus": "फोकस",
+    "creative": "रचनात्मक", "night": "रात", "professional": "पेशेवर",
+    "powerDesc": "अधिकतम प्रदर्शन और उत्पादकता", "stabilityDesc": "काम में स्थिरता और संतुलन",
+    "focusDesc": "कोई व्यवधान नहीं - पूर्ण एकाग्रता", "creativeDesc": "डिज़ाइन में प्रेरणा और रचनात्मकता",
+    "nightDesc": "रात में आँखों पर आसान", "professionalDesc": "सुरुचिपूर्ण कॉर्पोरेट इंटरफ़ेस"
+  }
+}

@@ -1,0 +1,57 @@
+import { useState, useEffect } from "react";
+import Card from "@/components/ui/Card";
+import Tabs from "@/components/ui/Tabs";
+import { formatOMR } from "@/lib/utils";
+import { invoke } from "@tauri-apps/api/core";
+import { TrendingUp, TrendingDown, BarChart3 } from "lucide-react";
+
+export default function FinancialStatementsPage() {
+  const [activeTab, setActiveTab] = useState("income");
+  const [income, setIncome] = useState<any>(null);
+  const [balance, setBalance] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([invoke("get_income_statement"), invoke("get_balance_sheet")])
+      .then(([i, b]) => { setIncome(i); setBalance(b); })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-12 h-12 border-2 border-brand-800 border-t-gold-400 rounded-full animate-spin" /></div>;
+
+  return (
+    <div className="space-y-6">
+      <div className="page-header"><div><h1 className="page-title">القوائم المالية</h1></div></div>
+      <Tabs tabs={[{key:"income",label:"قائمة الدخل",icon:<TrendingUp className="w-4 h-4"/>},{key:"balance",label:"الميزانية العمومية",icon:<BarChart3 className="w-4 h-4"/>}]} onChange={setActiveTab} />
+      {activeTab === "income" && income && (
+        <Card>
+          <h3 className="section-title mb-4">قائمة الدخل</h3>
+          <div className="space-y-3">
+            <div className="flex justify-between py-2 border-b border-surface-700/30"><span className="text-surface-400">إجمالي الإيرادات</span><span className="text-emerald-400 font-bold">{formatOMR(income.total_revenue || 0)}</span></div>
+            <div className="flex justify-between py-2 border-b border-surface-700/30"><span className="text-surface-400">إجمالي المصروفات</span><span className="text-red-400 font-bold">{formatOMR(income.total_expenses || 0)}</span></div>
+            <div className="flex justify-between py-3"><span className="font-bold text-white">صافي الربح / الخسارة</span><span className={`text-xl font-bold ${(income.net_income || 0) >= 0 ? 'gradient-text' : 'text-red-400'}`}>{formatOMR(income.net_income || 0)}</span></div>
+          </div>
+        </Card>
+      )}
+      {activeTab === "balance" && balance && (
+        <div className="grid grid-cols-2 gap-6">
+          <Card>
+            <h3 className="section-title mb-4">الأصول</h3>
+            {(balance.assets || []).map((a: any, i: number) => (
+              <div key={i} className="flex justify-between py-1.5 text-sm border-b border-surface-700/20"><span className="text-surface-300">{a.account_name}</span><span>{formatOMR(a.total || 0)}</span></div>
+            ))}
+            <div className="flex justify-between py-2 mt-2 border-t border-surface-600 font-bold"><span>الإجمالي</span><span className="gradient-text">{formatOMR(balance.total_assets || 0)}</span></div>
+          </Card>
+          <Card>
+            <h3 className="section-title mb-4">الالتزامات وحقوق الملكية</h3>
+            {[...(balance.liabilities || []), ...(balance.equity || [])].map((a: any, i: number) => (
+              <div key={i} className="flex justify-between py-1.5 text-sm border-b border-surface-700/20"><span className="text-surface-300">{a.account_name}</span><span>{formatOMR(a.total || 0)}</span></div>
+            ))}
+            <div className="flex justify-between py-2 mt-2 border-t border-surface-600 font-bold"><span>الإجمالي</span><span className="gradient-text">{formatOMR(balance.total_liabilities_equity || 0)}</span></div>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}

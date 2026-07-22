@@ -1,0 +1,127 @@
+{
+  "app": { "name": "PRO MAX OS", "tagline": "Enterprise Resource Planning System", "version": "Version 2.0.0" },
+  "nav": {
+    "dashboard": "Dashboard", "sales": "Sales", "customers": "Customers",
+    "invoices": "Invoices", "inventory": "Inventory", "products": "Products",
+    "production": "Production", "purchases": "Purchases", "suppliers": "Suppliers",
+    "accounting": "Accounting", "hr": "Human Resources", "payroll": "Payroll",
+    "expenses": "Expenses", "reports": "Reports", "settings": "Settings",
+    "machines": "Machines", "quality": "Quality", "operations": "Operations",
+    "maintenance": "Maintenance", "tools": "Tools", "alerts": "Alerts",
+    "logout": "Logout", "profile": "Profile"
+  },
+  "common": {
+    "save": "Save", "cancel": "Cancel", "delete": "Delete", "edit": "Edit",
+    "create": "Create", "search": "Search", "filter": "Filter", "print": "Print",
+    "export": "Export", "import": "Import", "upload": "Upload", "download": "Download",
+    "yes": "Yes", "no": "No", "confirm": "Confirm", "close": "Close",
+    "loading": "Loading...", "noData": "No data available",
+    "success": "Success", "error": "Error", "warning": "Warning",
+    "back": "Back", "next": "Next", "submit": "Submit", "reset": "Reset",
+    "actions": "Actions", "status": "Status", "date": "Date",
+    "fromDate": "From Date", "toDate": "To Date", "notes": "Notes",
+    "total": "Total", "subtotal": "Subtotal", "discount": "Discount",
+    "vat": "VAT", "paid": "Paid", "remaining": "Remaining",
+    "active": "Active", "inactive": "Inactive", "all": "All"
+  },
+  "auth": {
+    "login": "Login", "username": "Username", "password": "Password",
+    "rememberMe": "Remember me", "forgotPassword": "Forgot password?",
+    "loginBtn": "Sign In", "loggingIn": "Signing in...",
+    "changePassword": "Change Password", "currentPassword": "Current Password",
+    "newPassword": "New Password", "confirmPassword": "Confirm Password"
+  },
+  "dashboard": {
+    "title": "Dashboard", "dailyBrief": "Daily Brief",
+    "revenue": "Revenue", "expenses": "Expenses", "profit": "Profit",
+    "pendingInvoices": "Pending Invoices", "overdueAmount": "Overdue Amount",
+    "inventoryValue": "Inventory Value", "lowStock": "Low Stock",
+    "productionToday": "Today's Production", "wasteToday": "Today's Waste",
+    "topCustomers": "Top Customers", "recentInvoices": "Recent Invoices",
+    "salesTrend": "Sales Trend", "productionTrend": "Production Trend"
+  },
+  "customer": {
+    "title": "Customers", "newCustomer": "New Customer", "editCustomer": "Edit Customer",
+    "code": "Code", "name": "Name", "phone": "Phone", "email": "Email",
+    "address": "Address", "vatNumber": "VAT Number",
+    "creditLimit": "Credit Limit", "balance": "Balance",
+    "paymentTerms": "Payment Terms", "statement": "Statement",
+    "type": "Type", "credit": "Credit", "cash": "Cash",
+    "makePayment": "Record Payment"
+  },
+  "invoice": {
+    "title": "Invoices", "newInvoice": "New Invoice", "invoiceNo": "Invoice No.",
+    "customer": "Customer", "items": "Items", "qty": "Quantity",
+    "unitPrice": "Unit Price", "total": "Total",
+    "paymentType": "Payment Type", "cash": "Cash", "credit": "Credit",
+    "bankTransfer": "Bank Transfer", "cheque": "Cheque",
+    "status": "Status", "draft": "Draft", "posted": "Posted", "void": "Void",
+    "print": "Print Invoice"
+  },
+  "production": {
+    "title": "Production", "orders": "Production Orders", "newOrder": "New Order",
+    "prodNo": "Order No.", "shift": "Shift", "machine": "Machine",
+    "operator": "Operator", "supervisor": "Supervisor",
+    "runMinutes": "Run Minutes", "downtime": "Downtime",
+    "goodQty": "Good Quantity", "wasteQty": "Waste Quantity",
+    "batchNo": "Batch No.", "qualityStatus": "Quality Status",
+    "liveProduction": "Live Production"
+  },
+  "accounting": {
+    "title": "Accounting", "accounts": "Chart of Accounts", "journal": "Journal Entries",
+    "trialBalance": "Trial Balance", "incomeStatement": "Income Statement",
+    "balanceSheet": "Balance Sheet", "newEntry": "New Entry",
+    "accountCode": "Account Code", "accountName": "Account Name",
+    "debit": "Debit", "credit": "Credit", "balance": "Balance"
+  },
+  "hr": {
+    "title": "Human Resources", "employees": "Employees", "newEmployee": "New Employee",
+    "code": "Code", "name": "Name", "job": "Job Title",
+    "nationality": "Nationality", "salary": "Salary", "allowances": "Allowances",
+    "phone": "Phone", "passport": "Passport No.",
+    "passportExpiry": "Passport Expiry", "residenceExpiry": "Residence Expiry",
+    "visaExpiry": "Visa Expiry", "contractEnd": "Contract End"
+  },
+  "inventory": {
+    "title": "Inventory", "items": "Items", "newItem": "New Item",
+    "code": "Code", "name": "Name", "kind": "Type",
+    "finished": "Finished Good", "raw": "Raw Material", "packaging": "Packaging",
+    "spare": "Spare Part", "consumable": "Consumable",
+    "onHand": "On Hand", "reorderLevel": "Reorder Level",
+    "avgCost": "Avg Cost", "movements": "Movements",
+    "adjustStock": "Adjust Stock", "transfer": "Stock Transfer"
+  },
+  "reports": {
+    "title": "Reports", "aging": "Aging Report", "lowStock": "Low Stock Report",
+    "vatReturn": "VAT Return", "dailyClosing": "Daily Closing",
+    "ownerSummary": "Owner Summary", "inventoryMargin": "Inventory Margin",
+    "salesByCustomer": "Sales by Customer", "unpaidInvoices": "Unpaid Invoices"
+  },
+  "settings": {
+    "title": "Settings", "company": "Company Info", "users": "Users",
+    "backup": "Backup", "renewals": "Renewals",
+    "companyName": "Company Name", "vatNumber": "VAT Number",
+    "crNumber": "CR Number", "address": "Address", "phone": "Phone",
+    "email": "Email", "currency": "Currency",
+    "fiscalYear": "Fiscal Year Start", "bankDetails": "Bank Account"
+  },
+  "license": {
+    "activate": "Activate License", "enterKey": "Enter License Key",
+    "activateBtn": "Activate", "activating": "Activating...",
+    "valid": "License Valid", "invalid": "Invalid License",
+    "expired": "License Expired", "hardwareMismatch": "Bound to another device",
+    "customerName": "Customer", "type": "Type", "expiry": "Expiry Date",
+    "daysRemaining": "Days Remaining", "maxUsers": "Max Users",
+    "perpetual": "Perpetual", "subscription": "Subscription", "trial": "Trial",
+    "enterprise": "Enterprise", "contactSupport": "No key? Contact support"
+  },
+  "language": { "ar": "العربية", "en": "English", "hi": "हिन्दी", "ur": "اردو" },
+  "mode": {
+    "title": "Work Mode", "subtitle": "Choose the mode that suits your tasks",
+    "power": "Power", "stability": "Stability", "focus": "Focus",
+    "creative": "Creative", "night": "Night", "professional": "Professional",
+    "powerDesc": "Maximum performance & productivity", "stabilityDesc": "Stability & balance at work",
+    "focusDesc": "No distractions - full focus", "creativeDesc": "Inspiration & creativity in design",
+    "nightDesc": "Easy on the eyes at night", "professionalDesc": "Elegant corporate interface"
+  }
+}
