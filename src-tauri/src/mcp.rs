@@ -2,86 +2,65 @@ use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::io::{self, BufRead, Write};
-use std::path::Path;
-
-// ─── MCP Protocol Types ───────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
-pub struct JsonRpcRequest {
-    pub jsonrpc: String,
-    pub id: Option<Value>,
-    pub method: String,
-    pub params: Option<Value>,
+struct JsonRpcRequest {
+    #[serde(default, skip_serializing)]
+    #[allow(dead_code)]
+    jsonrpc: String,
+    id: Option<Value>,
+    method: String,
+    #[serde(default)]
+    params: Option<Value>,
 }
 
 #[derive(Debug, Serialize)]
-pub struct JsonRpcResponse {
-    pub jsonrpc: String,
+struct JsonRpcResponse {
+    jsonrpc: String,
+    id: Option<Value>,
+    result: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub result: Option<Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<JsonRpcError>,
+    error: Option<JsonRpcError>,
 }
 
 #[derive(Debug, Serialize)]
-pub struct JsonRpcError {
-    pub code: i32,
-    pub message: String,
+struct JsonRpcError {
+    code: i64,
+    message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<Value>,
+    data: Option<Value>,
 }
-
-// ─── MCP Tool Definition ──────────────────────────────────────────────
 
 #[derive(Debug, Serialize)]
-#[allow(non_snake_case)]
-pub struct McpTool {
-    pub name: String,
-    pub description: String,
-    pub inputSchema: Value,
+struct McpTool {
+    name: String,
+    description: String,
+    #[serde(rename = "inputSchema")]
+    input_schema: Value,
 }
-
-// ─── MCP Resource Definition ──────────────────────────────────────────
 
 #[derive(Debug, Serialize)]
-#[allow(non_snake_case)]
-pub struct McpResource {
-    pub uri: String,
-    pub name: String,
-    pub description: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub mimeType: Option<String>,
+struct McpResource {
+    uri: String,
+    name: String,
+    description: String,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "mimeType")]
+    mime_type: Option<String>,
 }
-
-// ─── Database Connection ──────────────────────────────────────────────
 
 fn find_db_path() -> Option<String> {
-    let paths = [
-        std::env::var("PROMAX_DB_PATH").ok(),
-        {
-            let data_dir = dirs_next().or_else(|| {
-                std::env::var("APPDATA").ok().map(|p| Path::new(&p).join("com.promaxos.app"))
-            }).map(|p| p.join("promax.db").to_string_lossy().to_string());
-            data_dir
-        },
-        Some("promax.db".into()),
-    ];
-    for p in paths.iter().flatten() {
-        if Path::new(p).exists() {
-            return Some(p.clone());
-        }
+    if let Ok(path) = std::env::var("PROMAX_DB_PATH") {
+        return Some(path);
     }
-    None
-}
-
-fn dirs_next() -> Option<std::path::PathBuf> {
-    if let Ok(appdata) = std::env::var("APPDATA") {
-        Some(Path::new(&appdata).join("com.promaxos.app"))
-    } else {
-        None
-    }
+    std::env::var("APPDATA")
+        .ok()
+        .map(|p| {
+            std::path::Path::new(&p)
+                .join("com.promaxos.app")
+                .join("promax.db")
+                .to_string_lossy()
+                .to_string()
+        })
 }
 
 fn open_db() -> Result<Connection, String> {
@@ -89,26 +68,61 @@ fn open_db() -> Result<Connection, String> {
     Connection::open(&path).map_err(|e| format!("DB error: {}", e))
 }
 
+fn query_rows(conn: &Connection, sql: &str, params: impl rusqlite::Params, limit: Option<usize>) -> Result<Vec<Value>, Value> {
+    let mut stmt = conn.prepare(sql).map_err(|e| {
+        json!({ "error": format!("SQL error: {}", e) })
+    })?;
+    let col_count = stmt.column_count();
+    let col_names: Vec<String> = (0..col_count)
+        .map(|i| stmt.column_name(i).unwrap_or("col").to_string())
+        .collect();
+    let iter = stmt.query_map(params, |row| {
+        let mut map = serde_json::Map::new();
+        for i in 0..col_count {
+            let name = &col_names[i];
+            if let Ok(v) = row.get::<_, String>(i) {
+                map.insert(name.clone(), Value::String(v));
+            } else if let Ok(v) = row.get::<_, i64>(i) {
+                map.insert(name.clone(), Value::Number(v.into()));
+            } else if let Ok(v) = row.get::<_, f64>(i) {
+                if let Some(n) = serde_json::Number::from_f64(v) {
+                    map.insert(name.clone(), Value::Number(n));
+                } else {
+                    map.insert(name.clone(), Value::Null);
+                }
+            } else if let Ok(v) = row.get::<_, bool>(i) {
+                map.insert(name.clone(), Value::Bool(v));
+            } else {
+                map.insert(name.clone(), Value::Null);
+            }
+        }
+        Ok(Value::Object(map))
+    }).map_err(|e| {
+        json!({ "error": format!("Query error: {}", e) })
+    })?;
+    let mut results = Vec::new();
+    for (i, row) in iter.enumerate() {
+        if let Some(max) = limit {
+            if i >= max { break; }
+        }
+        if let Ok(row) = row {
+            results.push(row);
+        }
+    }
+    Ok(results)
+}
+
 // ─── Tool Implementations ─────────────────────────────────────────────
 
 fn tool_list_customers(conn: &Connection, args: &Value) -> Value {
     let limit = args.get("limit").and_then(|v| v.as_i64()).unwrap_or(50);
-    let mut stmt = conn.prepare(
+    let rows = match query_rows(conn,
         "SELECT id, name, phone, email, vat_number, credit_limit_milli, balance_milli, active
-         FROM customers ORDER BY name LIMIT ?1"
-    ).unwrap();
-    let rows: Vec<Value> = stmt.query_map([limit], |row| {
-        Ok(json!({
-            "id": row.get::<_, i64>(0)?,
-            "name": row.get::<_, String>(1)?,
-            "phone": row.get::<_, Option<String>>(2)?,
-            "email": row.get::<_, Option<String>>(3)?,
-            "vat_number": row.get::<_, Option<String>>(4)?,
-            "credit_limit": row.get::<_, i64>(5)? as f64 / 1000.0,
-            "balance": row.get::<_, i64>(6)? as f64 / 1000.0,
-            "active": row.get::<_, bool>(7)?,
-        }))
-    }).unwrap().filter_map(|r| r.ok()).collect();
+         FROM customers ORDER BY name LIMIT ?1",
+        [limit], None) {
+        Ok(r) => r,
+        Err(e) => return e,
+    };
     json!({ "customers": rows })
 }
 
@@ -116,32 +130,22 @@ fn tool_get_customer(conn: &Connection, args: &Value) -> Value {
     let query = args.get("query").and_then(|v| v.as_str()).unwrap_or("");
     let id = args.get("id").and_then(|v| v.as_i64());
     let result = if let Some(cid) = id {
-        conn.query_row(
-            "SELECT id, name, address, phone, email, vat_number, credit_limit_milli, balance_milli, active, created_at
-             FROM customers WHERE id = ?1", [cid],
-            |row| Ok(json!({
-                "id": row.get::<_, i64>(0)?, "name": row.get::<_, String>(1)?,
-                "address": row.get::<_, Option<String>>(2)?, "phone": row.get::<_, Option<String>>(3)?,
-                "email": row.get::<_, Option<String>>(4)?, "vat_number": row.get::<_, Option<String>>(5)?,
-                "credit_limit": row.get::<_, i64>(6)? as f64 / 1000.0,
-                "balance": row.get::<_, i64>(7)? as f64 / 1000.0,
-                "active": row.get::<_, bool>(8)?, "created_at": row.get::<_, String>(9)?,
-            }))
-        ).ok()
+        let rows = match query_rows(conn,
+            "SELECT id, name, phone, email, vat_number, credit_limit_milli, balance_milli, active
+             FROM customers WHERE id = ?1", [cid], Some(1)) {
+            Ok(r) => r,
+            Err(_) => return json!({ "customer": null }),
+        };
+        rows.into_iter().next()
     } else if !query.is_empty() {
-        conn.query_row(
-            "SELECT id, name, address, phone, email, vat_number, credit_limit_milli, balance_milli, active, created_at
-             FROM customers WHERE name LIKE ?1 LIMIT 1",
-            [format!("%{}%", query)],
-            |row| Ok(json!({
-                "id": row.get::<_, i64>(0)?, "name": row.get::<_, String>(1)?,
-                "address": row.get::<_, Option<String>>(2)?, "phone": row.get::<_, Option<String>>(3)?,
-                "email": row.get::<_, Option<String>>(4)?, "vat_number": row.get::<_, Option<String>>(5)?,
-                "credit_limit": row.get::<_, i64>(6)? as f64 / 1000.0,
-                "balance": row.get::<_, i64>(7)? as f64 / 1000.0,
-                "active": row.get::<_, bool>(8)?, "created_at": row.get::<_, String>(9)?,
-            }))
-        ).ok()
+        let param = format!("%{}%", query);
+        let rows = match query_rows(conn,
+            "SELECT id, name, phone, email, vat_number, credit_limit_milli, balance_milli, active
+             FROM customers WHERE name LIKE ?1 LIMIT 1", [param.as_str()], None) {
+            Ok(r) => r,
+            Err(_) => return json!({ "customer": null }),
+        };
+        rows.into_iter().next()
     } else {
         None
     };
@@ -153,80 +157,57 @@ fn tool_list_invoices(conn: &Connection, args: &Value) -> Value {
     let status = args.get("status").and_then(|v| v.as_str());
     let customer_id = args.get("customer_id").and_then(|v| v.as_i64());
 
-    let rows: Vec<Value> = if let Some(s) = status {
-        let mut stmt = conn.prepare(
+    let rows = if let Some(s) = status {
+        match query_rows(conn,
             "SELECT si.id, si.inv_no, si.date, si.total_milli, si.status, COALESCE(c.name,'')
              FROM sales_invoices si LEFT JOIN customers c ON si.customer_id = c.id
-             WHERE si.status = ?1 ORDER BY si.id DESC LIMIT ?2"
-        ).unwrap();
-        stmt.query_map(rusqlite::params![s, limit], |row| {
-            Ok(json!({
-                "id": row.get::<_, i64>(0)?, "invoice_no": row.get::<_, String>(1)?,
-                "date": row.get::<_, String>(2)?, "total": row.get::<_, i64>(3)? as f64 / 1000.0,
-                "status": row.get::<_, String>(4)?, "customer_name": row.get::<_, String>(5)?,
-            }))
-        }).unwrap().filter_map(|r| r.ok()).collect()
+             WHERE si.status = ?1 ORDER BY si.id DESC LIMIT ?2",
+            rusqlite::params![s, limit], None) {
+            Ok(r) => r,
+            Err(e) => return e,
+        }
     } else if let Some(cid) = customer_id {
-        let mut stmt = conn.prepare(
+        match query_rows(conn,
             "SELECT si.id, si.inv_no, si.date, si.total_milli, si.status, COALESCE(c.name,'')
              FROM sales_invoices si LEFT JOIN customers c ON si.customer_id = c.id
-             WHERE si.customer_id = ?1 ORDER BY si.id DESC LIMIT ?2"
-        ).unwrap();
-        stmt.query_map(rusqlite::params![cid, limit], |row| {
-            Ok(json!({
-                "id": row.get::<_, i64>(0)?, "invoice_no": row.get::<_, String>(1)?,
-                "date": row.get::<_, String>(2)?, "total": row.get::<_, i64>(3)? as f64 / 1000.0,
-                "status": row.get::<_, String>(4)?, "customer_name": row.get::<_, String>(5)?,
-            }))
-        }).unwrap().filter_map(|r| r.ok()).collect()
+             WHERE si.customer_id = ?1 ORDER BY si.id DESC LIMIT ?2",
+            rusqlite::params![cid, limit], None) {
+            Ok(r) => r,
+            Err(e) => return e,
+        }
     } else {
-        let mut stmt = conn.prepare(
+        match query_rows(conn,
             "SELECT si.id, si.inv_no, si.date, si.total_milli, si.status, COALESCE(c.name,'')
              FROM sales_invoices si LEFT JOIN customers c ON si.customer_id = c.id
-             ORDER BY si.id DESC LIMIT ?1"
-        ).unwrap();
-        stmt.query_map([limit], |row| {
-            Ok(json!({
-                "id": row.get::<_, i64>(0)?, "invoice_no": row.get::<_, String>(1)?,
-                "date": row.get::<_, String>(2)?, "total": row.get::<_, i64>(3)? as f64 / 1000.0,
-                "status": row.get::<_, String>(4)?, "customer_name": row.get::<_, String>(5)?,
-            }))
-        }).unwrap().filter_map(|r| r.ok()).collect()
+             ORDER BY si.id DESC LIMIT ?1",
+            [limit], None) {
+            Ok(r) => r,
+            Err(e) => return e,
+        }
     };
-
     json!({ "invoices": rows })
 }
 
 fn tool_get_invoice(conn: &Connection, args: &Value) -> Value {
     let id = args.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
-    let inv = conn.query_row(
+    let inv_rows = match query_rows(conn,
         "SELECT si.id, si.inv_no, si.date, si.net_milli, si.vat_milli, si.total_milli, si.status,
                 si.notes, COALESCE(c.name,''), COALESCE(c.vat_number,'')
          FROM sales_invoices si LEFT JOIN customers c ON si.customer_id = c.id
-         WHERE si.id = ?1", [id],
-        |row| Ok(json!({
-            "id": row.get::<_, i64>(0)?, "invoice_no": row.get::<_, String>(1)?,
-            "date": row.get::<_, String>(2)?, "net": row.get::<_, i64>(3)? as f64 / 1000.0,
-            "vat": row.get::<_, i64>(4)? as f64 / 1000.0, "total": row.get::<_, i64>(5)? as f64 / 1000.0,
-            "status": row.get::<_, String>(6)?, "notes": row.get::<_, Option<String>>(7)?,
-            "customer_name": row.get::<_, String>(8)?, "customer_vat": row.get::<_, String>(9)?,
-        }))
-    ).ok();
+         WHERE si.id = ?1", [id], Some(1)) {
+        Ok(r) => r,
+        Err(e) => return e,
+    };
+    let inv = inv_rows.into_iter().next();
 
     let lines = if inv.is_some() {
-        let mut stmt = conn.prepare(
+        match query_rows(conn,
             "SELECT COALESCE(p.name_ar,''), sil.cartons, sil.unit_price_milli, sil.line_net_milli
              FROM sales_invoice_lines sil LEFT JOIN products p ON sil.product_id = p.id
-             WHERE sil.invoice_id = ?1"
-        ).unwrap();
-        let rows: Vec<Value> = stmt.query_map([id], |row| {
-            Ok(json!({
-                "product": row.get::<_, String>(0)?, "qty": row.get::<_, f64>(1)?,
-                "unit_price": row.get::<_, i64>(2)? as f64 / 1000.0,
-                "total": row.get::<_, i64>(3)? as f64 / 1000.0,
-            }))
-        }).unwrap().filter_map(|r| r.ok()).collect();
-        rows
+             WHERE sil.invoice_id = ?1", [id], None) {
+            Ok(r) => r,
+            Err(_) => vec![],
+        }
     } else { vec![] };
 
     json!({ "invoice": inv, "lines": lines })
@@ -234,36 +215,24 @@ fn tool_get_invoice(conn: &Connection, args: &Value) -> Value {
 
 fn tool_list_products(conn: &Connection, args: &Value) -> Value {
     let limit = args.get("limit").and_then(|v| v.as_i64()).unwrap_or(50);
-    let mut stmt = conn.prepare(
+    let rows = match query_rows(conn,
         "SELECT id, code, name_ar, name_en, default_price_milli, default_cost_milli, active
-         FROM products ORDER BY name_ar LIMIT ?1"
-    ).unwrap();
-    let rows: Vec<Value> = stmt.query_map([limit], |row| {
-        Ok(json!({
-            "id": row.get::<_, i64>(0)?, "code": row.get::<_, Option<String>>(1)?,
-            "name_ar": row.get::<_, String>(2)?, "name_en": row.get::<_, Option<String>>(3)?,
-            "price_milli": row.get::<_, i64>(4)?,
-            "cost_milli": row.get::<_, i64>(5)?,
-            "active": row.get::<_, bool>(6)?,
-        }))
-    }).unwrap().filter_map(|r| r.ok()).collect();
+         FROM products ORDER BY name_ar LIMIT ?1",
+        [limit], None) {
+        Ok(r) => r,
+        Err(e) => return e,
+    };
     json!({ "products": rows })
 }
 
 fn tool_get_inventory(conn: &Connection, _args: &Value) -> Value {
-    let mut stmt = conn.prepare(
+    let rows = match query_rows(conn,
         "SELECT ii.id, COALESCE(ii.code, ''), COALESCE(ii.name_ar, ''), ii.qty_on_hand, ii.reorder_level, ii.avg_cost_milli
-         FROM inventory_items ii
-         ORDER BY ii.name_ar LIMIT 100"
-    ).unwrap();
-    let rows: Vec<Value> = stmt.query_map([], |row| {
-        Ok(json!({
-            "id": row.get::<_, i64>(0)?, "code": row.get::<_, Option<String>>(1)?,
-            "name": row.get::<_, Option<String>>(2)?,
-            "qty_on_hand": row.get::<_, f64>(3)?, "reorder_level": row.get::<_, f64>(4)?,
-            "avg_cost_milli": row.get::<_, f64>(5)?,
-        }))
-    }).unwrap().filter_map(|r| r.ok()).collect();
+         FROM inventory_items ii ORDER BY ii.name_ar LIMIT 100",
+        [], None) {
+        Ok(r) => r,
+        Err(e) => return e,
+    };
     json!({ "inventory": rows })
 }
 
@@ -273,10 +242,10 @@ fn tool_get_dashboard_stats(conn: &Connection, _args: &Value) -> Value {
     let products: i64 = conn.query_row("SELECT COUNT(*) FROM products", [], |r| r.get(0)).unwrap_or(0);
     let employees: i64 = conn.query_row("SELECT COUNT(*) FROM employees", [], |r| r.get(0)).unwrap_or(0);
     let revenue: f64 = conn.query_row(
-        "SELECT COALESCE(SUM(total_milli), 0) FROM sales_invoices WHERE status != 'void'",
+        "SELECT COALESCE(SUM(total_milli), 0) FROM sales_invoices WHERE status NOT IN ('Void','Draft')",
         [], |r| r.get::<_, i64>(0)).map(|v| v as f64 / 1000.0).unwrap_or(0.0);
     let unpaid: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM sales_invoices WHERE status NOT IN ('paid','void','cancelled')",
+        "SELECT COUNT(*) FROM sales_invoices WHERE status NOT IN ('Void','Draft','Paid') AND total_milli > paid_milli",
         [], |r| r.get(0)).unwrap_or(0);
     json!({
         "customers": customers, "invoices": invoices, "products": products,
@@ -286,17 +255,12 @@ fn tool_get_dashboard_stats(conn: &Connection, _args: &Value) -> Value {
 
 fn tool_list_suppliers(conn: &Connection, args: &Value) -> Value {
     let limit = args.get("limit").and_then(|v| v.as_i64()).unwrap_or(50);
-    let mut stmt = conn.prepare(
-        "SELECT id, name, phone, email, balance_milli, active FROM suppliers ORDER BY name LIMIT ?1"
-    ).unwrap();
-    let rows: Vec<Value> = stmt.query_map([limit], |row| {
-        Ok(json!({
-            "id": row.get::<_, i64>(0)?, "name": row.get::<_, String>(1)?,
-            "phone": row.get::<_, Option<String>>(2)?, "email": row.get::<_, Option<String>>(3)?,
-            "balance": row.get::<_, i64>(4)? as f64 / 1000.0,
-            "active": row.get::<_, i64>(5)? != 0,
-        }))
-    }).unwrap().filter_map(|r| r.ok()).collect();
+    let rows = match query_rows(conn,
+        "SELECT id, name, phone, email, balance_milli, active FROM suppliers ORDER BY name LIMIT ?1",
+        [limit], None) {
+        Ok(r) => r,
+        Err(e) => return e,
+    };
     json!({ "suppliers": rows })
 }
 
@@ -315,53 +279,29 @@ fn tool_get_company_info(conn: &Connection, _args: &Value) -> Value {
 
 fn tool_search_employees(conn: &Connection, args: &Value) -> Value {
     let query = args.get("query").and_then(|v| v.as_str()).unwrap_or("");
-    let mut stmt = conn.prepare(
+    let param = format!("%{}%", query);
+    let rows = match query_rows(conn,
         "SELECT id, name, job, nationality, phone, passport_no, active
-         FROM employees WHERE name LIKE ?1 OR passport_no LIKE ?1 LIMIT 20"
-    ).unwrap();
-    let rows: Vec<Value> = stmt.query_map([format!("%{}%", query)], |row| {
-        Ok(json!({
-            "id": row.get::<_, i64>(0)?, "name": row.get::<_, String>(1)?,
-            "job": row.get::<_, Option<String>>(2)?,
-            "nationality": row.get::<_, Option<String>>(3)?,
-            "phone": row.get::<_, Option<String>>(4)?,
-            "passport_no": row.get::<_, Option<String>>(5)?,
-            "active": row.get::<_, i64>(6)? != 0,
-        }))
-    }).unwrap().filter_map(|r| r.ok()).collect();
+         FROM employees WHERE name LIKE ?1 OR passport_no LIKE ?1 LIMIT 20",
+        [param.as_str()], None) {
+        Ok(r) => r,
+        Err(e) => return e,
+    };
     json!({ "employees": rows })
 }
 
 fn tool_run_sql(conn: &Connection, args: &Value) -> Value {
     let sql = args.get("sql").and_then(|v| v.as_str()).unwrap_or("");
-    let limit = args.get("limit").and_then(|v| v.as_i64()).unwrap_or(100) as usize;
+    let limit = args.get("limit").and_then(|v| v.as_i64()).unwrap_or(100);
 
     if !sql.trim().to_lowercase().starts_with("select") {
         return json!({ "error": "Only SELECT queries are allowed via MCP" });
     }
 
-    let mut stmt = match conn.prepare(sql) {
-        Ok(s) => s,
-        Err(e) => return json!({ "error": format!("SQL error: {}", e) }),
-    };
-
-    let col_count = stmt.column_count();
-    let col_names: Vec<String> = (0..col_count).map(|i| stmt.column_name(i).unwrap_or("?").to_string()).collect();
-
-    let rows: Vec<Value> = stmt.query_map([], |row| {
-        let mut map = serde_json::Map::new();
-        for i in 0..col_count {
-            let name = &col_names[i];
-            let val: rusqlite::Result<String> = row.get::<_, String>(i);
-            match val {
-                Ok(v) => { map.insert(name.clone(), Value::String(v)); }
-                Err(_) => { map.insert(name.clone(), Value::Null); }
-            }
-        }
-        Ok(Value::Object(map))
-    }).unwrap().filter_map(|r| r.ok()).take(limit).collect();
-
-    json!({ "columns": col_names, "rows": rows, "total": rows.len() })
+    match query_rows(conn, sql, [], Some(limit as usize)) {
+        Ok(rows) => json!({ "rows": rows, "total": rows.len() }),
+        Err(e) => e,
+    }
 }
 
 // ─── Tool Definitions ──────────────────────────────────────────────────
@@ -371,19 +311,19 @@ fn get_tools() -> Vec<McpTool> {
         McpTool {
             name: "list_customers".into(),
             description: "List all customers with optional limit".into(),
-            inputSchema: json!({ "type": "object", "properties": { "limit": { "type": "integer", "default": 50 } } }),
+            input_schema: json!({ "type": "object", "properties": { "limit": { "type": "integer", "default": 50 } } }),
         },
         McpTool {
             name: "get_customer".into(),
             description: "Get customer details by ID or name search".into(),
-            inputSchema: json!({ "type": "object", "properties": {
+            input_schema: json!({ "type": "object", "properties": {
                 "id": { "type": "integer" }, "query": { "type": "string" }
             } }),
         },
         McpTool {
             name: "list_invoices".into(),
             description: "List invoices with optional status or customer filter".into(),
-            inputSchema: json!({ "type": "object", "properties": {
+            input_schema: json!({ "type": "object", "properties": {
                 "limit": { "type": "integer", "default": 20 },
                 "status": { "type": "string" }, "customer_id": { "type": "integer" }
             } }),
@@ -391,42 +331,42 @@ fn get_tools() -> Vec<McpTool> {
         McpTool {
             name: "get_invoice".into(),
             description: "Get full invoice details with line items".into(),
-            inputSchema: json!({ "type": "object", "properties": { "id": { "type": "integer" } }, "required": ["id"] }),
+            input_schema: json!({ "type": "object", "properties": { "id": { "type": "integer" } }, "required": ["id"] }),
         },
         McpTool {
             name: "list_products".into(),
             description: "List all products with pricing".into(),
-            inputSchema: json!({ "type": "object", "properties": { "limit": { "type": "integer", "default": 50 } } }),
+            input_schema: json!({ "type": "object", "properties": { "limit": { "type": "integer", "default": 50 } } }),
         },
         McpTool {
             name: "get_inventory".into(),
             description: "Get current inventory levels and stock alerts".into(),
-            inputSchema: json!({ "type": "object", "properties": {} }),
+            input_schema: json!({ "type": "object", "properties": {} }),
         },
         McpTool {
             name: "get_dashboard_stats".into(),
-            description: "Get ERP dashboard overview (customer/invoice/product counts, revenue)".into(),
-            inputSchema: json!({ "type": "object", "properties": {} }),
+            description: "Get ERP dashboard overview".into(),
+            input_schema: json!({ "type": "object", "properties": {} }),
         },
         McpTool {
             name: "list_suppliers".into(),
             description: "List all suppliers".into(),
-            inputSchema: json!({ "type": "object", "properties": { "limit": { "type": "integer", "default": 50 } } }),
+            input_schema: json!({ "type": "object", "properties": { "limit": { "type": "integer", "default": 50 } } }),
         },
         McpTool {
             name: "get_company_info".into(),
             description: "Get current company settings and information".into(),
-            inputSchema: json!({ "type": "object", "properties": {} }),
+            input_schema: json!({ "type": "object", "properties": {} }),
         },
         McpTool {
             name: "search_employees".into(),
-            description: "Search employees by name, passport, or iqama number".into(),
-            inputSchema: json!({ "type": "object", "properties": { "query": { "type": "string" } }, "required": ["query"] }),
+            description: "Search employees by name or passport number".into(),
+            input_schema: json!({ "type": "object", "properties": { "query": { "type": "string" } }, "required": ["query"] }),
         },
         McpTool {
             name: "run_sql".into(),
             description: "Run a read-only SELECT query on the ERP database (expert only)".into(),
-            inputSchema: json!({ "type": "object", "properties": {
+            input_schema: json!({ "type": "object", "properties": {
                 "sql": { "type": "string" }, "limit": { "type": "integer", "default": 100 }
             }, "required": ["sql"] }),
         },
@@ -437,12 +377,12 @@ fn get_tools() -> Vec<McpTool> {
 
 fn get_resources() -> Vec<McpResource> {
     vec![
-        McpResource { uri: "promax://dashboard".into(), name: "ERP Dashboard".into(), description: "Overview statistics of the entire ERP system".into(), mimeType: Some("application/json".into()) },
-        McpResource { uri: "promax://customers".into(), name: "Customers".into(), description: "All active customers".into(), mimeType: Some("application/json".into()) },
-        McpResource { uri: "promax://invoices/recent".into(), name: "Recent Invoices".into(), description: "Last 20 invoices".into(), mimeType: Some("application/json".into()) },
-        McpResource { uri: "promax://inventory".into(), name: "Inventory".into(), description: "Current inventory stock levels".into(), mimeType: Some("application/json".into()) },
-        McpResource { uri: "promax://company".into(), name: "Company Info".into(), description: "Current company settings".into(), mimeType: Some("application/json".into()) },
-        McpResource { uri: "promax://products".into(), name: "Products".into(), description: "All products and services".into(), mimeType: Some("application/json".into()) },
+        McpResource { uri: "promax://dashboard".into(), name: "ERP Dashboard".into(), description: "Overview statistics of the entire ERP system".into(), mime_type: Some("application/json".into()) },
+        McpResource { uri: "promax://customers".into(), name: "Customers".into(), description: "All active customers".into(), mime_type: Some("application/json".into()) },
+        McpResource { uri: "promax://invoices/recent".into(), name: "Recent Invoices".into(), description: "Last 20 invoices".into(), mime_type: Some("application/json".into()) },
+        McpResource { uri: "promax://inventory".into(), name: "Inventory".into(), description: "Current inventory stock levels".into(), mime_type: Some("application/json".into()) },
+        McpResource { uri: "promax://company".into(), name: "Company Info".into(), description: "Current company settings".into(), mime_type: Some("application/json".into()) },
+        McpResource { uri: "promax://products".into(), name: "Products".into(), description: "All products and services".into(), mime_type: Some("application/json".into()) },
     ]
 }
 
@@ -474,27 +414,18 @@ fn handle_request(conn: &Connection, req: &JsonRpcRequest) -> JsonRpcResponse {
         "initialize" => {
             json!({
                 "protocolVersion": "2024-11-05",
-                "capabilities": {
-                    "tools": {},
-                    "resources": {},
-                    "prompts": {}
-                },
-                "serverInfo": {
-                    "name": "promax-mcp",
-                    "version": "2.0.0"
-                }
+                "capabilities": { "tools": {}, "resources": {}, "prompts": {} },
+                "serverInfo": { "name": "promax-mcp", "version": "2.0.0" }
             })
         }
-        "tools/list" => {
-            json!({ "tools": get_tools() })
-        }
+        "tools/list" => json!({ "tools": get_tools() }),
         "tools/call" => {
             let empty = json!({});
             let params = req.params.as_ref().unwrap_or(&empty);
             let tool_name = params.get("name").and_then(|v| v.as_str()).unwrap_or("");
             let arguments = params.get("arguments").unwrap_or(&empty);
 
-            let result = match tool_name {
+            match tool_name {
                 "list_customers" => tool_list_customers(conn, arguments),
                 "get_customer" => tool_get_customer(conn, arguments),
                 "list_invoices" => tool_list_invoices(conn, arguments),
@@ -507,39 +438,22 @@ fn handle_request(conn: &Connection, req: &JsonRpcRequest) -> JsonRpcResponse {
                 "search_employees" => tool_search_employees(conn, arguments),
                 "run_sql" => tool_run_sql(conn, arguments),
                 _ => json!({ "error": format!("Unknown tool: {}", tool_name) }),
-            };
-
-            json!({
-                "content": [{
-                    "type": "text",
-                    "text": serde_json::to_string_pretty(&result).unwrap_or_default()
-                }]
-            })
+            }
         }
-        "resources/list" => {
-            json!({ "resources": get_resources() })
-        }
+        "resources/list" => json!({ "resources": get_resources() }),
         "resources/read" => {
             let empty = json!({});
             let params = req.params.as_ref().unwrap_or(&empty);
             let uri = params.get("uri").and_then(|v| v.as_str()).unwrap_or("");
             match read_resource(conn, uri) {
                 Ok(data) => json!({
-                    "contents": [{
-                        "uri": uri,
-                        "mimeType": "application/json",
-                        "text": serde_json::to_string_pretty(&data).unwrap_or_default()
-                    }]
+                    "contents": [{ "uri": uri, "mimeType": "application/json", "text": serde_json::to_string_pretty(&data).unwrap_or_default() }]
                 }),
                 Err(e) => return JsonRpcResponse { jsonrpc: "2.0".into(), id, result: None, error: Some(JsonRpcError { code: -32602, message: e, data: None }) },
             }
         }
-        "prompts/list" => {
-            json!({ "prompts": [] })
-        }
-        "ping" => {
-            json!({})
-        }
+        "prompts/list" => json!({ "prompts": [] }),
+        "ping" => json!({}),
         _ => {
             if req.method.starts_with("notifications/") {
                 return JsonRpcResponse { jsonrpc: "2.0".into(), id, result: Some(json!({})), error: None };
@@ -576,16 +490,18 @@ pub fn run_server() -> Result<(), String> {
                         code: -32700, message: format!("Parse error: {}", e), data: None,
                     }),
                 };
-                let resp_str = serde_json::to_string(&err_resp).unwrap_or_default();
-                writeln!(stdout_lock, "{}", resp_str).ok();
+                if let Ok(resp_str) = serde_json::to_string(&err_resp) {
+                    writeln!(stdout_lock, "{}", resp_str).ok();
+                }
                 continue;
             }
         };
 
         let resp = handle_request(&conn, &req);
-        let resp_str = serde_json::to_string(&resp).unwrap_or_default();
-        writeln!(stdout_lock, "{}", resp_str).ok();
-        stdout_lock.flush().ok();
+        if let Ok(resp_str) = serde_json::to_string(&resp) {
+            writeln!(stdout_lock, "{}", resp_str).ok();
+            stdout_lock.flush().ok();
+        }
     }
 
     Ok(())
