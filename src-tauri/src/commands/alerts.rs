@@ -163,7 +163,7 @@ fn check_quality_issues(conn: &rusqlite::Connection) -> Vec<Alert> {
     let mut alerts = Vec::new();
     
     let mut stmt = match conn.prepare(
-        "SELECT id, inspection_no, status, notes FROM quality_inspections WHERE status != 'Passed' ORDER BY date DESC LIMIT 20"
+        "SELECT id, inspector, status, notes FROM quality_inspections WHERE status != 'Passed' ORDER BY date DESC LIMIT 20"
     ) {
         Ok(s) => s,
         Err(_) => return alerts,

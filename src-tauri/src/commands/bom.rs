@@ -24,6 +24,7 @@ pub struct CreateBomInput {
 
 #[tauri::command]
 pub fn list_boms(state: State<'_, DbState>) -> Result<Vec<BomEntry>, String> {
+    crate::commands::licensing::require_feature(crate::commands::licensing::FEAT_BOM)?;
     let conn = state.0.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn
         .prepare(

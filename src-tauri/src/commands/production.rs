@@ -78,6 +78,7 @@ pub struct AddLineInput {
 pub fn list_production_orders(
     state: State<'_, DbState>,
 ) -> Result<Vec<ProductionOrder>, String> {
+    crate::commands::licensing::require_feature(crate::commands::licensing::FEAT_PRODUCTION)?;
     let conn = state.0.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn
         .prepare(

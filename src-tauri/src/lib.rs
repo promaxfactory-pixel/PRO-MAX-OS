@@ -173,6 +173,9 @@ pub fn run() {
             commands::licensing::deactivate_license,
             commands::licensing::verify_developer_pin,
             commands::licensing::generate_license_key,
+            commands::licensing::generate_tier_license,
+            commands::licensing::get_tier_features,
+            commands::licensing::list_tiers,
             // Reports
             commands::reports::low_stock_report,
             commands::reports::customers_aging,

@@ -547,6 +547,7 @@ fn parse_into_extraction_result(data: &OcrInvoiceData) -> ExtractionResult {
 
 #[tauri::command]
 pub fn ocr_extract_from_file(path: String) -> Result<OcrResult, String> {
+    crate::commands::licensing::require_feature(crate::commands::licensing::FEAT_OCR)?;
     if path.trim().is_empty() { return Err("File path cannot be empty".to_string()); }
     let path_obj = Path::new(&path);
     if !path_obj.exists() { return Err(format!("File does not exist: {}", path)); }
@@ -778,14 +779,14 @@ pub fn ocr_create_invoice(
     let total_baisa = (total * 1000.0) as i64;
 
     let inv_id: i64 = conn.query_row(
-        "INSERT INTO purchases (supplier_id, inv_no, date, net_milli, vat_milli, total_milli, notes, created_by)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'OCR Import', 'system')
+        "INSERT INTO purchases (pur_no, date, supplier_id, vat_enabled, net_milli, vat_milli, total_milli, status, notes, created_by)
+         VALUES (?1, ?2, ?3, 1, ?4, ?5, ?6, 'Posted', 'OCR Import', 'system')
          RETURNING id",
-        rusqlite::params![supplier_id, inv_no, date, net_baisa, vat_baisa, total_baisa],
+        rusqlite::params![inv_no, date, supplier_id, net_baisa, vat_baisa, total_baisa],
         |row| row.get(0),
     ).map_err(|e| format!("Failed to create invoice: {}", e))?;
 
-    Ok(format!("Invoice {} created (id: {})", inv_no, inv_id))
+    Ok(format!("Purchase {} created (id: {})", inv_no, inv_id))
 }
 
 #[tauri::command]
@@ -807,10 +808,25 @@ pub fn ocr_register_expense(
     state: State<'_, DbState>,
     data: serde_json::Value,
 ) -> Result<String, String> {
-    let _conn = state.0.lock().map_err(|e| e.to_string())?;
+    let conn = state.0.lock().map_err(|e| e.to_string())?;
     let total = data["total"].as_f64().unwrap_or(0.0);
     let desc = data["description"].as_str().unwrap_or("OCR Expense");
-    Ok(format!("Expense '{}' for {:.3} registered", desc, total))
+    let category = data["category"].as_str().unwrap_or("general");
+    let date = data["date"].as_str().unwrap_or("");
+    let amount_milli = (total * 1000.0) as i64;
+
+    let seq: i64 = conn
+        .query_row("SELECT COALESCE(MAX(CAST(SUBSTR(exp_no, 12) AS INTEGER)), 0) + 1 FROM expenses", [], |r| r.get(0))
+        .unwrap_or(1);
+    let year = chrono::Utc::now().format("%Y").to_string();
+    let exp_no = format!("EXP-{}-{:04}", year, seq);
+    let use_date = if date.is_empty() { chrono::Utc::now().format("%Y-%m-%d").to_string() } else { date.to_string() };
+
+    conn.execute(
+        "INSERT INTO expenses (exp_no, date, category, description, amount_milli, method, notes) VALUES (?1, ?2, ?3, ?4, ?5, 'OCR', 'OCR Scanned')",
+        rusqlite::params![exp_no, use_date, category, desc, amount_milli],
+    ).map_err(|e| e.to_string())?;
+    Ok(format!("Expense {} for {:.3} OMR registered", exp_no, total))
 }
 
 #[tauri::command]
@@ -818,9 +834,19 @@ pub fn ocr_update_prices(
     state: State<'_, DbState>,
     data: serde_json::Value,
 ) -> Result<String, String> {
-    let _conn = state.0.lock().map_err(|e| e.to_string())?;
-    let count = data["items"].as_array().map(|a| a.len()).unwrap_or(0);
-    Ok(format!("{} prices updated", count))
+    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    let items = data["items"].as_array().ok_or("items must be an array")?;
+    let mut count = 0u32;
+    for item in items {
+        if let (Some(product_id), Some(price)) = (item["product_id"].as_i64(), item["new_price_milli"].as_i64()) {
+            conn.execute(
+                "UPDATE products SET default_price_milli = ?1 WHERE id = ?2",
+                rusqlite::params![price, product_id],
+            ).map_err(|e| e.to_string())?;
+            count += 1;
+        }
+    }
+    Ok(format!("{} prices updated via OCR", count))
 }
 
 #[tauri::command]

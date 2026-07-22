@@ -46,6 +46,7 @@ pub struct CreateAdvanceInput {
 
 #[tauri::command]
 pub fn list_payroll_runs(state: State<'_, DbState>) -> Result<Vec<PayrollRun>, String> {
+    crate::commands::licensing::require_feature(crate::commands::licensing::FEAT_PAYROLL)?;
     let conn = state.0.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn
         .prepare(

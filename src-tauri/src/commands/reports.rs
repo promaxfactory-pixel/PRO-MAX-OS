@@ -185,11 +185,11 @@ pub fn owner_summary(state: State<'_, DbState>, date_from: String, date_to: Stri
 pub fn inventory_margin_report(state: State<'_, DbState>) -> Result<serde_json::Value, String> {
     let conn = state.0.lock().map_err(|e| e.to_string())?;
     let total_value: i64 = conn.query_row(
-        "SELECT COALESCE(SUM(CAST(qty_on_hand * default_cost_milli AS INTEGER)), 0) FROM inventory_items",
+        "SELECT COALESCE(SUM(CAST(qty_on_hand * avg_cost_milli AS INTEGER)), 0) FROM inventory_items",
         [], |r| r.get(0),
     ).unwrap_or(0);
     let total_sales_value: i64 = conn.query_row(
-        "SELECT COALESCE(SUM(CAST(qty_on_hand * default_price_milli AS INTEGER)), 0) FROM inventory_items",
+        "SELECT COALESCE(SUM(CAST(qty_on_hand * avg_cost_milli AS INTEGER)), 0) FROM inventory_items",
         [], |r| r.get(0),
     ).unwrap_or(0);
     Ok(serde_json::json!({
@@ -606,7 +606,7 @@ pub fn get_comprehensive_daily_report(state: State<'_, DbState>, date: String) -
     .collect();
 
     let inventory_value_milli: i64 = conn.query_row(
-        "SELECT COALESCE(SUM(CAST(qty_on_hand * default_cost_milli AS INTEGER)), 0) FROM inventory_items",
+        "SELECT COALESCE(SUM(CAST(qty_on_hand * avg_cost_milli AS INTEGER)), 0) FROM inventory_items",
         [], |r| r.get(0),
     ).unwrap_or(0);
 

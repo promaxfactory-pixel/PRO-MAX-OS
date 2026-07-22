@@ -228,6 +228,7 @@ pub fn ai_sales_forecast(
     state: State<'_, DbState>,
     days: i32,
 ) -> Result<SalesForecast, String> {
+    crate::commands::licensing::require_feature(crate::commands::licensing::FEAT_AI)?;
     let conn = state.0.lock().map_err(|e| e.to_string())?;
     let history_days = 180i64;
     let start_date = days_ago_str(history_days);
@@ -421,11 +422,11 @@ pub fn ai_customer_risk(state: State<'_, DbState>) -> Result<Vec<CustomerRisk>, 
         }
 
         let avg_days_stmt_result = conn.prepare(
-            "SELECT AVG(julianday(si.date) - julianday(si2.date))
-             FROM sales_invoices si
-             JOIN sales_invoices si2 ON si2.customer_id = si.customer_id
-                AND si2.date < si.date
-             WHERE si.customer_id = ?1 AND si.status NOT IN ('Void','Draft')"
+            "SELECT AVG(date_gap) FROM (
+                SELECT julianday(date) - julianday(LAG(date) OVER (ORDER BY date)) as date_gap
+                FROM sales_invoices
+                WHERE customer_id = ?1 AND status NOT IN ('Void','Draft')
+            ) WHERE date_gap IS NOT NULL"
         );
         let avg_days = if let Ok(mut dstmt) = avg_days_stmt_result {
             dstmt.query_row(params![id], |row| row.get::<_, f64>(0)).unwrap_or(30.0)
@@ -495,7 +496,7 @@ pub fn ai_production_analysis(state: State<'_, DbState>) -> Result<ProductionAna
                          THEN SUM(pl.cartons_waste) * 100.0 / (SUM(pl.cartons_good) + SUM(pl.cartons_waste))
                          ELSE 0 END as waste_pct
              FROM production_lines pl
-             JOIN production_orders po ON po.prod_no = pl.order_id
+             JOIN production_orders po ON po.id = pl.order_id
              LEFT JOIN machines m ON m.id = po.machine_id
              GROUP BY m.code
              ORDER BY waste_pct ASC",
@@ -523,7 +524,7 @@ pub fn ai_production_analysis(state: State<'_, DbState>) -> Result<ProductionAna
             machine: machine.clone(),
             total_cartons: good + waste,
             waste_cartons: *waste,
-            waste_pct: (p * 100.0 * 100.0).round() / 100.0,
+            waste_pct: (p * 100.0).round() / 100.0,
             efficiency: ((100.0 - p) * 100.0).round() / 100.0,
             }
         })
@@ -554,7 +555,7 @@ pub fn ai_production_analysis(state: State<'_, DbState>) -> Result<ProductionAna
     let waste_trend_stmt_result = conn.prepare(
         "SELECT date, SUM(pl.cartons_waste) * 100.0 / (SUM(pl.cartons_good) + SUM(pl.cartons_waste))
          FROM production_lines pl
-         JOIN production_orders po ON po.prod_no = pl.order_id
+         JOIN production_orders po ON po.id = pl.order_id
          WHERE po.date >= date('now', '-30 days')
          GROUP BY date ORDER BY date",
     );
@@ -671,7 +672,7 @@ pub fn ai_cost_analysis(state: State<'_, DbState>) -> Result<CostAnalysis, Strin
         "SELECT date, SUM(pl.cartons_good * p.default_cost_milli) / 1000.0 as daily_cogs
          FROM production_lines pl
          JOIN products p ON p.id = pl.product_id
-         JOIN production_orders po ON po.prod_no = pl.order_id
+         JOIN production_orders po ON po.id = pl.order_id
          WHERE po.date >= date('now', '-60 days')
          GROUP BY date ORDER BY date",
     );
@@ -807,7 +808,7 @@ pub fn ai_dashboard_insights(state: State<'_, DbState>) -> Result<Vec<Insight>, 
     let waste_result = conn.prepare(
         "SELECT SUM(pl.cartons_waste) * 100.0 / (SUM(pl.cartons_good) + SUM(pl.cartons_waste))
          FROM production_lines pl
-         JOIN production_orders po ON po.prod_no = pl.order_id
+         JOIN production_orders po ON po.id = pl.order_id
          WHERE po.date >= date('now', '-30 days')"
     );
     if let Ok(mut wstmt) = waste_result {
@@ -889,11 +890,8 @@ pub fn ai_dashboard_insights(state: State<'_, DbState>) -> Result<Vec<Insight>, 
 
     let margin_result = conn.prepare(
         "SELECT
-            COALESCE(SUM(si.total_milli), 0) / 1000.0 as revenue,
-            COALESCE(SUM(pl.cartons_good * p.default_cost_milli), 0) / 1000.0 as cogs
-         FROM sales_invoices si, production_lines pl
-         JOIN products p ON p.id = pl.product_id
-         WHERE si.date >= date('now', '-30 days')"
+            (SELECT COALESCE(SUM(total_milli), 0) / 1000.0 FROM sales_invoices WHERE date >= date('now', '-30 days') AND status NOT IN ('Void','Draft')) as revenue,
+            (SELECT COALESCE(SUM(pl.cartons_good * p.default_cost_milli), 0) / 1000.0 FROM production_lines pl JOIN products p ON p.id = pl.product_id JOIN production_orders po ON po.id = pl.order_id WHERE po.date >= date('now', '-30 days')) as cogs"
     );
     if let Ok(mut mstmt) = margin_result {
         if let Ok((rev, cogs)) = mstmt.query_row([], |row| {

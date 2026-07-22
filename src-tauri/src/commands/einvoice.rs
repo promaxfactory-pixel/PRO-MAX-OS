@@ -219,6 +219,7 @@ pub fn einvoice_generate(
     state: State<'_, DbState>,
     invoice_id: i64,
 ) -> Result<EInvoiceResult, String> {
+    crate::commands::licensing::require_feature(crate::commands::licensing::FEAT_EINVOICE)?;
     let conn = state.0.lock().map_err(|e| e.to_string())?;
 
     let inv = conn

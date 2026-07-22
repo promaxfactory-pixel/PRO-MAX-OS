@@ -11,6 +11,10 @@ pub struct LicenseData {
     pub features: Vec<String>,
     pub max_users: i32,
     pub signature: String,
+    #[serde(default)]
+    pub trial_days: Option<i32>,
+    #[serde(default)]
+    pub created_at: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -28,6 +32,87 @@ pub struct LicenseInfo {
     pub features: Vec<String>,
     pub max_users: i32,
     pub days_remaining: Option<i64>,
+    pub is_trial: bool,
+}
+
+pub const TIER_BASIC: &str = "basic";
+pub const TIER_PRO: &str = "professional";
+pub const TIER_ENTERPRISE: &str = "enterprise";
+pub const TIER_TRIAL: &str = "trial";
+
+pub const FEAT_CORE: &str = "core";
+pub const FEAT_INVENTORY: &str = "inventory";
+pub const FEAT_INVOICING: &str = "invoicing";
+pub const FEAT_PURCHASES: &str = "purchases";
+pub const FEAT_ACCOUNTING: &str = "accounting";
+pub const FEAT_PRODUCTION: &str = "production";
+pub const FEAT_HR: &str = "hr";
+pub const FEAT_PAYROLL: &str = "payroll";
+pub const FEAT_AI: &str = "ai";
+pub const FEAT_OCR: &str = "ocr";
+pub const FEAT_EINVOICE: &str = "einvoice";
+pub const FEAT_REPORTS: &str = "reports";
+pub const FEAT_GOVERNMENT: &str = "government";
+pub const FEAT_BOM: &str = "bom";
+pub const FEAT_STOCK_TRANSFERS: &str = "stock_transfers";
+pub const FEAT_MAINTENANCE: &str = "maintenance";
+pub const FEAT_QUALITY: &str = "quality";
+pub const FEAT_CHEQUES: &str = "cheques";
+pub const FEAT_CASHBANK: &str = "cashbank";
+pub const FEAT_PETTY_CASH: &str = "petty_cash";
+pub const FEAT_RENEWALS: &str = "renewals";
+pub const FEAT_EXCEL_IMPORT: &str = "excel_import";
+pub const FEAT_BACKUP: &str = "backup";
+
+fn tier_features(tier: &str) -> Vec<String> {
+    match tier {
+        TIER_TRIAL => vec![
+            FEAT_CORE.into(), FEAT_INVENTORY.into(), FEAT_INVOICING.into(), FEAT_PURCHASES.into(), FEAT_ACCOUNTING.into(),
+            FEAT_PRODUCTION.into(), FEAT_HR.into(), FEAT_PAYROLL.into(), FEAT_AI.into(), FEAT_OCR.into(), FEAT_EINVOICE.into(),
+            FEAT_REPORTS.into(), FEAT_GOVERNMENT.into(), FEAT_BOM.into(), FEAT_STOCK_TRANSFERS.into(), FEAT_MAINTENANCE.into(),
+            FEAT_QUALITY.into(), FEAT_CHEQUES.into(), FEAT_CASHBANK.into(), FEAT_PETTY_CASH.into(), FEAT_RENEWALS.into(),
+            FEAT_EXCEL_IMPORT.into(), FEAT_BACKUP.into(),
+        ],
+        TIER_BASIC => vec![
+            FEAT_CORE.into(), FEAT_INVENTORY.into(), FEAT_INVOICING.into(), FEAT_PURCHASES.into(), FEAT_ACCOUNTING.into(),
+            FEAT_REPORTS.into(), FEAT_BACKUP.into(),
+        ],
+        TIER_PRO => vec![
+            FEAT_CORE.into(), FEAT_INVENTORY.into(), FEAT_INVOICING.into(), FEAT_PURCHASES.into(), FEAT_ACCOUNTING.into(),
+            FEAT_PRODUCTION.into(), FEAT_HR.into(), FEAT_PAYROLL.into(), FEAT_AI.into(), FEAT_OCR.into(), FEAT_EINVOICE.into(),
+            FEAT_REPORTS.into(), FEAT_MAINTENANCE.into(), FEAT_QUALITY.into(), FEAT_CHEQUES.into(), FEAT_CASHBANK.into(),
+            FEAT_PETTY_CASH.into(), FEAT_RENEWALS.into(), FEAT_EXCEL_IMPORT.into(), FEAT_BACKUP.into(),
+        ],
+        TIER_ENTERPRISE => vec![
+            FEAT_CORE.into(), FEAT_INVENTORY.into(), FEAT_INVOICING.into(), FEAT_PURCHASES.into(), FEAT_ACCOUNTING.into(),
+            FEAT_PRODUCTION.into(), FEAT_HR.into(), FEAT_PAYROLL.into(), FEAT_AI.into(), FEAT_OCR.into(), FEAT_EINVOICE.into(),
+            FEAT_REPORTS.into(), FEAT_GOVERNMENT.into(), FEAT_BOM.into(), FEAT_STOCK_TRANSFERS.into(), FEAT_MAINTENANCE.into(),
+            FEAT_QUALITY.into(), FEAT_CHEQUES.into(), FEAT_CASHBANK.into(), FEAT_PETTY_CASH.into(), FEAT_RENEWALS.into(),
+            FEAT_EXCEL_IMPORT.into(), FEAT_BACKUP.into(),
+        ],
+        _ => vec![FEAT_CORE.into()],
+    }
+}
+
+pub fn get_current_features() -> Vec<String> {
+    let status = check_license();
+    match &status.license {
+        Some(lic) if status.valid => lic.features.clone(),
+        _ => vec![],
+    }
+}
+
+pub fn is_feature_enabled(feature: &str) -> bool {
+    let features = get_current_features();
+    features.contains(&feature.to_string()) || features.contains(&"all".to_string())
+}
+
+pub fn require_feature(feature: &str) -> Result<(), String> {
+    if is_feature_enabled(feature) {
+        Ok(())
+    } else {
+        Err(format!("هذه الميزة '{}' غير متاحة في الترخيص الحالي. يرجى ترقية الترخيص.", feature))
+    }
 }
 
 fn get_license_path() -> PathBuf {
@@ -79,10 +164,12 @@ pub fn generate_license(
     hardware_id: &str,
     features: Vec<String>,
     max_users: i32,
+    trial_days: Option<i32>,
 ) -> String {
     let data = format!("{}|{}|{}|{}|{}|{}|{}",
         customer_name, license_type, expires_at.unwrap_or(""), hardware_id, features.join(","), max_users, secret_key());
     let signature = compute_signature(&data);
+    let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
     let license = LicenseData {
         customer_name: customer_name.to_string(),
         license_type: license_type.to_string(),
@@ -91,6 +178,8 @@ pub fn generate_license(
         features,
         max_users,
         signature,
+        trial_days,
+        created_at: Some(now),
     };
     let json = serde_json::to_string(&license).unwrap_or_default();
     base64::Engine::encode(&base64::engine::general_purpose::STANDARD, json.as_bytes())
@@ -163,6 +252,7 @@ pub fn check_license() -> LicenseStatus {
                     (d - chrono::Local::now().date_naive()).num_days()
                 })
             });
+            let is_trial = license.license_type == TIER_TRIAL;
             LicenseStatus {
                 valid: true,
                 message: "الترخيص ساري المفعول".to_string(),
@@ -173,6 +263,7 @@ pub fn check_license() -> LicenseStatus {
                     features: license.features,
                     max_users: license.max_users,
                     days_remaining,
+                    is_trial,
                 }),
             }
         }
@@ -223,6 +314,7 @@ pub fn activate_license(license_key: String) -> LicenseStatus {
             (d - chrono::Local::now().date_naive()).num_days()
         })
     });
+    let is_trial = license.license_type == TIER_TRIAL;
     LicenseStatus {
         valid: true,
         message: "تم تنشيط البرنامج بنجاح".to_string(),
@@ -233,6 +325,7 @@ pub fn activate_license(license_key: String) -> LicenseStatus {
             features: license.features,
             max_users: license.max_users,
             days_remaining,
+            is_trial,
         }),
     }
 }
@@ -288,5 +381,78 @@ pub fn generate_license_key(
         "ANY",
         features,
         max_users,
+        None,
     ))
+}
+
+#[tauri::command]
+pub fn generate_tier_license(
+    pin: String,
+    customer_name: String,
+    tier: String,
+    expires_days: Option<i64>,
+    max_users: Option<i32>,
+    target_hardware_id: Option<String>,
+) -> Result<String, String> {
+    if !crate::crypto::verify_developer_pin(&pin) {
+        return Err("رقم التعريف غير صحيح".to_string());
+    }
+    let features = tier_features(&tier);
+    let users = max_users.unwrap_or(match tier.as_str() {
+        TIER_BASIC => 1,
+        TIER_PRO => 5,
+        TIER_ENTERPRISE => 999,
+        TIER_TRIAL => 1,
+        _ => 1,
+    });
+    let hw_id = target_hardware_id.unwrap_or_else(|| "ANY".to_string());
+    let trial_days = if tier == TIER_TRIAL { Some(14) } else { None };
+    let expires_at = expires_days.map(|days| {
+        let date = chrono::Local::now().date_naive() + chrono::Duration::days(days);
+        date.format("%Y-%m-%d").to_string()
+    });
+    Ok(generate_license(
+        &customer_name,
+        &tier,
+        expires_at.as_deref(),
+        &hw_id,
+        features,
+        users,
+        trial_days,
+    ))
+}
+
+#[tauri::command]
+pub fn get_tier_features(tier: String) -> Vec<String> {
+    tier_features(&tier)
+}
+
+#[tauri::command]
+pub fn list_tiers() -> Vec<serde_json::Value> {
+    vec![
+        serde_json::json!({
+            "id": TIER_TRIAL, "name": "Trial", "name_ar": "تجريبي",
+            "max_users": 1, "days": 14,
+            "features": tier_features(TIER_TRIAL),
+            "description": "Free 14-day trial with all features",
+        }),
+        serde_json::json!({
+            "id": TIER_BASIC, "name": "Basic", "name_ar": "أساسي",
+            "max_users": 1,
+            "features": tier_features(TIER_BASIC),
+            "description": "Core accounting, inventory, invoicing, purchases, reports",
+        }),
+        serde_json::json!({
+            "id": TIER_PRO, "name": "Professional", "name_ar": "احترافي",
+            "max_users": 5,
+            "features": tier_features(TIER_PRO),
+            "description": "All Basic features + production, HR, payroll, AI, OCR, e-invoicing",
+        }),
+        serde_json::json!({
+            "id": TIER_ENTERPRISE, "name": "Enterprise", "name_ar": "مؤسسي",
+            "max_users": 999,
+            "features": tier_features(TIER_ENTERPRISE),
+            "description": "Everything including government integration, BOM, stock transfers",
+        }),
+    ]
 }

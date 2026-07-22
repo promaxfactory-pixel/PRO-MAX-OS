@@ -53,6 +53,7 @@ pub struct GovDashboard {
 
 #[tauri::command]
 pub fn gov_get_dashboard(state: State<'_, DbState>) -> Result<GovDashboard, String> {
+    crate::commands::licensing::require_feature(crate::commands::licensing::FEAT_GOVERNMENT)?;
     let conn = state.0.lock().map_err(|e| e.to_string())?;
 
     let entities_count: i64 = conn
@@ -273,7 +274,7 @@ pub fn gov_get_employee_doc_status(state: State<'_, DbState>) -> Result<Value, S
         .unwrap_or(0);
     let expiring_work_permits: i64 = conn
         .query_row(
-            "SELECT COUNT(*) FROM employees WHERE work_permit_expiry IS NOT NULL AND work_permit_expiry <= date('now', '+90 days') AND active=1",
+            "SELECT COUNT(*) FROM employees WHERE workpermit_expiry IS NOT NULL AND workpermit_expiry <= date('now', '+90 days') AND active=1",
             [],
             |row| row.get(0),
         )
