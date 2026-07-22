@@ -629,7 +629,9 @@ pub fn save_ai_settings(state: State<'_, DbState>, input: AiSettings) -> Result<
     let conn = state.0.lock().map_err(|e| e.to_string())?;
 
     if let Some(ref key) = input.api_key {
-        save_setting(&conn, "ai_api_key", key)?;
+        let encrypted = crate::crypto::encrypt_if_needed(key)
+            .map_err(|e| format!("Failed to encrypt API key: {}", e))?;
+        save_setting(&conn, "ai_api_key", &encrypted)?;
     }
     if let Some(ref model) = input.model {
         save_setting(&conn, "ai_model", model)?;
@@ -648,7 +650,8 @@ pub fn save_ai_settings(state: State<'_, DbState>, input: AiSettings) -> Result<
 pub fn get_ai_settings(state: State<'_, DbState>) -> Result<AiSettings, String> {
     let conn = state.0.lock().map_err(|e| e.to_string())?;
 
-    let api_key = load_setting(&conn, "ai_api_key")?;
+    let api_key = load_setting(&conn, "ai_api_key")?
+        .map(|v| crate::crypto::decrypt_if_needed(&v).unwrap_or(v));
     let model = load_setting(&conn, "ai_model")?;
     let max_tokens = load_setting(&conn, "ai_max_tokens")?
         .and_then(|v| v.parse::<i64>().ok());
@@ -1260,6 +1263,7 @@ pub async fn chat_with_ai(
         let provider = input.provider.as_deref().unwrap_or("openai");
         let api_key = load_setting(&conn, &format!("ai_api_key_{provider}"))?
             .or_else(|| load_setting(&conn, "ai_api_key").ok().flatten())
+            .map(|v| crate::crypto::decrypt_if_needed(&v).unwrap_or(v))
             .ok_or_else(|| "API key not configured. Go to Settings > AI Integration to set up.".to_string())?;
         let model = load_setting(&conn, &format!("ai_model_{provider}"))?
             .or_else(|| load_setting(&conn, "ai_model").ok().flatten())
@@ -1402,7 +1406,8 @@ pub async fn test_ai_connection(
     let (api_key, model) = {
         let conn = state.0.lock().map_err(|e| e.to_string())?;
         let api_key = load_setting(&conn, &format!("ai_api_key_{prov}"))?
-            .or_else(|| load_setting(&conn, "ai_api_key").ok().flatten());
+            .or_else(|| load_setting(&conn, "ai_api_key").ok().flatten())
+            .map(|v| crate::crypto::decrypt_if_needed(&v).unwrap_or(v));
         let model = load_setting(&conn, &format!("ai_model_{prov}"))?
             .or_else(|| load_setting(&conn, "ai_model").ok().flatten())
             .unwrap_or_else(|| match prov {
@@ -1451,7 +1456,9 @@ pub fn save_ai_provider_settings(
     model: String,
 ) -> Result<String, String> {
     let conn = state.0.lock().map_err(|e| e.to_string())?;
-    save_setting(&conn, &format!("ai_api_key_{provider}"), &api_key)?;
+    let encrypted = crate::crypto::encrypt_if_needed(&api_key)
+        .map_err(|e| format!("Failed to encrypt API key: {}", e))?;
+    save_setting(&conn, &format!("ai_api_key_{provider}"), &encrypted)?;
     save_setting(&conn, &format!("ai_model_{provider}"), &model)?;
     Ok(format!("{provider} settings saved successfully"))
 }

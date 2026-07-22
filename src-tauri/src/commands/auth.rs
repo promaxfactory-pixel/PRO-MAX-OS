@@ -6,6 +6,8 @@ use tauri::State;
 
 const MAX_LOGIN_ATTEMPTS: i64 = 5;
 const LOCKOUT_MINUTES: i64 = 15;
+const MAX_PASSWORD_CHANGE_ATTEMPTS: i64 = 3;
+const PASSWORD_CHANGE_LOCKOUT_MINUTES: i64 = 30;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct User {
@@ -64,6 +66,18 @@ fn is_rate_limited(conn: &rusqlite::Connection, username: &str) -> Result<bool, 
         )
         .map_err(|e| e.to_string())?;
     Ok(recent_failures >= MAX_LOGIN_ATTEMPTS)
+}
+
+fn is_password_change_rate_limited(conn: &rusqlite::Connection, user_id: i64) -> Result<bool, String> {
+    let cutoff = chrono::Utc::now().timestamp() as f64 - (PASSWORD_CHANGE_LOCKOUT_MINUTES * 60) as f64;
+    let recent_failures: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM login_attempts WHERE username=(SELECT username FROM users WHERE id=?) AND ok=0 AND ts>=?",
+            rusqlite::params![user_id, cutoff],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(recent_failures >= MAX_PASSWORD_CHANGE_ATTEMPTS)
 }
 
 #[tauri::command]
@@ -176,6 +190,10 @@ pub fn change_password(
 
     rbac::require_role(&conn, user_id, &["admin", "manager", "user"]).map_err(|e| e.to_string())?;
 
+    if is_password_change_rate_limited(&conn, user_id)? {
+        return Err("تم حظر تغيير كلمة المرور مؤقتاً بسبب محاولات كثيرة. حاول مرة أخرى بعد 30 دقيقة".to_string());
+    }
+
     if new_password.len() < 8 {
         return Err("كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل".to_string());
     }
@@ -189,6 +207,10 @@ pub fn change_password(
         .map_err(|_| "المستخدم غير موجود".to_string())?;
 
     if !verify_password_stored(&old_password, &current.0, &current.1) {
+        let _ = conn.execute(
+            "INSERT INTO login_attempts(username, ts, ok) VALUES((SELECT username FROM users WHERE id=?), ?, 0)",
+            rusqlite::params![user_id, chrono::Utc::now().timestamp() as f64],
+        );
         return Err("كلمة المرور القديمة غير صحيحة".to_string());
     }
 

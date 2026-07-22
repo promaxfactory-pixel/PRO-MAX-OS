@@ -10,6 +10,7 @@ import {
   ChevronRight, Edit, Clock, History, Zap, RotateCcw, Loader2,
   Download, BadgeCheck, BadgeHelp, BadgeX, BadgeInfo, Plus
 } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 type ConfidenceLevel = "high" | "medium" | "low";
 
@@ -102,6 +103,7 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function EnhancedOcrPage() {
   const navigate = useNavigate();
+  const addNotification = useUIStore((s) => s.addNotification);
 
   const [activeTab, setActiveTab] = useState<"scan" | "history">("scan");
   const [file, setFile] = useState<File | null>(null);
@@ -124,7 +126,7 @@ export default function EnhancedOcrPage() {
     setHistoryLoading(true);
     invoke("ocr_get_history")
       .then((d: any) => setHistory(d || []))
-      .catch(console.error)
+      .catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
       .finally(() => setHistoryLoading(false));
   }, []);
 

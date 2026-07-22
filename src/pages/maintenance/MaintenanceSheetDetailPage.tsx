@@ -6,17 +6,19 @@ import Badge, { StatusBadge } from "@/components/ui/Badge";
 import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowRight, Wrench, AlertTriangle, Clock, DollarSign, Calendar } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 export default function MaintenanceSheetDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { addNotification } = useUIStore();
   const [sheet, setSheet] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     invoke("get_maintenance_sheet", { id: Number(id) })
       .then((d) => setSheet(d))
-      .catch(console.error)
+      .catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
       .finally(() => setLoading(false));
   }, [id]);
 

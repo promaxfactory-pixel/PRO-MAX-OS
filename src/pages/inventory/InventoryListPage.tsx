@@ -4,13 +4,15 @@ import Badge from "@/components/ui/Badge";
 import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Database, AlertTriangle } from "lucide-react";
+import { useUIStore } from "../../stores/uiStore";
 
 export default function InventoryListPage() {
+  const { addNotification } = useUIStore();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [kindFilter, setKindFilter] = useState("all");
 
-  useEffect(() => { invoke("list_inventory_items").then((d: any) => setItems(d)).catch(console.error).finally(() => setLoading(false)); }, []);
+  useEffect(() => { invoke("list_inventory_items").then((d: any) => setItems(d)).catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false)); }, []);
 
   const filtered = kindFilter === "all" ? items : items.filter(i => i.kind === kindFilter);
   const lowStock = items.filter(i => i.reorder_level > 0 && i.qty_on_hand <= i.reorder_level);

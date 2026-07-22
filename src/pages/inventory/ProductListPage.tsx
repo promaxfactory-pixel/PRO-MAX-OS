@@ -5,13 +5,15 @@ import Button from "@/components/ui/Button";
 import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, Package } from "lucide-react";
+import { useUIStore } from "../../stores/uiStore";
 
 export default function ProductListPage() {
+  const { addNotification } = useUIStore();
   const navigate = useNavigate();
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { invoke("list_products").then((d: any) => setProducts(d)).catch(console.error).finally(() => setLoading(false)); }, []);
+  useEffect(() => { invoke("list_products").then((d: any) => setProducts(d)).catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false)); }, []);
 
   const columns: Column<any>[] = [
     { key: "code", header: "الكود", sortable: true, render: (r) => <span className="font-mono text-brand-400">{r.code || "—"}</span> },

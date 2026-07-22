@@ -25,7 +25,7 @@ export default function CustomerPaymentPage() {
   useEffect(() => {
     invoke("get_customer", { id: Number(id) })
       .then((d) => setCustomer(d))
-      .catch(console.error)
+      .catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
       .finally(() => setLoading(false));
   }, [id]);
 

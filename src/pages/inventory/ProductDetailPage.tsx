@@ -4,15 +4,17 @@ import Card from "@/components/ui/Card";
 import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowRight, Package } from "lucide-react";
+import { useUIStore } from "../../stores/uiStore";
 
 export default function ProductDetailPage() {
+  const { addNotification } = useUIStore();
   const { id } = useParams();
   const navigate = useNavigate();
   const [product, setProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    invoke("get_product", { id: Number(id) }).then((d) => setProduct(d)).catch(console.error).finally(() => setLoading(false));
+    invoke("get_product", { id: Number(id) }).then((d) => setProduct(d)).catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false));
   }, [id]);
 
   if (loading || !product) return <div className="flex items-center justify-center h-64"><div className="w-12 h-12 border-2 border-brand-800 border-t-gold-400 rounded-full animate-spin" /></div>;

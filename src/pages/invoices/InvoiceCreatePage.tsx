@@ -21,8 +21,8 @@ export default function InvoiceCreatePage() {
   const [useCustoms, setUseCustoms] = useState(false);
 
   useEffect(() => {
-    invoke("list_customers").then((d: any) => setCustomers(d)).catch(console.error);
-    invoke("list_products").then((d: any) => setProducts(d)).catch(console.error);
+    invoke("list_customers").then((d: any) => setCustomers(d)).catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }));
+    invoke("list_products").then((d: any) => setProducts(d)).catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }));
   }, []);
 
   const addLine = () => setLines([...lines, { product_id: products[0]?.id || 0, cartons: 1, unit_price: 0, customs_price: 0 }]);

@@ -19,7 +19,7 @@ export default function UsersPage() {
   const fetchUsers = () => {
     invoke("list_users")
       .then((d: any) => setUsers(d))
-      .catch(console.error)
+      .catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
       .finally(() => setLoading(false));
   };
 

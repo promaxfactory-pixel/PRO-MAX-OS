@@ -45,7 +45,7 @@ export default function SettingsPage() {
   useEffect(() => {
     invoke("get_company_settings")
       .then((d: any) => setForm((prev) => ({ ...prev, ...d })))
-      .catch(console.error);
+      .catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }));
   }, []);
 
   const handleChange = (field: string, value: any) => {

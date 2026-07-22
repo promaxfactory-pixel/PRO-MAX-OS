@@ -6,16 +6,18 @@ import Button from "@/components/ui/Button";
 import { formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, ClipboardList } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 export default function OperationsSheetListPage() {
   const navigate = useNavigate();
+  const { addNotification } = useUIStore();
   const [sheets, setSheets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     invoke("list_operations_sheets")
       .then((d: any) => setSheets(d))
-      .catch(console.error)
+      .catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
       .finally(() => setLoading(false));
   }, []);
 

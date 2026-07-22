@@ -45,7 +45,7 @@ export default function MachineFormPage() {
             notes: d.notes || "",
           });
         })
-        .catch(console.error)
+        .catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
         .finally(() => setLoading(false));
     }
   }, [id, isEdit]);

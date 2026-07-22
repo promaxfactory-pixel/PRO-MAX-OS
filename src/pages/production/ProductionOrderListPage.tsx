@@ -6,13 +6,15 @@ import Button from "@/components/ui/Button";
 import { formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, Factory } from "lucide-react";
+import { useUIStore } from "../../stores/uiStore";
 
 export default function ProductionOrderListPage() {
+  const { addNotification } = useUIStore();
   const navigate = useNavigate();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { invoke("list_production_orders").then((d: any) => setOrders(d)).catch(console.error).finally(() => setLoading(false)); }, []);
+  useEffect(() => { invoke("list_production_orders").then((d: any) => setOrders(d)).catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false)); }, []);
 
   const columns: Column<any>[] = [
     { key: "prod_no", header: "رقم الأمر", sortable: true, render: (r) => <span className="font-mono text-brand-400">{r.prod_no || "—"}</span> },

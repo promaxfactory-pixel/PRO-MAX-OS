@@ -31,7 +31,7 @@ export default function ProductFormPage() {
           default_price_milli: d.default_price_milli || 0, default_cost_milli: d.default_cost_milli || 0,
           vat_pct: d.vat_pct || 5, barcode: d.barcode || "", notes: d.notes || "",
         });
-      }).catch(console.error).finally(() => setLoading(false));
+      }).catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false));
     }
   }, [id, isEdit]);
 

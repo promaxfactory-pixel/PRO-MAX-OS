@@ -19,7 +19,7 @@ interface UIState {
 }
 
 export interface Notification {
-  id: string;
+  id?: string;
   type: 'success' | 'error' | 'warning' | 'info';
   title: string;
   message: string;
@@ -52,6 +52,6 @@ export const useUIStore = create<UIState>((set) => ({
   collapseSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   setCurrentModule: (module) => set({ currentModule: module }),
   setSearchQuery: (query) => set({ searchQuery: query }),
-  addNotification: (n) => set((s) => ({ notifications: [...s.notifications, n] })),
+  addNotification: (n) => set((s) => ({ notifications: [...s.notifications, { ...n, id: n.id || crypto.randomUUID() }] })),
   removeNotification: (id) => set((s) => ({ notifications: s.notifications.filter((n) => n.id !== id) })),
 }));

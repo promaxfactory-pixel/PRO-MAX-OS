@@ -5,15 +5,17 @@ import Button from "@/components/ui/Button";
 import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowRight, Phone, Mail, MapPin, Edit, FileText, Banknote } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 export default function SupplierDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const addNotification = useUIStore((s) => s.addNotification);
   const [supplier, setSupplier] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    invoke("get_supplier", { id: Number(id) }).then((d) => setSupplier(d)).catch(console.error).finally(() => setLoading(false));
+    invoke("get_supplier", { id: Number(id) }).then((d) => setSupplier(d)).catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false));
   }, [id]);
 
   if (loading || !supplier) {

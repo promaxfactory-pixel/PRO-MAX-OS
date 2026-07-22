@@ -24,7 +24,7 @@ export default function SupplierPaymentPage() {
   useEffect(() => {
     invoke("get_supplier", { id: Number(id) })
       .then((d) => setSupplier(d))
-      .catch(console.error)
+      .catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
       .finally(() => setLoading(false));
   }, [id]);
 

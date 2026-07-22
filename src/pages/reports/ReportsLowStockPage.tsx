@@ -5,9 +5,11 @@ import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowRight, AlertTriangle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useUIStore } from "@/stores/uiStore";
 
 export default function ReportsLowStockPage() {
   const navigate = useNavigate();
+  const addNotification = useUIStore((s) => s.addNotification);
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState({ totalItems: 0, totalDeficit: 0, totalCostGap: 0 });
@@ -23,7 +25,7 @@ export default function ReportsLowStockPage() {
           totalCostGap: arr.reduce((s: number, i: any) => s + (i.cost_gap_milli || 0), 0),
         });
       })
-      .catch(console.error)
+      .catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
       .finally(() => setLoading(false));
   }, []);
 

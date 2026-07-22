@@ -24,7 +24,7 @@ export default function BackupPage() {
     setLoading(true);
     invoke<Backup[]>("backup_list")
       .then(setBackups)
-      .catch(console.error)
+      .catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
       .finally(() => setLoading(false));
   }, []);
 

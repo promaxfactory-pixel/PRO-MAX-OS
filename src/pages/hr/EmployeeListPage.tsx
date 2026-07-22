@@ -6,13 +6,15 @@ import Button from "@/components/ui/Button";
 import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, UserCog } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 export default function EmployeeListPage() {
   const navigate = useNavigate();
+  const { addNotification } = useUIStore();
   const [employees, setEmployees] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { invoke("list_employees").then((d: any) => setEmployees(d)).catch(console.error).finally(() => setLoading(false)); }, []);
+  useEffect(() => { invoke("list_employees").then((d: any) => setEmployees(d)).catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false)); }, []);
 
   const columns: Column<any>[] = [
     { key: "code", header: "الكود", render: (r) => <span className="font-mono text-brand-400">{r.code || "—"}</span> },

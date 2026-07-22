@@ -8,8 +8,10 @@ import { formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowRight, Check, Ban } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { useUIStore } from "../../stores/uiStore";
 
 export default function ProductionOrderDetailPage() {
+  const { addNotification } = useUIStore();
   const { id } = useParams();
   const navigate = useNavigate();
   const [order, setOrder] = useState<any>(null);
@@ -21,7 +23,7 @@ export default function ProductionOrderDetailPage() {
     Promise.all([
       invoke("get_production_order", { id: Number(id) }),
       invoke("get_production_lines", { orderId: Number(id) }),
-    ]).then(([o, l]) => { setOrder(o); setLines(l as any[]); }).catch(console.error).finally(() => setLoading(false));
+    ]).then(([o, l]) => { setOrder(o); setLines(l as any[]); }).catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false));
   }, [id]);
 
   const handleApprove = async () => {

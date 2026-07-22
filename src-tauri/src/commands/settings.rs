@@ -178,8 +178,10 @@ pub fn list_users(state: State<'_, DbState>) -> Result<Vec<SettingsUser>, String
 }
 
 #[tauri::command]
-pub fn create_user(state: State<'_, DbState>, input: CreateUserInput) -> Result<i64, String> {
+pub fn create_user(state: State<'_, DbState>, caller_id: i64, input: CreateUserInput) -> Result<i64, String> {
     let conn = state.0.lock().map_err(|e| e.to_string())?;
+
+    rbac::require_role(&conn, caller_id, &["admin"]).map_err(|e| e.to_string())?;
 
     if input.username.is_empty() {
         return Err("اسم المستخدم مطلوب".to_string());
@@ -231,8 +233,10 @@ pub fn update_user(state: State<'_, DbState>, id: i64, input: UpdateUserInput) -
 }
 
 #[tauri::command]
-pub fn reset_user_password(state: State<'_, DbState>, id: i64, new_password: String) -> Result<String, String> {
+pub fn reset_user_password(state: State<'_, DbState>, caller_id: i64, id: i64, new_password: String) -> Result<String, String> {
     let conn = state.0.lock().map_err(|e| e.to_string())?;
+
+    rbac::require_role(&conn, caller_id, &["admin"]).map_err(|e| e.to_string())?;
 
     if new_password.len() < 8 {
         return Err("كلمة المرور يجب أن تكون 8 أحرف على الأقل".to_string());
@@ -250,8 +254,10 @@ pub fn reset_user_password(state: State<'_, DbState>, id: i64, new_password: Str
 }
 
 #[tauri::command]
-pub fn delete_user(state: State<'_, DbState>, id: i64) -> Result<String, String> {
+pub fn delete_user(state: State<'_, DbState>, caller_id: i64, id: i64) -> Result<String, String> {
     let conn = state.0.lock().map_err(|e| e.to_string())?;
+
+    rbac::require_role(&conn, caller_id, &["admin"]).map_err(|e| e.to_string())?;
 
     let username: String = conn.query_row(
         "SELECT username FROM users WHERE id=?",

@@ -5,6 +5,7 @@ import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useUIStore } from "@/stores/uiStore";
 
 interface AgingRow {
   customer_code: string;
@@ -28,6 +29,7 @@ interface AgingSummary {
 
 export default function ReportsAgingPage() {
   const navigate = useNavigate();
+  const addNotification = useUIStore((s) => s.addNotification);
   const [data, setData] = useState<AgingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<AgingSummary>({ total: 0, current: 0, days_30: 0, days_60: 0, days_90: 0, over_90: 0 });
@@ -46,7 +48,7 @@ export default function ReportsAgingPage() {
           over_90: arr.reduce((s, c) => s + (c.over_90 || 0), 0),
         });
       })
-      .catch(console.error)
+      .catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
       .finally(() => setLoading(false));
   }, []);
 

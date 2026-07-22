@@ -23,8 +23,9 @@ const Toast = memo(function Toast() {
   useEffect(() => {
     const timers: ReturnType<typeof setTimeout>[] = [];
     for (const n of notifications) {
+      if (!n.id) continue;
       const duration = n.duration ?? 4000;
-      timers.push(setTimeout(() => removeNotification(n.id), duration));
+      timers.push(setTimeout(() => removeNotification(n.id!), duration));
     }
     return () => timers.forEach(clearTimeout);
   }, [notifications, removeNotification]);
@@ -37,7 +38,7 @@ const Toast = memo(function Toast() {
 
         return (
           <div
-            key={n.id}
+            key={n.id ?? n.title}
             className={`pointer-events-auto flex items-start gap-3 min-w-[320px] max-w-[420px] rounded-xl border bg-surface-900 p-4 shadow-lg animate-slide-in-left ${colorClass}`}
           >
             <Icon className="mt-0.5 h-5 w-5 shrink-0" />
@@ -48,7 +49,7 @@ const Toast = memo(function Toast() {
               <p className="text-sm text-surface-400 leading-relaxed">{n.message}</p>
             </div>
             <button
-              onClick={() => removeNotification(n.id)}
+              onClick={() => n.id && removeNotification(n.id)}
               className="shrink-0 rounded-lg p-1 text-surface-400 hover:text-white hover:bg-surface-700 transition-colors"
             >
               <X className="h-4 w-4" />

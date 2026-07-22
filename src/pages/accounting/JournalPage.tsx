@@ -3,12 +3,14 @@ import DataTable, { Column } from "@/components/ui/DataTable";
 import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Receipt } from "lucide-react";
+import { useUIStore } from "../../stores/uiStore";
 
 export default function JournalPage() {
+  const { addNotification } = useUIStore();
   const [entries, setEntries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { invoke("list_journal_entries").then((d: any) => setEntries(d)).catch(console.error).finally(() => setLoading(false)); }, []);
+  useEffect(() => { invoke("list_journal_entries").then((d: any) => setEntries(d)).catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false)); }, []);
 
   const columns: Column<any>[] = [
     { key: "entry_no", header: "الرقم", sortable: true, render: (r) => <span className="font-mono text-brand-400">{r.entry_no || "—"}</span> },

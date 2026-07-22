@@ -1,9 +1,12 @@
 /// PRO MAX OS - Cryptographic & Security Module
-/// Argon2 password hashing, JWT tokens, secrets management.
+/// Argon2 password hashing, JWT tokens, secrets management, AES-256-GCM encryption.
 
+use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use argon2::password_hash::SaltString;
+use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use rand::rngs::OsRng;
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -244,6 +247,69 @@ pub fn validate_tauri_token(token: &str) -> Result<(i64, String, String), String
     }
 
     Ok((user_id, parts[3].to_string(), role))
+}
+
+// ─── AES-256-GCM Encryption at Rest ──────────────────────────────────
+
+fn derive_encryption_key(secret: &[u8]) -> [u8; 32] {
+    use sha2::{Digest, Sha256};
+    let hash = Sha256::digest(secret);
+    let mut key = [0u8; 32];
+    key.copy_from_slice(&hash);
+    key
+}
+
+pub fn encrypt_value(plaintext: &str) -> Result<String, String> {
+    if plaintext.is_empty() {
+        return Ok(plaintext.to_string());
+    }
+    let secrets = get_secrets();
+    let key_bytes = derive_encryption_key(secrets.encryption_key.as_bytes());
+    let cipher = Aes256Gcm::new_from_slice(&key_bytes)
+        .map_err(|e| format!("Failed to create cipher: {}", e))?;
+    let mut nonce_bytes = [0u8; 12];
+    OsRng.fill_bytes(&mut nonce_bytes);
+    let nonce = Nonce::from_slice(&nonce_bytes);
+    let ciphertext = cipher.encrypt(nonce, plaintext.as_bytes())
+        .map_err(|e| format!("Encryption failed: {}", e))?;
+    let mut output = nonce_bytes.to_vec();
+    output.extend_from_slice(&ciphertext);
+    Ok(B64.encode(&output))
+}
+
+pub fn decrypt_value(encoded: &str) -> Result<String, String> {
+    if encoded.is_empty() || !encoded.starts_with("gcm:") {
+        return Ok(encoded.to_string());
+    }
+    let raw = encoded.strip_prefix("gcm:").unwrap_or(encoded);
+    let data = B64.decode(raw).map_err(|e| format!("Invalid encrypted data: {}", e))?;
+    if data.len() < 12 {
+        return Err("Invalid encrypted data length".to_string());
+    }
+    let secrets = get_secrets();
+    let key_bytes = derive_encryption_key(secrets.encryption_key.as_bytes());
+    let cipher = Aes256Gcm::new_from_slice(&key_bytes)
+        .map_err(|e| format!("Failed to create cipher: {}", e))?;
+    let nonce = Nonce::from_slice(&data[..12]);
+    let plaintext = cipher.decrypt(nonce, &data[12..])
+        .map_err(|e| format!("Decryption failed (wrong key or corrupted data): {}", e))?;
+    String::from_utf8(plaintext).map_err(|e| format!("Decrypted data is not valid UTF-8: {}", e))
+}
+
+pub fn encrypt_if_needed(plaintext: &str) -> Result<String, String> {
+    if plaintext.starts_with("gcm:") || plaintext.is_empty() {
+        return Ok(plaintext.to_string());
+    }
+    let encrypted = encrypt_value(plaintext)?;
+    Ok(format!("gcm:{}", encrypted))
+}
+
+pub fn decrypt_if_needed(value: &str) -> Result<String, String> {
+    if value.starts_with("gcm:") {
+        decrypt_value(value)
+    } else {
+        Ok(value.to_string())
+    }
 }
 
 // ─── Token Blacklist (for revocation) ─────────────────────────────────

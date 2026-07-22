@@ -5,9 +5,11 @@ import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowRight, Printer, Download } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useUIStore } from "@/stores/uiStore";
 
 export default function ReportsVatReturnPage() {
   const navigate = useNavigate();
+  const addNotification = useUIStore((s) => s.addNotification);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState(() => {
@@ -19,7 +21,7 @@ export default function ReportsVatReturnPage() {
     setLoading(true);
     invoke("vat_return", { month: period })
       .then((d: any) => setData(d))
-      .catch(console.error)
+      .catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
       .finally(() => setLoading(false));
   };
 

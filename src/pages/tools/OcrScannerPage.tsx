@@ -5,6 +5,7 @@ import { formatOMR, formatDate, cn } from "@/lib/utils";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { ScanLine, Upload, Save, Clock, FileText, CheckCircle2 } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 interface OcrResult {
   invoice_number: string;
@@ -25,6 +26,7 @@ interface HistoryEntry {
 }
 
 export default function OcrScannerPage() {
+  const addNotification = useUIStore((s) => s.addNotification);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -37,7 +39,7 @@ export default function OcrScannerPage() {
     setHistoryLoading(true);
     invoke("ocr_get_history")
       .then((d: any) => setHistory(d || []))
-      .catch(console.error)
+      .catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
       .finally(() => setHistoryLoading(false));
   }, []);
 

@@ -21,7 +21,7 @@ export default function ProductionOrderCreatePage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    invoke("list_products").then((d: any) => setProducts(d)).catch(console.error);
+    invoke("list_products").then((d: any) => setProducts(d)).catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }));
   }, []);
 
   const addLine = () => setLines([...lines, { product_id: products[0]?.id || 0, cartons_good: 0, cartons_waste: 0, worker: "" }]);

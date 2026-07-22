@@ -5,14 +5,16 @@ import Button from "@/components/ui/Button";
 import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowRight, UserCog, Edit } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 export default function EmployeeDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { addNotification } = useUIStore();
   const [emp, setEmp] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { invoke("get_employee", { id: Number(id) }).then((d) => setEmp(d)).catch(console.error).finally(() => setLoading(false)); }, [id]);
+  useEffect(() => { invoke("get_employee", { id: Number(id) }).then((d) => setEmp(d)).catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false)); }, [id]);
 
   if (loading || !emp) return <div className="flex items-center justify-center h-64"><div className="w-12 h-12 border-2 border-brand-800 border-t-gold-400 rounded-full animate-spin" /></div>;
 

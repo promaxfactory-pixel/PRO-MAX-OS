@@ -31,7 +31,7 @@ export default function CustomerFormPage() {
           credit_limit_milli: d.credit_limit_milli || 0, payment_terms: d.payment_terms || "",
           opening_balance_milli: d.opening_balance_milli || 0, notes: d.notes || "",
         });
-      }).catch(console.error).finally(() => setLoading(false));
+      }).catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false));
     }
   }, [id, isEdit]);
 

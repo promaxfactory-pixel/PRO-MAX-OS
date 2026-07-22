@@ -3,12 +3,14 @@ import DataTable, { Column } from "@/components/ui/DataTable";
 import Badge from "@/components/ui/Badge";
 import { invoke } from "@tauri-apps/api/core";
 import { BookOpen } from "lucide-react";
+import { useUIStore } from "../../stores/uiStore";
 
 export default function AccountsPage() {
+  const { addNotification } = useUIStore();
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { invoke("list_accounts").then((d: any) => setAccounts(d)).catch(console.error).finally(() => setLoading(false)); }, []);
+  useEffect(() => { invoke("list_accounts").then((d: any) => setAccounts(d)).catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false)); }, []);
 
   const typeColors: Record<string, string> = { asset: 'badge-success', liability: 'badge-danger', equity: 'badge-info', revenue: 'badge-gold', expense: 'badge-warning' };
   const typeLabels: Record<string, string> = { asset: 'أصول', liability: 'التزامات', equity: 'حقوق ملكية', revenue: 'إيرادات', expense: 'مصروفات' };

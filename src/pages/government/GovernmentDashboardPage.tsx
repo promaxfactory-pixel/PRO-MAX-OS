@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import Card from "@/components/ui/Card";
 import { Building2, ScrollText, IdCard, Globe, Clock, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 interface GovDashboard {
   entities_count: number;
@@ -47,6 +48,7 @@ interface DocStatus {
 }
 
 export default function GovernmentDashboardPage() {
+  const { addNotification } = useUIStore();
   const [dashboard, setDashboard] = useState<GovDashboard | null>(null);
   const [docStatus, setDocStatus] = useState<DocStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,7 +60,7 @@ export default function GovernmentDashboardPage() {
     ]).then(([d, ds]) => {
       setDashboard(d);
       setDocStatus(ds);
-    }).catch(console.error).finally(() => setLoading(false));
+    }).catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false));
   }, []);
 
   if (loading) {

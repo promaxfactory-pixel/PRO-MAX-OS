@@ -36,7 +36,7 @@ export default function IntegrationsPage() {
   useEffect(() => {
     invoke<Partial<Settings>>("integrations_get_settings")
       .then((d) => setForm((prev) => ({ ...prev, ...d })))
-      .catch(console.error);
+      .catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }));
   }, []);
 
   const handleChange = (field: keyof Settings, value: any) => {

@@ -912,6 +912,11 @@ pub fn einvoice_save_settings(
         .query_row("SELECT id FROM companies LIMIT 1", [], |row| row.get(0))
         .unwrap_or(1);
 
+    let enc_key = api_key.as_ref().map(|k| crate::crypto::encrypt_if_needed(k)).transpose().map_err(|e| e.to_string())?;
+    let enc_secret = api_secret.as_ref().map(|s| crate::crypto::encrypt_if_needed(s)).transpose().map_err(|e| e.to_string())?;
+    let enc_portal_user = portal_username.as_ref().map(|u| crate::crypto::encrypt_if_needed(u)).transpose().map_err(|e| e.to_string())?;
+    let enc_portal_pass = portal_password.as_ref().map(|p| crate::crypto::encrypt_if_needed(p)).transpose().map_err(|e| e.to_string())?;
+
     let existing = conn
         .query_row(
             "SELECT id FROM einvoice_settings WHERE company_id = ?1",
@@ -930,7 +935,7 @@ pub fn einvoice_save_settings(
              updated_at = datetime('now')
              WHERE id = ?9",
             rusqlite::params![environment, auto_submit as i32, submit_on_post as i32,
-                tax_authority_endpoint, api_key, api_secret, portal_username, portal_password, eid],
+                tax_authority_endpoint, enc_key, enc_secret, enc_portal_user, enc_portal_pass, eid],
         ).map_err(|e| e.to_string())?;
     } else {
         conn.execute(
@@ -938,7 +943,7 @@ pub fn einvoice_save_settings(
              tax_authority_endpoint, api_key, api_secret, portal_username, portal_password)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             rusqlite::params![company_id, environment, auto_submit as i32, submit_on_post as i32,
-                tax_authority_endpoint, api_key, api_secret, portal_username, portal_password],
+                tax_authority_endpoint, enc_key, enc_secret, enc_portal_user, enc_portal_pass],
         ).map_err(|e| e.to_string())?;
     }
 

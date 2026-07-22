@@ -4,8 +4,10 @@ import Tabs from "@/components/ui/Tabs";
 import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { TrendingUp, TrendingDown, BarChart3 } from "lucide-react";
+import { useUIStore } from "../../stores/uiStore";
 
 export default function FinancialStatementsPage() {
+  const { addNotification } = useUIStore();
   const [activeTab, setActiveTab] = useState("income");
   const [income, setIncome] = useState<any>(null);
   const [balance, setBalance] = useState<any>(null);
@@ -14,7 +16,7 @@ export default function FinancialStatementsPage() {
   useEffect(() => {
     Promise.all([invoke("get_income_statement"), invoke("get_balance_sheet")])
       .then(([i, b]) => { setIncome(i); setBalance(b); })
-      .catch(console.error)
+      .catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
       .finally(() => setLoading(false));
   }, []);
 
