@@ -4,8 +4,10 @@ import Button from "@/components/ui/Button";
 import { invoke } from "@tauri-apps/api/core";
 import { useLicenseStore } from "@/stores/licenseStore";
 import { Save, Building2, Shield, Key, Eye, EyeOff, CheckCircle, Copy } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 export default function SettingsPage() {
+  const addNotification = useUIStore((s) => s.addNotification);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [clickCount, setClickCount] = useState(0);
@@ -58,7 +60,7 @@ export default function SettingsPage() {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
-      console.error(err);
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء الحفظ" });
     } finally {
       setSaving(false);
     }

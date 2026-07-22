@@ -38,7 +38,7 @@ export default function InvoiceDetailPage() {
       const ln = await invoke<InvoiceLine[]>("get_invoice_lines", { invoiceId: Number(id) });
       setInvoice(inv);
       setLines(ln);
-    } catch (err) { console.error(err); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
   };
 

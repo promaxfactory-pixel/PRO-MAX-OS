@@ -5,9 +5,11 @@ import DataTable, { Column } from "@/components/ui/DataTable";
 import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Calendar, AlertTriangle } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 export default function UnpaidInvoicesPage() {
   const navigate = useNavigate();
+  const addNotification = useUIStore((s) => s.addNotification);
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [asOf, setAsOf] = useState(new Date().toISOString().split("T")[0]);
@@ -19,7 +21,7 @@ export default function UnpaidInvoicesPage() {
     try {
       const result = await invoke("unpaid_invoices_report", { asOf: asOf || null });
       setData(result as any[]);
-    } catch (err) { console.error(err); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
   };
 

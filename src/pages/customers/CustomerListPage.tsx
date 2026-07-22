@@ -5,9 +5,11 @@ import Button from "@/components/ui/Button";
 import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, Users } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 export default function CustomerListPage() {
   const navigate = useNavigate();
+  const addNotification = useUIStore((s) => s.addNotification);
   const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -16,7 +18,7 @@ export default function CustomerListPage() {
   const loadCustomers = async () => {
     setLoading(true);
     try { const d = await invoke("list_customers"); setCustomers(d as any[]); }
-    catch (err) { console.error(err); }
+    catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
   };
 

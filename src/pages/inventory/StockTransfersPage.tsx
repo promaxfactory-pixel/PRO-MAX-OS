@@ -42,7 +42,7 @@ export default function StockTransfersPage() {
       setWarehouses(warehousesData as any[]);
       setItems(itemsData as any[]);
     } catch (err) {
-      console.error(err);
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" });
     } finally {
       setLoading(false);
     }

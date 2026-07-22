@@ -4,8 +4,10 @@ import Button from "@/components/ui/Button";
 import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Calendar, TrendingUp, TrendingDown, DollarSign, Users, Truck } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 export default function OwnerSummaryPage() {
+  const addNotification = useUIStore((s) => s.addNotification);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [fromDate, setFromDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0]);
@@ -18,7 +20,7 @@ export default function OwnerSummaryPage() {
     try {
       const result = await invoke("owner_summary", { fromDate, toDate });
       setData(result);
-    } catch (err) { console.error(err); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
   };
 

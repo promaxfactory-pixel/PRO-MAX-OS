@@ -7,9 +7,11 @@ import Card from "@/components/ui/Card";
 import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, FileCheck, AlertTriangle, Clock, ShieldAlert } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 export default function RenewalsPage() {
   const navigate = useNavigate();
+  const addNotification = useUIStore((s) => s.addNotification);
   const [renewals, setRenewals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -33,7 +35,7 @@ export default function RenewalsPage() {
     try {
       const d = await invoke("list_renewals");
       setRenewals(d as any[]);
-    } catch (err) { console.error(err); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
   };
 
@@ -56,7 +58,7 @@ export default function RenewalsPage() {
       setShowForm(false);
       setForm({ name: "", category: "", authority: "", issue_date: "", expiry_date: "", cost_milli: "", responsible: "", alert_days: "30", notes: "" });
       loadRenewals();
-    } catch (err) { console.error(err); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء الحفظ" }); }
     finally { setSaving(false); }
   };
 

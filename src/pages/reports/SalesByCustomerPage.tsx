@@ -4,8 +4,10 @@ import DataTable, { Column } from "@/components/ui/DataTable";
 import { formatOMR, formatNumber } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Calendar, Users } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 export default function SalesByCustomerPage() {
+  const addNotification = useUIStore((s) => s.addNotification);
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [fromDate, setFromDate] = useState("");
@@ -21,7 +23,7 @@ export default function SalesByCustomerPage() {
         toDate: toDate || null,
       });
       setData(result as any[]);
-    } catch (err) { console.error(err); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
   };
 

@@ -8,6 +8,7 @@ import {
   Settings2, ListOrdered, AlertTriangle, Hash, Ban,
   Play, Globe, Server, Key,
 } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 interface DashboardData {
   total_generated: number;
@@ -98,6 +99,7 @@ function statusBadge(status: string) {
 }
 
 export default function EInvoicePage() {
+  const addNotification = useUIStore((s) => s.addNotification);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [records, setRecords] = useState<EinvoiceRecord[]>([]);
   const [queue, setQueue] = useState<QueueItem[]>([]);
@@ -140,7 +142,9 @@ export default function EInvoicePage() {
         setSOnPost(set.submit_on_post);
         setSEndpoint(set.tax_authority_endpoint || "");
       }
-    } catch { }
+    } catch {
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" });
+    }
     finally { setLoading(false); }
   }, [statusFilter]);
 
@@ -157,7 +161,7 @@ export default function EInvoicePage() {
       const valid = await invoke<ValidationResult>("einvoice_validate", { invoiceId: selectedId });
       setValidation(valid);
       loadData();
-    } catch (err) { console.error(err); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setGenerating(false); }
   };
 

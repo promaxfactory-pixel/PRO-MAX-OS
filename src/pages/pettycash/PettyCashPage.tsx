@@ -5,8 +5,10 @@ import Card, { StatCard } from "@/components/ui/Card";
 import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, Save, Coins, ArrowRight } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 export default function PettyCashPage() {
+  const addNotification = useUIStore((s) => s.addNotification);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -24,7 +26,7 @@ export default function PettyCashPage() {
   const loadAccounts = async () => {
     setLoading(true);
     try { const d = await invoke("list_petty_cash_accounts"); setAccounts(d as any[]); }
-    catch (err) { console.error(err); }
+    catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
   };
 
@@ -55,7 +57,7 @@ export default function PettyCashPage() {
       setShowForm(false);
       loadAccounts();
     } catch (err) {
-      console.error(err);
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء الحفظ" });
     } finally {
       setSubmitting(false);
     }

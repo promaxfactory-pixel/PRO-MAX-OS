@@ -7,6 +7,7 @@ import {
   FileSpreadsheet, Upload, CheckCircle2, XCircle, ArrowRight,
   RotateCcw, Download, AlertTriangle
 } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 type ImportType = "journal" | "customers" | "products" | "inventory";
 
@@ -30,6 +31,7 @@ const TARGET_FIELDS: Record<ImportType, string[]> = {
 };
 
 export default function ExcelImportPage() {
+  const addNotification = useUIStore((s) => s.addNotification);
   const [file, setFile] = useState<File | null>(null);
   const [importType, setImportType] = useState<ImportType>("journal");
   const [headers, setHeaders] = useState<string[]>([]);
@@ -60,7 +62,7 @@ export default function ExcelImportPage() {
       setRows(data.rows.slice(0, 5));
       setMappings(data.headers.map((h) => ({ source: h, target: "" })));
     } catch (err) {
-      console.error(err);
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" });
     }
   };
 
@@ -79,7 +81,7 @@ export default function ExcelImportPage() {
       setErrors(data);
       setStep("review");
     } catch (err) {
-      console.error(err);
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" });
     }
   };
 
@@ -101,7 +103,7 @@ export default function ExcelImportPage() {
       setStep("done");
       loadHistory();
     } catch (err) {
-      console.error(err);
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء الحفظ" });
     } finally {
       setImporting(false);
     }

@@ -5,8 +5,10 @@ import Badge from "@/components/ui/Badge";
 import { formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Search, Shield, Users, Calendar, ChevronDown, ChevronUp } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 export default function AuditLogPage() {
+  const addNotification = useUIStore((s) => s.addNotification);
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -23,7 +25,7 @@ export default function AuditLogPage() {
     try {
       const d = await invoke("list_audit_logs");
       setLogs(d as any[]);
-    } catch (err) { console.error(err); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
   };
 

@@ -7,6 +7,7 @@ import {
   MessageSquare, Mail, Printer, Save, CheckCircle2,
   Send, Wifi, WifiOff
 } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 interface Settings {
   whatsapp_api_key: string;
@@ -21,6 +22,7 @@ interface Settings {
 }
 
 export default function IntegrationsPage() {
+  const addNotification = useUIStore((s) => s.addNotification);
   const [form, setForm] = useState<Settings>({
     whatsapp_api_key: "", whatsapp_phone: "",
     smtp_server: "", smtp_port: 587, smtp_user: "", smtp_pass: "", smtp_from: "",
@@ -48,7 +50,7 @@ export default function IntegrationsPage() {
       await invoke("integrations_save_settings", { settings: form });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } catch (err) { console.error(err); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء الحفظ" }); }
     finally { setSaving(false); }
   };
 

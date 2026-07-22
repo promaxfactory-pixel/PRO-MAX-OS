@@ -7,10 +7,12 @@ import {
   Database, Download, Upload, Trash2, CheckCircle2,
   AlertTriangle, RefreshCw
 } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 interface Backup { id: number; file_name: string; size: string; created_at: string; type: string; }
 
 export default function BackupPage() {
+  const addNotification = useUIStore((s) => s.addNotification);
   const [backups, setBackups] = useState<Backup[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -66,7 +68,7 @@ export default function BackupPage() {
       setMessage({ type: "success", text: "تم التصدير بنجاح" });
       setTimeout(() => setMessage(null), 4000);
     } catch (err) {
-      console.error(err);
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء التصدير" });
     }
   };
 

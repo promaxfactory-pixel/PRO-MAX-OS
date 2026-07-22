@@ -6,8 +6,10 @@ import Card from "@/components/ui/Card";
 import { formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, Trash2, Shield, Edit } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 export default function UsersPage() {
+  const addNotification = useUIStore((s) => s.addNotification);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -39,7 +41,7 @@ export default function UsersPage() {
       setForm({ username: "", full_name: "", email: "", role: "viewer", password: "" });
       fetchUsers();
     } catch (err) {
-      console.error(err);
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء الحفظ" });
     } finally {
       setSaving(false);
     }

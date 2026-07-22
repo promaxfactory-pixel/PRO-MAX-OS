@@ -235,15 +235,15 @@ fn tool_get_invoice(conn: &Connection, args: &Value) -> Value {
 fn tool_list_products(conn: &Connection, args: &Value) -> Value {
     let limit = args.get("limit").and_then(|v| v.as_i64()).unwrap_or(50);
     let mut stmt = conn.prepare(
-        "SELECT id, code, name_ar, name_en, category, unit_price_milli, active
+        "SELECT id, code, name_ar, name_en, default_price_milli, default_cost_milli, active
          FROM products ORDER BY name_ar LIMIT ?1"
     ).unwrap();
     let rows: Vec<Value> = stmt.query_map([limit], |row| {
         Ok(json!({
             "id": row.get::<_, i64>(0)?, "code": row.get::<_, Option<String>>(1)?,
             "name_ar": row.get::<_, String>(2)?, "name_en": row.get::<_, Option<String>>(3)?,
-            "category": row.get::<_, Option<String>>(4)?,
-            "unit_price": row.get::<_, i64>(5)? as f64 / 1000.0,
+            "price_milli": row.get::<_, i64>(4)?,
+            "cost_milli": row.get::<_, i64>(5)?,
             "active": row.get::<_, bool>(6)?,
         }))
     }).unwrap().filter_map(|r| r.ok()).collect();
@@ -252,15 +252,16 @@ fn tool_list_products(conn: &Connection, args: &Value) -> Value {
 
 fn tool_get_inventory(conn: &Connection, _args: &Value) -> Value {
     let mut stmt = conn.prepare(
-        "SELECT ii.id, COALESCE(p.name_ar,''), ii.quantity, ii.min_stock, ii.max_stock, ii.location
-         FROM inventory_items ii LEFT JOIN products p ON ii.product_id = p.id
-         ORDER BY p.name_ar LIMIT 100"
+        "SELECT ii.id, COALESCE(ii.code, ''), COALESCE(ii.name_ar, ''), ii.qty_on_hand, ii.reorder_level, ii.avg_cost_milli
+         FROM inventory_items ii
+         ORDER BY ii.name_ar LIMIT 100"
     ).unwrap();
     let rows: Vec<Value> = stmt.query_map([], |row| {
         Ok(json!({
-            "id": row.get::<_, i64>(0)?, "product": row.get::<_, String>(1)?,
-            "quantity": row.get::<_, f64>(2)?, "min_stock": row.get::<_, f64>(3)?,
-            "max_stock": row.get::<_, f64>(4)?, "location": row.get::<_, Option<String>>(5)?,
+            "id": row.get::<_, i64>(0)?, "code": row.get::<_, Option<String>>(1)?,
+            "name": row.get::<_, Option<String>>(2)?,
+            "qty_on_hand": row.get::<_, f64>(3)?, "reorder_level": row.get::<_, f64>(4)?,
+            "avg_cost_milli": row.get::<_, f64>(5)?,
         }))
     }).unwrap().filter_map(|r| r.ok()).collect();
     json!({ "inventory": rows })
@@ -286,14 +287,14 @@ fn tool_get_dashboard_stats(conn: &Connection, _args: &Value) -> Value {
 fn tool_list_suppliers(conn: &Connection, args: &Value) -> Value {
     let limit = args.get("limit").and_then(|v| v.as_i64()).unwrap_or(50);
     let mut stmt = conn.prepare(
-        "SELECT id, name, phone, email, vat_number, balance_milli FROM suppliers ORDER BY name LIMIT ?1"
+        "SELECT id, name, phone, email, balance_milli, active FROM suppliers ORDER BY name LIMIT ?1"
     ).unwrap();
     let rows: Vec<Value> = stmt.query_map([limit], |row| {
         Ok(json!({
             "id": row.get::<_, i64>(0)?, "name": row.get::<_, String>(1)?,
             "phone": row.get::<_, Option<String>>(2)?, "email": row.get::<_, Option<String>>(3)?,
-            "vat_number": row.get::<_, Option<String>>(4)?,
-            "balance": row.get::<_, i64>(5)? as f64 / 1000.0,
+            "balance": row.get::<_, i64>(4)? as f64 / 1000.0,
+            "active": row.get::<_, i64>(5)? != 0,
         }))
     }).unwrap().filter_map(|r| r.ok()).collect();
     json!({ "suppliers": rows })
@@ -315,17 +316,17 @@ fn tool_get_company_info(conn: &Connection, _args: &Value) -> Value {
 fn tool_search_employees(conn: &Connection, args: &Value) -> Value {
     let query = args.get("query").and_then(|v| v.as_str()).unwrap_or("");
     let mut stmt = conn.prepare(
-        "SELECT id, name, department, position, phone, email, nationality, passport_no, iqama_no, active
-         FROM employees WHERE name LIKE ?1 OR passport_no LIKE ?1 OR iqama_no LIKE ?1 LIMIT 20"
+        "SELECT id, name, job, nationality, phone, passport_no, active
+         FROM employees WHERE name LIKE ?1 OR passport_no LIKE ?1 LIMIT 20"
     ).unwrap();
     let rows: Vec<Value> = stmt.query_map([format!("%{}%", query)], |row| {
         Ok(json!({
             "id": row.get::<_, i64>(0)?, "name": row.get::<_, String>(1)?,
-            "department": row.get::<_, Option<String>>(2)?, "position": row.get::<_, Option<String>>(3)?,
-            "phone": row.get::<_, Option<String>>(4)?, "email": row.get::<_, Option<String>>(5)?,
-            "nationality": row.get::<_, Option<String>>(6)?,
-            "passport_no": row.get::<_, Option<String>>(7)?, "iqama_no": row.get::<_, Option<String>>(8)?,
-            "active": row.get::<_, bool>(9)?,
+            "job": row.get::<_, Option<String>>(2)?,
+            "nationality": row.get::<_, Option<String>>(3)?,
+            "phone": row.get::<_, Option<String>>(4)?,
+            "passport_no": row.get::<_, Option<String>>(5)?,
+            "active": row.get::<_, i64>(6)? != 0,
         }))
     }).unwrap().filter_map(|r| r.ok()).collect();
     json!({ "employees": rows })

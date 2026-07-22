@@ -4,6 +4,7 @@ import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowRight, Save, Plus, Trash2 } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 interface WorkerEntry {
   worker_id: number;
@@ -18,6 +19,7 @@ interface WorkerEntry {
 
 export default function OperationsSheetCreatePage() {
   const navigate = useNavigate();
+  const addNotification = useUIStore((s) => s.addNotification);
   const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState({
@@ -60,7 +62,7 @@ export default function OperationsSheetCreatePage() {
       });
       navigate("/operations");
     } catch (err) {
-      console.error(err);
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء الحفظ" });
     } finally {
       setSaving(false);
     }

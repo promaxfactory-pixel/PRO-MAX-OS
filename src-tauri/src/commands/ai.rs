@@ -377,7 +377,7 @@ pub fn ai_customer_risk(state: State<'_, DbState>) -> Result<Vec<CustomerRisk>, 
             "SELECT c.id, c.name,
                     COUNT(DISTINCT si.inv_no) as inv_count,
                     COALESCE(SUM(si.total_milli), 0) / 1000.0 as total_rial,
-                    COALESCE(SUM(CASE WHEN si.status = 'overdue' THEN si.total_milli - si.paid_milli ELSE 0 END), 0) / 1000.0 as overdue_rial
+                    COALESCE(SUM(CASE WHEN si.status NOT IN ('Void','Draft') AND si.total_milli > si.paid_milli AND si.date < date('now') THEN si.total_milli - si.paid_milli ELSE 0 END), 0) / 1000.0 as overdue_rial
              FROM customers c
              LEFT JOIN sales_invoices si ON si.customer_id = c.id
              GROUP BY c.id, c.name

@@ -5,9 +5,11 @@ import Button from "@/components/ui/Button";
 import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, Search, Truck } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 export default function SupplierListPage() {
   const navigate = useNavigate();
+  const addNotification = useUIStore((s) => s.addNotification);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -19,7 +21,7 @@ export default function SupplierListPage() {
     try {
       const data = await invoke("list_suppliers");
       setSuppliers(data as any[]);
-    } catch (err) { console.error(err); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
   };
 

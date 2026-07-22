@@ -7,8 +7,10 @@ import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, HandCoins, Wallet, Lock } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { useUIStore } from "@/stores/uiStore";
 
 export default function EmployeeAdvancesPage() {
+  const addNotification = useUIStore((s) => s.addNotification);
   const [advances, setAdvances] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,7 +36,7 @@ export default function EmployeeAdvancesPage() {
       ]);
       setAdvances(advData as any[]);
       setEmployees(empData as any[]);
-    } catch (err) { console.error(err); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
   };
 
@@ -53,7 +55,7 @@ export default function EmployeeAdvancesPage() {
       setShowForm(false);
       setForm({ employee_id: "", amount_milli: "", date: new Date().toISOString().split("T")[0], reason: "", deduction_per_payroll_milli: "" });
       loadData();
-    } catch (err) { console.error(err); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء الحفظ" }); }
     finally { setSaving(false); }
   };
 

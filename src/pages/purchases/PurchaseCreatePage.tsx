@@ -5,6 +5,7 @@ import Card from "@/components/ui/Card";
 import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowRight, Plus, Save, Trash2 } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 interface Line {
   item_id: number;
@@ -24,6 +25,7 @@ interface InventoryItem {
 
 export default function PurchaseCreatePage() {
   const navigate = useNavigate();
+  const addNotification = useUIStore((s) => s.addNotification);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -80,7 +82,7 @@ export default function PurchaseCreatePage() {
       });
       navigate("/purchases");
     } catch (err) {
-      console.error(err);
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء الحفظ" });
     } finally {
       setSubmitting(false);
     }

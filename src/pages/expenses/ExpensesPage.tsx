@@ -5,6 +5,7 @@ import Card, { StatCard } from "@/components/ui/Card";
 import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, Save, Receipt, ArrowRight } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 const CATEGORIES = [
   "أجر", "إيجار", "مواصلات", "كهرباء", "مياه",
@@ -18,6 +19,7 @@ const METHODS = [
 ];
 
 export default function ExpensesPage() {
+  const addNotification = useUIStore((s) => s.addNotification);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -38,7 +40,7 @@ export default function ExpensesPage() {
   const loadExpenses = async () => {
     setLoading(true);
     try { const d = await invoke("list_expenses"); setExpenses(d as any[]); }
-    catch (err) { console.error(err); }
+    catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
   };
 
@@ -75,7 +77,7 @@ export default function ExpensesPage() {
       setShowForm(false);
       loadExpenses();
     } catch (err) {
-      console.error(err);
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء الحفظ" });
     } finally {
       setSubmitting(false);
     }

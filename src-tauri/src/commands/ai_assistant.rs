@@ -1009,7 +1009,7 @@ pub fn ai_suggest_actions(
                 .query_row(
                     "SELECT CASE WHEN SUM(pl.cartons_good) + SUM(pl.cartons_waste) > 0 \
                      THEN SUM(pl.cartons_waste) * 100.0 / (SUM(pl.cartons_good) + SUM(pl.cartons_waste)) ELSE 0 END \
-                     FROM production_lines pl JOIN production_orders po ON po.prod_no = pl.order_id \
+                     FROM production_lines pl JOIN production_orders po ON po.id = pl.order_id \
                      WHERE po.date >= date('now', '-30 days')",
                     [],
                     |row| row.get(0),

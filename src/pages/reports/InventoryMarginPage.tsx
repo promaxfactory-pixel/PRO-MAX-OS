@@ -4,8 +4,10 @@ import DataTable, { Column } from "@/components/ui/DataTable";
 import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Package, TrendingUp } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 export default function InventoryMarginPage() {
+  const addNotification = useUIStore((s) => s.addNotification);
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -16,7 +18,7 @@ export default function InventoryMarginPage() {
     try {
       const result = await invoke("inventory_margin_report");
       setData(result as any[]);
-    } catch (err) { console.error(err); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
   };
 

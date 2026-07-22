@@ -225,7 +225,7 @@ async fn api_dashboard(state: web::Data<AppState>, req: HttpRequest) -> HttpResp
 struct CustomerResponse {
     id: i64, name: String, phone: Option<String>, email: Option<String>,
     vat_number: Option<String>, credit_limit_omr: f64, balance_omr: f64,
-    active: bool, created_at: String,
+    active: bool,
 }
 
 async fn api_list_customers(state: web::Data<AppState>, req: HttpRequest) -> HttpResponse {
@@ -233,7 +233,7 @@ async fn api_list_customers(state: web::Data<AppState>, req: HttpRequest) -> Htt
     let conn = match state.db.lock() { Ok(c) => c, Err(e) => return err(&e.to_string()) };
 
     let customers: Vec<CustomerResponse> = conn.prepare(
-        "SELECT id, name, phone, email, vat_number, credit_limit_milli, balance_milli, active, created_at
+        "SELECT id, name, phone, email, vat_number, credit_limit_milli, balance_milli, active
          FROM customers ORDER BY name LIMIT 200"
     ).ok().and_then(|mut stmt| {
         stmt.query_map([], |row| {
@@ -242,7 +242,7 @@ async fn api_list_customers(state: web::Data<AppState>, req: HttpRequest) -> Htt
                 email: row.get(3)?, vat_number: row.get(4)?,
                 credit_limit_omr: row.get::<_, i64>(5)? as f64 / 1000.0,
                 balance_omr: row.get::<_, i64>(6)? as f64 / 1000.0,
-                active: row.get(7)?, created_at: row.get(8)?,
+                active: row.get::<_, i64>(7)? != 0,
             })
         }).ok().map(|iter| iter.filter_map(|r| r.ok()).collect())
     }).unwrap_or_default();
@@ -256,14 +256,14 @@ async fn api_get_customer(state: web::Data<AppState>, req: HttpRequest, path: we
     let id = path.into_inner();
 
     match conn.query_row(
-        "SELECT id, name, phone, email, vat_number, credit_limit_milli, balance_milli, active, created_at
+        "SELECT id, name, phone, email, vat_number, credit_limit_milli, balance_milli, active
          FROM customers WHERE id = ?1", [id],
         |row| Ok(CustomerResponse {
             id: row.get(0)?, name: row.get(1)?, phone: row.get(2)?,
             email: row.get(3)?, vat_number: row.get(4)?,
             credit_limit_omr: row.get::<_, i64>(5)? as f64 / 1000.0,
             balance_omr: row.get::<_, i64>(6)? as f64 / 1000.0,
-            active: row.get(7)?, created_at: row.get(8)?,
+            active: row.get::<_, i64>(7)? != 0,
         })
     ) {
         Ok(c) => HttpResponse::Ok().json(c),
@@ -377,7 +377,7 @@ async fn api_get_invoice(state: web::Data<AppState>, req: HttpRequest, path: web
 #[derive(Serialize)]
 struct ProductResponse {
     id: i64, code: Option<String>, name_ar: String, name_en: Option<String>,
-    category: Option<String>, unit_price_omr: f64, active: bool,
+    price_omr: f64, cost_omr: f64, active: bool,
 }
 
 async fn api_list_products(state: web::Data<AppState>, req: HttpRequest) -> HttpResponse {
@@ -385,14 +385,15 @@ async fn api_list_products(state: web::Data<AppState>, req: HttpRequest) -> Http
     let conn = match state.db.lock() { Ok(c) => c, Err(e) => return err(&e.to_string()) };
 
     let products: Vec<ProductResponse> = conn.prepare(
-        "SELECT id, code, name_ar, name_en, category, unit_price_milli, active FROM products ORDER BY name_ar LIMIT 200"
+        "SELECT id, code, name_ar, name_en, default_price_milli, default_cost_milli, active FROM products ORDER BY name_ar LIMIT 200"
     ).ok().and_then(|mut stmt| {
         stmt.query_map([], |row| {
             Ok(ProductResponse {
                 id: row.get(0)?, code: row.get(1)?, name_ar: row.get(2)?,
-                name_en: row.get(3)?, category: row.get(4)?,
-                unit_price_omr: row.get::<_, i64>(5)? as f64 / 1000.0,
-                active: row.get(6)?,
+                name_en: row.get(3)?,
+                price_omr: row.get::<_, i64>(4)? as f64 / 1000.0,
+                cost_omr: row.get::<_, i64>(5)? as f64 / 1000.0,
+                active: row.get::<_, i64>(6)? != 0,
             })
         }).ok().map(|iter| iter.filter_map(|r| r.ok()).collect())
     }).unwrap_or_default();

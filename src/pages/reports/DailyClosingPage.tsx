@@ -3,8 +3,10 @@ import Card from "@/components/ui/Card";
 import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Calendar, Factory, ShoppingCart, Receipt, TrendingDown, Wallet } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 export default function DailyClosingPage() {
+  const addNotification = useUIStore((s) => s.addNotification);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
@@ -16,7 +18,7 @@ export default function DailyClosingPage() {
     try {
       const result = await invoke("daily_factory_closing", { date: date || null });
       setData(result);
-    } catch (err) { console.error(err); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
   };
 

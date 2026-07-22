@@ -78,6 +78,10 @@ function TypingDots() {
   );
 }
 
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 function renderMessageContent(content: string) {
   const lines = content.split("\n");
   return lines.map((line, i) => {
@@ -104,7 +108,8 @@ function renderMessageContent(content: string) {
       return <li key={i} className="text-sm text-surface-300 mr-4 list-decimal">{line.replace(/^\d+\.\s*/, "")}</li>;
     }
     if (line.trim() === "") return <br key={i} />;
-    const formatted = line
+    const escaped = escapeHtml(line);
+    const formatted = escaped
       .replace(/\*\*(.*?)\*\*/g, '<strong class="text-white">$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>');
     return <p key={i} className="text-sm text-surface-300" dangerouslySetInnerHTML={{ __html: formatted }} />;

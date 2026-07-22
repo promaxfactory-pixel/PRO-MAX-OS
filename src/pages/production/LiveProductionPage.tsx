@@ -88,7 +88,9 @@ export default function LiveProductionPage() {
     try {
       const data = await invoke<DashboardData>("get_live_dashboard", {});
       setDashboard(data);
-    } catch {}
+    } catch {
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" });
+    }
   }, []);
 
   useEffect(() => {

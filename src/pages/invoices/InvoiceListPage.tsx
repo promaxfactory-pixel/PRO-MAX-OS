@@ -7,9 +7,11 @@ import Card from "@/components/ui/Card";
 import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, FileText, Download, Filter } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 export default function InvoiceListPage() {
   const navigate = useNavigate();
+  const addNotification = useUIStore((s) => s.addNotification);
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("all");
@@ -21,7 +23,7 @@ export default function InvoiceListPage() {
     try {
       const data = await invoke("list_invoices");
       setInvoices(data as any[]);
-    } catch (err) { console.error(err); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
   };
 

@@ -13,9 +13,11 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell
 } from "recharts";
+import { useUIStore } from "@/stores/uiStore";
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const addNotification = useUIStore((s) => s.addNotification);
   const [stats, setStats] = useState<any>(null);
   const [liveData, setLiveData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -31,7 +33,7 @@ export default function DashboardPage() {
       const data = await invoke("get_dashboard_stats");
       setStats(data);
     } catch (err) {
-      console.error(err);
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" });
     } finally {
       setLoading(false);
     }
@@ -41,7 +43,9 @@ export default function DashboardPage() {
     try {
       const data = await invoke("get_live_dashboard");
       setLiveData(data);
-    } catch {}
+    } catch {
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" });
+    }
   };
 
   const salesTrend = stats?.sales_trend?.map((d: any) => ({ name: d.date?.slice(5) || d.date, amount: d.amount / 1000 })) || [];

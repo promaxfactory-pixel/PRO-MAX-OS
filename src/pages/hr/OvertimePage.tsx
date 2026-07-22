@@ -7,8 +7,10 @@ import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, Clock, DollarSign, CheckCircle, XCircle } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { useUIStore } from "@/stores/uiStore";
 
 export default function OvertimePage() {
+  const addNotification = useUIStore((s) => s.addNotification);
   const [records, setRecords] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,7 +41,7 @@ export default function OvertimePage() {
       ]);
       setRecords(otData as any[]);
       setEmployees(empData as any[]);
-    } catch (err) { console.error(err); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
   };
 
@@ -59,7 +61,7 @@ export default function OvertimePage() {
       setShowForm(false);
       setForm({ employee_id: "", date: new Date().toISOString().split("T")[0], hours: "", rate_multiplier: "1.5", reason: "", notes: "" });
       loadData();
-    } catch (err) { console.error(err); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء الحفظ" }); }
     finally { setSaving(false); }
   };
 
@@ -67,14 +69,14 @@ export default function OvertimePage() {
     try {
       await invoke("approve_overtime", { id, input: { approved_by: "admin" } });
       loadData();
-    } catch (err) { console.error(err); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء الحفظ" }); }
   };
 
   const handleReject = async (id: number) => {
     try {
       await invoke("reject_overtime", { id });
       loadData();
-    } catch (err) { console.error(err); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء الحفظ" }); }
   };
 
   const totalHoursThisMonth = records

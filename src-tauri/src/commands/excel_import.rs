@@ -461,7 +461,7 @@ pub fn excel_import_journal(
     input: ExcelImportInput,
 ) -> Result<ExcelImportResult, String> {
     let (headers, data) = read_all_rows(&input.file_path, &input.sheet_name)?;
-    let start_idx = if input.skip_first_row { 0 } else { 0 };
+    let start_idx = if input.skip_first_row { 1 } else { 0 };
     let data_rows = &data[start_idx..];
 
     let mut hmap = header_index_map(&headers);

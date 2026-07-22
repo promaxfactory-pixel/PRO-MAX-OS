@@ -8,10 +8,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { ArrowRight, Printer, Calendar } from "lucide-react";
 import StatementPrintTemplate from "@/components/print/StatementPrintTemplate";
 import { printComponent } from "@/utils/printUtils";
+import { useUIStore } from "@/stores/uiStore";
 
 export default function CustomerStatementPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const addNotification = useUIStore((s) => s.addNotification);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [fromDate, setFromDate] = useState("");
@@ -30,7 +32,7 @@ export default function CustomerStatementPage() {
         toDate: toDate || null,
       });
       setData(result);
-    } catch (err) { console.error(err); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
   };
 
@@ -43,7 +45,7 @@ export default function CustomerStatementPage() {
         printComponent("print-area");
         setShowPrint(false);
       }, 200);
-    } catch (err) { console.error(err); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
   };
 
   if (loading || !data) {

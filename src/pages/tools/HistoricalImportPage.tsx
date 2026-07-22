@@ -10,6 +10,7 @@ import {
   AlertTriangle, RotateCcw, ArrowRight, ChevronLeft, FileSpreadsheet,
   Download, Loader2, ChevronDown
 } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 type EntityType =
   | "customers" | "suppliers" | "products"

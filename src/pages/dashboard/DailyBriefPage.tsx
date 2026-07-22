@@ -8,9 +8,11 @@ import {
   AlertTriangle, Package, Users, FileText, Clock,
   TrendingDown, Shield, RefreshCw
 } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 export default function DailyBriefPage() {
   const navigate = useNavigate();
+  const addNotification = useUIStore((s) => s.addNotification);
   const [brief, setBrief] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -21,7 +23,7 @@ export default function DailyBriefPage() {
     try {
       const data = await invoke("get_daily_brief");
       setBrief(data);
-    } catch (err) { console.error(err); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
   };
 

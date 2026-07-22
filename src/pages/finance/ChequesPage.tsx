@@ -6,10 +6,12 @@ import Card from "@/components/ui/Card";
 import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, FileText, AlertTriangle, CheckCircle } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 type ChequeKind = "all" | "issued" | "received";
 
 export default function ChequesPage() {
+  const addNotification = useUIStore((s) => s.addNotification);
   const [cheques, setCheques] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [kind, setKind] = useState<ChequeKind>("all");
@@ -32,7 +34,7 @@ export default function ChequesPage() {
     try {
       const d = await invoke("list_cheques");
       setCheques(d as any[]);
-    } catch (err) { console.error(err); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
   };
 
@@ -53,7 +55,7 @@ export default function ChequesPage() {
       setShowForm(false);
       setForm({ kind: "issued", cheque_no: "", bank: "", party: "", amount_milli: "", due_date: "", notes: "" });
       loadCheques();
-    } catch (err) { console.error(err); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء الحفظ" }); }
     finally { setSaving(false); }
   };
 
