@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useLicenseStore } from "@/stores/licenseStore";
 import { Shield, CheckCircle, XCircle, Key, Info } from "lucide-react";
 
 export default function LicenseActivationPage() {
   const [licenseKey, setLicenseKey] = useState("");
   const { activateLicense, isLoading, message, isLicensed, license } = useLicenseStore();
+  const navigate = useNavigate();
 
   const handleActivate = async () => {
     if (!licenseKey.trim()) return;
@@ -124,7 +126,7 @@ export default function LicenseActivationPage() {
                 )}
 
                 <button
-                  onClick={() => window.location.reload()}
+                  onClick={() => navigate("/login")}
                   className="mt-6 w-full py-3 bg-gradient-to-r from-brand-800 to-brand-900 text-white font-bold rounded-xl hover:from-brand-700 hover:to-brand-800 border border-brand-700 transition-all"
                 >
                   الدخول إلى البرنامج

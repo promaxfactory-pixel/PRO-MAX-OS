@@ -11,16 +11,60 @@ pub fn init_database(path: &Path) -> Result<Connection> {
     // Core schema
     conn.execute_batch(include_str!("schema.sql"))?;
     
+    // Ensure admin user exists with auto-generated password
+    ensure_admin_user(&conn)?;
+    
     // Run migrations
     migrations::run(&conn)?;
     
     Ok(conn)
 }
 
+fn ensure_admin_user(conn: &Connection) -> Result<()> {
+    let admin_exists: bool = conn
+        .query_row(
+            "SELECT COUNT(*) FROM users WHERE username='admin'",
+            [],
+            |r| r.get::<_, i64>(0),
+        )
+        .unwrap_or(0) > 0;
+
+    if !admin_exists {
+        use rand::Rng;
+        let temp_password: String = (0..16)
+            .map(|_| {
+                let charset = b"ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%&";
+                let idx = rand::thread_rng().gen_range(0..charset.len());
+                charset[idx] as char
+            })
+            .collect();
+        
+        let hash = crate::crypto::hash_password(&temp_password)
+            .unwrap_or_else(|_| "argon2id$v=19$m=19456,t=2,p=1$FALLBACK".into());
+        
+        conn.execute(
+            "INSERT INTO users(username, full_name, password_hash, salt, role, active, must_change_password, created_at)
+             VALUES('admin', 'مدير النظام', ?, '', 'admin', 1, 1, datetime('now'))",
+            [&hash],
+        )?;
+
+        // Log the temporary password to stderr/stout so it appears in Tauri console
+        eprintln!("========================================");
+        eprintln!("   PRO MAX OS - FIRST TIME SETUP");
+        eprintln!("========================================");
+        eprintln!("  Admin username: admin");
+        eprintln!("  Admin password: {}", temp_password);
+        eprintln!("  ** CHANGE THIS PASSWORD ON FIRST LOGIN **");
+        eprintln!("========================================");
+    }
+
+    Ok(())
+}
+
 mod migrations {
     use rusqlite::{Connection, Result};
     
-    const SCHEMA_VERSION: i32 = 19;
+    const SCHEMA_VERSION: i32 = 20;
     
     pub fn run(conn: &Connection) -> Result<()> {
         let current: i32 = conn
@@ -334,6 +378,18 @@ mod migrations {
                     CREATE INDEX IF NOT EXISTS idx_einv_q_status ON einvoice_queue(status);
                     CREATE INDEX IF NOT EXISTS idx_einv_q_next ON einvoice_queue(next_retry_at);
                     CREATE INDEX IF NOT EXISTS idx_einv_comp ON einvoice_settings(company_id);"
+                ).ok();
+            }
+            20 => {
+                conn.execute_batch(
+                    "CREATE TABLE IF NOT EXISTS password_change_attempts (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL REFERENCES users(id),
+                        ts REAL NOT NULL,
+                        ok INTEGER NOT NULL DEFAULT 0
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_pca_user ON password_change_attempts(user_id);
+                    CREATE INDEX IF NOT EXISTS idx_pca_ts ON password_change_attempts(ts);"
                 ).ok();
             }
             _ => {}

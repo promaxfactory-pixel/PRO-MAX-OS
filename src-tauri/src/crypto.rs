@@ -27,10 +27,10 @@ pub struct AppSecrets {
 impl Default for AppSecrets {
     fn default() -> Self {
         Self {
-            jwt_secret: "change-me-jwt-secret-promax-2026".into(),
-            licensing_secret: "change-me-license-secret-promax-2026".into(),
-            developer_pin_hash: "change-me".into(),
-            encryption_key: "change-me-enc-key-32bytes!!".into(),
+            jwt_secret: generate_machine_secret(),
+            licensing_secret: generate_machine_secret(),
+            developer_pin_hash: hash_developer_pin("1234"),
+            encryption_key: generate_machine_secret(),
         }
     }
 }
@@ -56,11 +56,10 @@ pub fn init_secrets(db_path: &PathBuf) -> AppSecrets {
             })
         }),
         developer_pin_hash: std::env::var("PROMAX_DEV_PIN_HASH").unwrap_or_else(|_| {
-            // Default: hash of "1234" — must be changed!
-            "$argon2id$v=19$m=19456,t=2,p=1$DEFAULT_SALT$CHANGE_ME".into()
+            hash_developer_pin("1234")
         }),
         encryption_key: std::env::var("PROMAX_ENC_KEY").unwrap_or_else(|_| {
-            "promax-enc-key-v2-00000".into()
+            generate_machine_secret()
         }),
     };
 
@@ -319,18 +318,20 @@ static TOKEN_BLACKLIST: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
 
 pub fn blacklist_token(jti: &str) {
     let list = TOKEN_BLACKLIST.get_or_init(|| Mutex::new(Vec::new()));
-    list.lock().unwrap().push(jti.to_string());
-    // Keep blacklist manageable — remove entries older than 24h
-    if list.lock().unwrap().len() > 10000 {
-        list.lock().unwrap().clear();
+    if let Ok(mut guard) = list.lock() {
+        guard.push(jti.to_string());
+        if guard.len() > 10000 {
+            guard.clear();
+        }
     }
 }
 
 pub fn is_token_blacklisted(jti: &str) -> bool {
     let list = TOKEN_BLACKLIST.get();
     if let Some(l) = list {
-        l.lock().unwrap().contains(&jti.to_string())
-    } else {
-        false
+        if let Ok(guard) = l.lock() {
+            return guard.contains(&jti.to_string());
+        }
     }
+    false
 }

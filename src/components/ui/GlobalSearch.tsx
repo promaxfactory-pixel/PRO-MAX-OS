@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { Search, X, User, Package, FileText, Truck, UserCog } from "lucide-react";
+import { useUIStore } from "@/stores/uiStore";
 
 interface SearchResult {
   id: number;
@@ -59,8 +60,9 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+  const { addNotification } = useUIStore();
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -173,8 +175,9 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
         }
 
         setResults(all);
-      } catch {
+      } catch (e) {
         setResults([]);
+        addNotification({ type: "error", title: "خطأ", message: "فشل البحث" });
       } finally {
         setLoading(false);
       }

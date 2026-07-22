@@ -41,7 +41,9 @@ export default function TemperatureMonitor() {
           addNotification({ id: crypto.randomUUID(), type: "warning", title: "حرارة عالية", message: `${m.machine_name}: ${m.temperature}°C` });
         }
       }
-    } catch {}
+    } catch (e) {
+      addNotification({ type: "error", title: "خطأ", message: "فشل جلب حرارة الماكينات" });
+    }
   }, [addNotification]);
 
   useEffect(() => {

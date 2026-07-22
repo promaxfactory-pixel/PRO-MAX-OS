@@ -143,7 +143,7 @@ export default function EInvoicePage() {
         setSEndpoint(set.tax_authority_endpoint || "");
       }
     } catch {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" });
+        addNotification({ type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" });
     }
     finally { setLoading(false); }
   }, [statusFilter]);
@@ -170,7 +170,7 @@ export default function EInvoicePage() {
     try {
       await invoke("einvoice_submit", { invoiceId: id });
       loadData();
-    } catch (err: any) { alert(err); }
+    } catch (err) { addNotification({ type: "error", title: "خطأ", message: String(err) }); }
     finally { setProcessing(false); }
   };
 
@@ -180,14 +180,14 @@ export default function EInvoicePage() {
     try {
       await invoke("einvoice_cancel", { invoiceId: id, reason });
       loadData();
-    } catch (err: any) { alert(err); }
+    } catch (err) { addNotification({ type: "error", title: "خطأ في الإلغاء", message: String(err) }); }
   };
 
   const handleQueueAdd = async (id: number) => {
     try {
       await invoke("einvoice_add_to_queue", { invoiceId: id });
       loadData();
-    } catch (err: any) { alert(err); }
+    } catch (err) { addNotification({ type: "error", title: "خطأ", message: String(err) }); }
   };
 
   const handleProcessQueue = async () => {
@@ -195,7 +195,7 @@ export default function EInvoicePage() {
     try {
       await invoke("einvoice_process_queue");
       loadData();
-    } catch (err: any) { alert(err); }
+    } catch (err) { addNotification({ type: "error", title: "خطأ", message: String(err) }); }
     finally { setProcessing(false); }
   };
 
@@ -203,7 +203,7 @@ export default function EInvoicePage() {
     try {
       await invoke("einvoice_retry_queue_item", { queueId: qid });
       loadData();
-    } catch (err: any) { alert(err); }
+    } catch (err) { addNotification({ type: "error", title: "خطأ", message: String(err) }); }
   };
 
   const handleSaveSettings = async () => {
@@ -221,7 +221,7 @@ export default function EInvoicePage() {
       });
       loadData();
       setShowSettings(false);
-    } catch (err: any) { alert(err); }
+    } catch (err) { addNotification({ type: "error", title: "خطأ في الحفظ", message: String(err) }); }
     finally { setSaving(false); }
   };
 

@@ -25,7 +25,7 @@ const Toast = memo(function Toast() {
     for (const n of notifications) {
       if (!n.id) continue;
       const duration = n.duration ?? 4000;
-      timers.push(setTimeout(() => removeNotification(n.id!), duration));
+      timers.push(setTimeout(() => removeNotification(n.id || ''), duration));
     }
     return () => timers.forEach(clearTimeout);
   }, [notifications, removeNotification]);

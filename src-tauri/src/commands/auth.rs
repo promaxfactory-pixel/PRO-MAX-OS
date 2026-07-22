@@ -72,12 +72,24 @@ fn is_password_change_rate_limited(conn: &rusqlite::Connection, user_id: i64) ->
     let cutoff = chrono::Utc::now().timestamp() as f64 - (PASSWORD_CHANGE_LOCKOUT_MINUTES * 60) as f64;
     let recent_failures: i64 = conn
         .query_row(
-            "SELECT COUNT(*) FROM login_attempts WHERE username=(SELECT username FROM users WHERE id=?) AND ok=0 AND ts>=?",
+            "SELECT COUNT(*) FROM password_change_attempts WHERE user_id=? AND ok=0 AND ts>=?",
             rusqlite::params![user_id, cutoff],
             |r| r.get(0),
         )
         .map_err(|e| e.to_string())?;
     Ok(recent_failures >= MAX_PASSWORD_CHANGE_ATTEMPTS)
+}
+
+fn is_token_validate_rate_limited(conn: &rusqlite::Connection) -> Result<bool, String> {
+    let cutoff = chrono::Utc::now().timestamp() as f64 - 60.0;
+    let recent: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM login_attempts WHERE username='_validate_token_' AND ts>=?",
+            rusqlite::params![cutoff],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(recent >= 60)
 }
 
 #[tauri::command]
@@ -208,7 +220,7 @@ pub fn change_password(
 
     if !verify_password_stored(&old_password, &current.0, &current.1) {
         let _ = conn.execute(
-            "INSERT INTO login_attempts(username, ts, ok) VALUES((SELECT username FROM users WHERE id=?), ?, 0)",
+            "INSERT INTO password_change_attempts(user_id, ts, ok) VALUES(?, ?, 0)",
             rusqlite::params![user_id, chrono::Utc::now().timestamp() as f64],
         );
         return Err("كلمة المرور القديمة غير صحيحة".to_string());
@@ -228,9 +240,18 @@ pub fn change_password(
 
 #[tauri::command]
 pub fn validate_token(state: State<'_, DbState>, token: String) -> Result<User, String> {
-    let (user_id, _username, _role) = crypto::validate_tauri_token(&token)?;
-
     let conn = state.0.lock().map_err(|e| e.to_string())?;
+
+    if is_token_validate_rate_limited(&conn)? {
+        return Err("طلبات التحقق من التوكن كثيرة جداً. حاول مرة أخرى بعد دقيقة".to_string());
+    }
+
+    let _ = conn.execute(
+        "INSERT INTO login_attempts(username, ts, ok) VALUES('_validate_token_', ?, 1)",
+        rusqlite::params![chrono::Utc::now().timestamp() as f64],
+    );
+
+    let (user_id, _username, _role) = crypto::validate_tauri_token(&token)?;
 
     // Verify user still active and role hasn't changed
     conn.query_row(

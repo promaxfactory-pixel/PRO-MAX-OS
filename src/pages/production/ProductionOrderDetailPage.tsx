@@ -28,7 +28,7 @@ export default function ProductionOrderDetailPage() {
 
   const handleApprove = async () => {
     await invoke("approve_production_order", { id: Number(id) });
-    window.location.reload();
+    invoke("get_production_order", { id: Number(id) }).then((o) => setOrder(o));
   };
 
   if (loading || !order) return <div className="flex items-center justify-center h-64"><div className="w-12 h-12 border-2 border-brand-800 border-t-gold-400 rounded-full animate-spin" /></div>;

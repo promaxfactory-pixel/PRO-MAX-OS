@@ -22,10 +22,6 @@ CREATE TABLE IF NOT EXISTS users (
     created_at           TEXT
 );
 
-INSERT OR IGNORE INTO users(username, full_name, password_hash, salt, role, active, must_change_password, created_at)
-SELECT 'admin', 'مدير النظام', '741d93ffe9884eb1ad6470548b8843432770a8416436fa1314a0802fd43f8c78', 'f2b014f5-7df1-47b3-98ab-43a60d0dcce9', 'admin', 1, 1, datetime('now')
-WHERE NOT EXISTS (SELECT 1 FROM users WHERE username='admin');
-
 CREATE TABLE IF NOT EXISTS company_settings (
     id             INTEGER PRIMARY KEY CHECK (id = 1),
     name           TEXT, factory_name TEXT, address TEXT, phone TEXT,
