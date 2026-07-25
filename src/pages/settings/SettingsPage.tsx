@@ -87,34 +87,34 @@ export default function SettingsPage() {
           <div className="space-y-4">
             <div>
               <label className="form-label">اسم الشركة (عربي)</label>
-              <input type="text" value={form.company_name_ar} onChange={(e) => handleChange("company_name_ar", e.target.value)} className="input-field" />
+              <input type="text" value={form.company_name_ar} onChange={(e) => handleChange("company_name_ar", e.target.value)} className="input-field" aria-label="اسم الشركة (عربي)" />
             </div>
             <div>
               <label className="form-label">اسم الشركة (إنجليزي)</label>
-              <input type="text" value={form.company_name_en} onChange={(e) => handleChange("company_name_en", e.target.value)} className="input-field" dir="ltr" />
+              <input type="text" value={form.company_name_en} onChange={(e) => handleChange("company_name_en", e.target.value)} className="input-field" dir="ltr" aria-label="اسم الشركة (إنجليزي)" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="form-label">الرقم الضريبي</label>
-                <input type="text" value={form.vat_number} onChange={(e) => handleChange("vat_number", e.target.value)} className="input-field" />
+                <input type="text" value={form.vat_number} onChange={(e) => handleChange("vat_number", e.target.value)} className="input-field" aria-label="الرقم الضريبي" />
               </div>
               <div>
                 <label className="form-label">رقم السجل التجاري</label>
-                <input type="text" value={form.cr_number} onChange={(e) => handleChange("cr_number", e.target.value)} className="input-field" />
+                <input type="text" value={form.cr_number} onChange={(e) => handleChange("cr_number", e.target.value)} className="input-field" aria-label="رقم السجل التجاري" />
               </div>
             </div>
             <div>
               <label className="form-label">العنوان</label>
-              <input type="text" value={form.address} onChange={(e) => handleChange("address", e.target.value)} className="input-field" />
+              <input type="text" value={form.address} onChange={(e) => handleChange("address", e.target.value)} className="input-field" aria-label="العنوان" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="form-label">الهاتف</label>
-                <input type="text" value={form.phone} onChange={(e) => handleChange("phone", e.target.value)} className="input-field" dir="ltr" />
+                <input type="text" value={form.phone} onChange={(e) => handleChange("phone", e.target.value)} className="input-field" dir="ltr" aria-label="الهاتف" />
               </div>
               <div>
                 <label className="form-label">البريد الإلكتروني</label>
-                <input type="email" value={form.email} onChange={(e) => handleChange("email", e.target.value)} className="input-field" dir="ltr" />
+                <input type="email" value={form.email} onChange={(e) => handleChange("email", e.target.value)} className="input-field" dir="ltr" aria-label="البريد الإلكتروني" />
               </div>
             </div>
           </div>
@@ -127,7 +127,7 @@ export default function SettingsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="form-label">العملة</label>
-                  <select value={form.currency} onChange={(e) => handleChange("currency", e.target.value)} className="input-field">
+                  <select value={form.currency} onChange={(e) => handleChange("currency", e.target.value)} className="input-field" aria-label="العملة">
                     <option value="OMR">ريال عُماني (OMR)</option>
                     <option value="SAR">ريال سعودي (SAR)</option>
                     <option value="AED">درهم إماراتي (AED)</option>
@@ -136,12 +136,12 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <label className="form-label">نسبة الضريبة (%)</label>
-                  <input type="number" value={form.vat_rate} onChange={(e) => handleChange("vat_rate", Number(e.target.value))} className="input-field" min="0" max="100" />
+                  <input type="number" value={form.vat_rate} onChange={(e) => handleChange("vat_rate", Number(e.target.value))} className="input-field" min="0" max="100" aria-label="نسبة الضريبة" />
                 </div>
               </div>
               <div>
                 <label className="form-label">بداية السنة المالية</label>
-                <select value={form.fiscal_year_start} onChange={(e) => handleChange("fiscal_year_start", e.target.value)} className="input-field">
+                <select value={form.fiscal_year_start} onChange={(e) => handleChange("fiscal_year_start", e.target.value)} className="input-field" aria-label="بداية السنة المالية">
                   <option value="01-01">1 يناير</option>
                   <option value="04-01">1 أبريل</option>
                   <option value="07-01">1 يوليو</option>
@@ -156,21 +156,21 @@ export default function SettingsPage() {
             <div className="space-y-4">
               <div>
                 <label className="form-label">اسم البنك</label>
-                <input type="text" value={form.bank_name} onChange={(e) => handleChange("bank_name", e.target.value)} className="input-field" />
+                <input type="text" value={form.bank_name} onChange={(e) => handleChange("bank_name", e.target.value)} className="input-field" aria-label="اسم البنك" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="form-label">رقم الحساب</label>
-                  <input type="text" value={form.bank_account_no} onChange={(e) => handleChange("bank_account_no", e.target.value)} className="input-field" dir="ltr" />
+                  <input type="text" value={form.bank_account_no} onChange={(e) => handleChange("bank_account_no", e.target.value)} className="input-field" dir="ltr" aria-label="رقم الحساب" />
                 </div>
                 <div>
                   <label className="form-label">IBAN</label>
-                  <input type="text" value={form.bank_iban} onChange={(e) => handleChange("bank_iban", e.target.value)} className="input-field" dir="ltr" />
+                  <input type="text" value={form.bank_iban} onChange={(e) => handleChange("bank_iban", e.target.value)} className="input-field" dir="ltr" aria-label="رقم الحساب البنكي" />
                 </div>
               </div>
               <div>
                 <label className="form-label">SWIFT Code</label>
-                <input type="text" value={form.bank_swift} onChange={(e) => handleChange("bank_swift", e.target.value)} className="input-field dir-ltr" dir="ltr" />
+                <input type="text" value={form.bank_swift} onChange={(e) => handleChange("bank_swift", e.target.value)} className="input-field dir-ltr" dir="ltr" aria-label="رمز السويفت" />
               </div>
             </div>
           </Card>
@@ -245,6 +245,7 @@ export default function SettingsPage() {
                         onChange={(e) => { setDevPin(e.target.value); setPinError(""); }}
                         placeholder="رقم التعريف"
                         className="input-field w-full pl-10 font-mono"
+                        aria-label="رقم التعريف"
                         onKeyDown={(e) => e.key === "Enter" && (async () => {
                           try {
                             const ok = await invoke("verify_developer_pin", { pin: devPin });
@@ -279,11 +280,11 @@ export default function SettingsPage() {
                     <div className="space-y-3">
                       <div>
                         <label className="form-label">اسم العميل</label>
-                        <input type="text" value={genCustName} onChange={(e) => setGenCustName(e.target.value)} className="input-field" placeholder="اسم الشركة" />
+                        <input type="text" value={genCustName} onChange={(e) => setGenCustName(e.target.value)} className="input-field" placeholder="اسم الشركة" aria-label="اسم العميل" />
                       </div>
                       <div>
                         <label className="form-label">نوع الترخيص</label>
-                        <select value={genLicType} onChange={(e) => setGenLicType(e.target.value)} className="input-field">
+                        <select value={genLicType} onChange={(e) => setGenLicType(e.target.value)} className="input-field" aria-label="نوع الترخيص">
                           <option value="perpetual">دائم</option>
                           <option value="subscription">اشتراك</option>
                           <option value="trial">تجريبي</option>
@@ -293,11 +294,11 @@ export default function SettingsPage() {
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <label className="form-label">عدد الأيام (0 = دائم)</label>
-                          <input type="number" value={genDays} onChange={(e) => setGenDays(e.target.value)} className="input-field" min="0" />
+                          <input type="number" value={genDays} onChange={(e) => setGenDays(e.target.value)} className="input-field" min="0" aria-label="عدد الأيام" />
                         </div>
                         <div>
                           <label className="form-label">عدد المستخدمين</label>
-                          <input type="number" value={genMaxUsers} onChange={(e) => setGenMaxUsers(e.target.value)} className="input-field" min="1" />
+                          <input type="number" value={genMaxUsers} onChange={(e) => setGenMaxUsers(e.target.value)} className="input-field" min="1" aria-label="عدد المستخدمين" />
                         </div>
                       </div>
                       <Button onClick={async () => {
@@ -330,6 +331,7 @@ export default function SettingsPage() {
                               readOnly
                               className="input-field w-full h-24 font-mono text-xs"
                               dir="ltr"
+                              aria-label="مفتاح الترخيص"
                             />
                             <button onClick={() => { navigator.clipboard.writeText(genResult); }} className="absolute top-2 right-2 p-1.5 rounded bg-zinc-700 hover:bg-zinc-600 text-gray-300 transition-colors">
                               <Copy className="w-4 h-4" />

@@ -72,12 +72,12 @@ export default function ProductionOrderCreatePage() {
             <div className="space-y-3">
               {lines.map((line, i) => (
                 <div key={i} className="flex items-center gap-3 p-3 bg-surface-900/50 rounded-xl border border-surface-700/30">
-                  <select value={line.product_id} onChange={(e) => updateLine(i, "product_id", Number(e.target.value))} className="flex-1 bg-surface-800 border border-surface-700 rounded-lg px-3 py-2 text-sm text-white">
+                  <select value={line.product_id} onChange={(e) => updateLine(i, "product_id", Number(e.target.value))} className="flex-1 bg-surface-800 border border-surface-700 rounded-lg px-3 py-2 text-sm text-white" aria-label="المنتج">
                     {products.map(p => <option key={p.id} value={p.id}>{p.name_ar || p.name_en}</option>)}
                   </select>
-                  <input type="number" value={line.cartons_good} onChange={(e) => updateLine(i, "cartons_good", e.target.value)} className="w-24 bg-surface-800 border border-surface-700 rounded-lg px-3 py-2 text-sm text-white text-center" placeholder="صالح" />
-                  <input type="number" value={line.cartons_waste} onChange={(e) => updateLine(i, "cartons_waste", e.target.value)} className="w-24 bg-surface-800 border border-surface-700 rounded-lg px-3 py-2 text-sm text-white text-center" placeholder="هالك" />
-                  <input value={line.worker} onChange={(e) => updateLine(i, "worker", e.target.value)} className="w-32 bg-surface-800 border border-surface-700 rounded-lg px-3 py-2 text-sm text-white" placeholder="العامل" />
+                  <input type="number" value={line.cartons_good} onChange={(e) => updateLine(i, "cartons_good", e.target.value)} className="w-24 bg-surface-800 border border-surface-700 rounded-lg px-3 py-2 text-sm text-white text-center" placeholder="صالح" aria-label="كرتون صالح" />
+                  <input type="number" value={line.cartons_waste} onChange={(e) => updateLine(i, "cartons_waste", e.target.value)} className="w-24 bg-surface-800 border border-surface-700 rounded-lg px-3 py-2 text-sm text-white text-center" placeholder="هالك" aria-label="كرتون هالك" />
+                  <input value={line.worker} onChange={(e) => updateLine(i, "worker", e.target.value)} className="w-32 bg-surface-800 border border-surface-700 rounded-lg px-3 py-2 text-sm text-white" placeholder="العامل" aria-label="العامل" />
                   <button onClick={() => removeLine(i)} className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg"><Trash2 className="w-4 h-4" /></button>
                 </div>
               ))}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import Card from "@/components/ui/Card";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import { formatOMR, formatNumber } from "@/lib/utils";
@@ -21,9 +21,7 @@ export default function SalesByCustomerPage() {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
 
-  useEffect(() => { loadData(); }, [fromDate, toDate]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const result = await invoke("sales_by_customer_report", {
@@ -33,7 +31,9 @@ export default function SalesByCustomerPage() {
       setData(result as SalesByCustomer[]);
     } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
-  };
+  }, [addNotification, fromDate, toDate]);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   const totalNet = data.reduce((s, r) => s + r.net_milli, 0);
   const totalVat = data.reduce((s, r) => s + r.vat_milli, 0);
@@ -56,9 +56,9 @@ export default function SalesByCustomerPage() {
         </div>
         <div className="flex items-center gap-2">
           <Calendar className="w-4 h-4 text-surface-400" />
-          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="input-field text-sm" />
+          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="input-field text-sm" aria-label="من تاريخ" />
           <span className="text-surface-500">إلى</span>
-          <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="input-field text-sm" />
+          <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="input-field text-sm" aria-label="إلى تاريخ" />
         </div>
       </div>
 

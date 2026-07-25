@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -43,9 +43,7 @@ export default function OvertimePage() {
     notes: "",
   });
 
-  useEffect(() => { loadData(); }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [otData, empData] = await Promise.all([
@@ -56,7 +54,9 @@ export default function OvertimePage() {
       setEmployees(empData as Employee[]);
     } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
-  };
+  }, [addNotification]);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   const handleCreate = async () => {
     setSaving(true);
@@ -165,7 +165,7 @@ export default function OvertimePage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="input-group">
                 <label className="input-label">الموظف</label>
-                <select value={form.employee_id} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} className="input-field">
+                <select value={form.employee_id} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} className="input-field" aria-label="الموظف">
                   <option value="">— اختر موظف —</option>
                   {employees.map((emp: any) => (
                     <option key={emp.id} value={emp.id}>{emp.name}</option>
@@ -174,17 +174,17 @@ export default function OvertimePage() {
               </div>
               <div className="input-group">
                 <label className="input-label">التاريخ</label>
-                <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="input-field" />
+                <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="input-field" aria-label="التاريخ" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="input-group">
                 <label className="input-label">عدد الساعات</label>
-                <input type="number" min="0.5" step="0.5" value={form.hours} onChange={(e) => setForm({ ...form, hours: e.target.value })} className="input-field" dir="ltr" />
+                <input type="number" min="0.5" step="0.5" value={form.hours} onChange={(e) => setForm({ ...form, hours: e.target.value })} className="input-field" dir="ltr" aria-label="عدد الساعات" />
               </div>
               <div className="input-group">
                 <label className="input-label">مضاعف الأجر</label>
-                <select value={form.rate_multiplier} onChange={(e) => setForm({ ...form, rate_multiplier: e.target.value })} className="input-field">
+                <select value={form.rate_multiplier} onChange={(e) => setForm({ ...form, rate_multiplier: e.target.value })} className="input-field" aria-label="مضاعف الأجر">
                   <option value="1.5">1.5x</option>
                   <option value="2">2x</option>
                   <option value="2.5">2.5x</option>
@@ -194,11 +194,11 @@ export default function OvertimePage() {
             </div>
             <div className="input-group">
               <label className="input-label">السبب</label>
-              <input type="text" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} className="input-field" placeholder="سبب العمل الإضافي..." />
+              <input type="text" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} className="input-field" placeholder="سبب العمل الإضافي..." aria-label="السبب" />
             </div>
             <div className="input-group">
               <label className="input-label">ملاحظات</label>
-              <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="input-field" rows={3} placeholder="ملاحظات إضافية..." />
+              <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="input-field" rows={3} placeholder="ملاحظات إضافية..." aria-label="ملاحظات" />
             </div>
           </div>
           <div className="flex justify-end gap-3 mt-4">

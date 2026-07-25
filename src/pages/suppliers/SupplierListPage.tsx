@@ -42,7 +42,7 @@ export default function SupplierListPage() {
 
       <div className="relative">
         <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-500" />
-        <input type="text" placeholder="بحث بالاسم أو الكود..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pr-10 input-field" />
+        <input type="text" placeholder="بحث بالاسم أو الكود..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pr-10 input-field" aria-label="بحث" />
       </div>
 
       {loading ? (

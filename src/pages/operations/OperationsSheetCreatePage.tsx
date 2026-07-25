@@ -114,11 +114,11 @@ export default function OperationsSheetCreatePage() {
         <div className="grid grid-cols-3 gap-4">
           <div>
             <label className="form-label">التاريخ</label>
-            <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="input-field" />
+            <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="input-field" aria-label="التاريخ" />
           </div>
           <div>
             <label className="form-label">الوردية</label>
-            <select value={form.shift} onChange={(e) => setForm({ ...form, shift: e.target.value })} className="input-field">
+            <select value={form.shift} onChange={(e) => setForm({ ...form, shift: e.target.value })} className="input-field" aria-label="الوردية">
               <option value="morning">صباحي</option>
               <option value="evening">مسائي</option>
               <option value="night">ليلي</option>
@@ -126,7 +126,7 @@ export default function OperationsSheetCreatePage() {
           </div>
           <div>
             <label className="form-label">ملاحظات</label>
-            <input type="text" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="input-field" placeholder="ملاحظات عامة..." />
+            <input type="text" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="input-field" placeholder="ملاحظات عامة..." aria-label="ملاحظات" />
           </div>
         </div>
       </Card>
@@ -153,6 +153,7 @@ export default function OperationsSheetCreatePage() {
                     }}
                     className="input-field w-48"
                     placeholder="اسم العامل"
+                    aria-label="اسم العامل"
                   />
                 </div>
                 <button onClick={() => removeEntry(idx)} className="text-red-400 hover:text-red-300 p-1">
@@ -163,7 +164,7 @@ export default function OperationsSheetCreatePage() {
               <div className="grid grid-cols-6 gap-3">
                 <div>
                   <label className="form-label text-xs">الحضور</label>
-                  <select value={entry.attendance} onChange={(e) => updateEntry(idx, "attendance", e.target.value)} className="input-field text-sm">
+                  <select value={entry.attendance} onChange={(e) => updateEntry(idx, "attendance", e.target.value)} className="input-field text-sm" aria-label="الحضور">
                     <option value="present">حاضر</option>
                     <option value="absent">غائب</option>
                     <option value="late">متأخر</option>
@@ -171,15 +172,15 @@ export default function OperationsSheetCreatePage() {
                 </div>
                 <div>
                   <label className="form-label text-xs">ساعات إضافية</label>
-                  <input type="number" value={entry.overtime_hours} onChange={(e) => updateEntry(idx, "overtime_hours", Number(e.target.value))} className="input-field text-sm" min="0" />
+                  <input type="number" value={entry.overtime_hours} onChange={(e) => updateEntry(idx, "overtime_hours", Number(e.target.value))} className="input-field text-sm" min="0" aria-label="ساعات إضافية" />
                 </div>
                 <div>
                   <label className="form-label text-xs">الإنتاج (طن)</label>
-                  <input type="number" value={entry.production_qty} onChange={(e) => updateEntry(idx, "production_qty", Number(e.target.value))} className="input-field text-sm" min="0" />
+                  <input type="number" value={entry.production_qty} onChange={(e) => updateEntry(idx, "production_qty", Number(e.target.value))} className="input-field text-sm" min="0" aria-label="الإنتاج بالطن" />
                 </div>
                 <div>
                   <label className="form-label text-xs">جودة الإنتاج</label>
-                  <select value={entry.quality_grade} onChange={(e) => updateEntry(idx, "quality_grade", e.target.value)} className="input-field text-sm">
+                  <select value={entry.quality_grade} onChange={(e) => updateEntry(idx, "quality_grade", e.target.value)} className="input-field text-sm" aria-label="جودة الإنتاج">
                     <option value="A">ممتاز (A)</option>
                     <option value="B">جيد (B)</option>
                     <option value="C">مقبول (C)</option>
@@ -193,6 +194,7 @@ export default function OperationsSheetCreatePage() {
                     checked={entry.safety_incident}
                     onChange={(e) => updateEntry(idx, "safety_incident", e.target.checked)}
                     className="w-5 h-5 rounded bg-surface-700 border-surface-600 text-red-500 focus:ring-red-500"
+                    aria-label="حادث أمان"
                   />
                 </div>
                 <div>
@@ -204,6 +206,7 @@ export default function OperationsSheetCreatePage() {
                     className="input-field text-sm"
                     placeholder="تفاصيل..."
                     disabled={!entry.safety_incident}
+                    aria-label="ملاحظة أمان"
                   />
                 </div>
               </div>

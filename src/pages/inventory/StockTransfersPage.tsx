@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import DataTable, { Column } from "@/components/ui/DataTable";
@@ -47,11 +47,7 @@ export default function StockTransfersPage() {
     notes: "",
   });
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [transfersData, warehousesData, itemsData] = await Promise.all([
@@ -67,7 +63,11 @@ export default function StockTransfersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [addNotification]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const set = (key: string, val: any) => setForm((f) => ({ ...f, [key]: val }));
 
@@ -130,7 +130,7 @@ export default function StockTransfersPage() {
             <div className="grid grid-cols-2 gap-6">
               <div className="input-group">
                 <label className="input-label">من مستودع *</label>
-                <select className="input-field" value={form.from_warehouse_id} onChange={(e) => set("from_warehouse_id", Number(e.target.value))} required>
+                <select className="input-field" value={form.from_warehouse_id} onChange={(e) => set("from_warehouse_id", Number(e.target.value))} required aria-label="من مستودع">
                   <option value={0}>اختر المستودع</option>
                   {warehouses.map((w) => (
                     <option key={w.id} value={w.id}>{w.name}</option>
@@ -139,7 +139,7 @@ export default function StockTransfersPage() {
               </div>
               <div className="input-group">
                 <label className="input-label">إلى مستودع *</label>
-                <select className="input-field" value={form.to_warehouse_id} onChange={(e) => set("to_warehouse_id", Number(e.target.value))} required>
+                <select className="input-field" value={form.to_warehouse_id} onChange={(e) => set("to_warehouse_id", Number(e.target.value))} required aria-label="إلى مستودع">
                   <option value={0}>اختر المستودع</option>
                   {warehouses.map((w) => (
                     <option key={w.id} value={w.id}>{w.name}</option>
@@ -148,7 +148,7 @@ export default function StockTransfersPage() {
               </div>
               <div className="input-group">
                 <label className="input-label">الصنف *</label>
-                <select className="input-field" value={form.item_id} onChange={(e) => set("item_id", Number(e.target.value))} required>
+                <select className="input-field" value={form.item_id} onChange={(e) => set("item_id", Number(e.target.value))} required aria-label="الصنف">
                   <option value={0}>اختر الصنف</option>
                   {items.map((i) => (
                     <option key={i.id} value={i.id}>{i.name_ar || i.name_en}</option>
@@ -157,11 +157,11 @@ export default function StockTransfersPage() {
               </div>
               <div className="input-group">
                 <label className="input-label">الكمية *</label>
-                <input className="input-field" type="number" min="0.01" step="0.01" value={form.qty} onChange={(e) => set("qty", Number(e.target.value))} required />
+                <input className="input-field" type="number" min="0.01" step="0.01" value={form.qty} onChange={(e) => set("qty", Number(e.target.value))} required aria-label="الكمية" />
               </div>
               <div className="input-group col-span-2">
                 <label className="input-label">ملاحظات</label>
-                <textarea className="input-field" rows={3} value={form.notes} onChange={(e) => set("notes", e.target.value)} />
+                <textarea className="input-field" rows={3} value={form.notes} onChange={(e) => set("notes", e.target.value)} aria-label="ملاحظات" />
               </div>
             </div>
             <div className="flex justify-start gap-3 mt-6">

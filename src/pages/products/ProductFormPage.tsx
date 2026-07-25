@@ -75,39 +75,39 @@ export default function ProductFormPage() {
           <div className="grid grid-cols-3 gap-6">
             <div className="input-group">
               <label className="input-label">اسم المنتج (عربي) *</label>
-              <input className="input-field" value={form.name_ar} onChange={(e) => set("name_ar", e.target.value)} required />
+              <input className="input-field" value={form.name_ar} onChange={(e) => set("name_ar", e.target.value)} required aria-label="اسم المنتج بالعربي" />
             </div>
             <div className="input-group">
               <label className="input-label">اسم المنتج (إنجليزي)</label>
-              <input className="input-field" value={form.name_en} onChange={(e) => set("name_en", e.target.value)} dir="ltr" />
+              <input className="input-field" value={form.name_en} onChange={(e) => set("name_en", e.target.value)} dir="ltr" aria-label="اسم المنتج بالإنجليزي" />
             </div>
             <div className="input-group">
               <label className="input-label">الكود</label>
-              <input className="input-field" value={form.code} onChange={(e) => set("code", e.target.value)} />
+              <input className="input-field" value={form.code} onChange={(e) => set("code", e.target.value)} aria-label="الكود" />
             </div>
             <div className="input-group">
               <label className="input-label">المقاس</label>
-              <input className="input-field" value={form.size} onChange={(e) => set("size", e.target.value)} placeholder="مثال: 8oz" />
+              <input className="input-field" value={form.size} onChange={(e) => set("size", e.target.value)} placeholder="مثال: 8oz" aria-label="المقاس" />
             </div>
             <div className="input-group">
               <label className="input-label">نوع الكوب</label>
-              <input className="input-field" value={form.cup_type} onChange={(e) => set("cup_type", e.target.value)} placeholder="مثال: A-line" />
+              <input className="input-field" value={form.cup_type} onChange={(e) => set("cup_type", e.target.value)} placeholder="مثال: A-line" aria-label="نوع الكوب" />
             </div>
             <div className="input-group">
               <label className="input-label">أكواب/كرتون</label>
-              <input className="input-field" type="number" value={form.cups_per_carton} onChange={(e) => set("cups_per_carton", Number(e.target.value))} />
+              <input className="input-field" type="number" value={form.cups_per_carton} onChange={(e) => set("cups_per_carton", Number(e.target.value))} aria-label="أكواب لكل كرتون" />
             </div>
             <div className="input-group">
               <label className="input-label">نوع الكرتون</label>
-              <input className="input-field" value={form.carton_type} onChange={(e) => set("carton_type", e.target.value)} />
+              <input className="input-field" value={form.carton_type} onChange={(e) => set("carton_type", e.target.value)} aria-label="نوع الكرتون" />
             </div>
             <div className="input-group">
               <label className="input-label">الباركود</label>
-              <input className="input-field" value={form.barcode} onChange={(e) => set("barcode", e.target.value)} />
+              <input className="input-field" value={form.barcode} onChange={(e) => set("barcode", e.target.value)} aria-label="الباركود" />
             </div>
             <div className="input-group">
               <label className="input-label">ضريبة %</label>
-              <input className="input-field" type="number" step="0.1" value={form.vat_pct} onChange={(e) => set("vat_pct", Number(e.target.value))} />
+              <input className="input-field" type="number" step="0.1" value={form.vat_pct} onChange={(e) => set("vat_pct", Number(e.target.value))} aria-label="نسبة الضريبة" />
             </div>
           </div>
         </Card>
@@ -117,16 +117,16 @@ export default function ProductFormPage() {
           <div className="grid grid-cols-2 gap-6">
             <div className="input-group">
               <label className="input-label">سعر البيع الافتراضي (مليار)</label>
-              <input className="input-field" type="number" value={form.default_price_milli} onChange={(e) => set("default_price_milli", Number(e.target.value))} />
+              <input className="input-field" type="number" value={form.default_price_milli} onChange={(e) => set("default_price_milli", Number(e.target.value))} aria-label="سعر البيع الافتراضي" />
             </div>
             <div className="input-group">
               <label className="input-label">التكلفة الافتراضية (مليار)</label>
-              <input className="input-field" type="number" value={form.default_cost_milli} onChange={(e) => set("default_cost_milli", Number(e.target.value))} />
+              <input className="input-field" type="number" value={form.default_cost_milli} onChange={(e) => set("default_cost_milli", Number(e.target.value))} aria-label="التكلفة الافتراضية" />
             </div>
           </div>
           <div className="input-group mt-4">
             <label className="input-label">ملاحظات</label>
-            <textarea className="input-field" rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} />
+            <textarea className="input-field" rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} aria-label="ملاحظات" />
           </div>
         </Card>
 

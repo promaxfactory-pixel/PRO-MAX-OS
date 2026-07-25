@@ -277,6 +277,7 @@ export default function HistoricalImportPage() {
                     accept=".xlsx,.xls,.csv"
                     className="hidden"
                     onChange={handleFileUpload}
+                    aria-label="اختر ملف"
                   />
                   {loading ? (
                     <Loader2 className="w-12 h-12 mx-auto mb-3 text-gold-400 animate-spin" />

@@ -78,27 +78,27 @@ export default function EmployeeFormPage() {
           <div className="grid grid-cols-3 gap-6">
             <div className="input-group">
               <label className="input-label">اسم الموظف *</label>
-              <input className="input-field" value={form.name} onChange={(e) => set("name", e.target.value)} required />
+              <input className="input-field" value={form.name} onChange={(e) => set("name", e.target.value)} required aria-label="اسم الموظف" />
             </div>
             <div className="input-group">
               <label className="input-label">الرقم الوظيفي</label>
-              <input className="input-field" value={form.code} onChange={(e) => set("code", e.target.value)} />
+              <input className="input-field" value={form.code} onChange={(e) => set("code", e.target.value)} aria-label="الرقم الوظيفي" />
             </div>
             <div className="input-group">
               <label className="input-label">الجنسية</label>
-              <input className="input-field" value={form.nationality} onChange={(e) => set("nationality", e.target.value)} />
+              <input className="input-field" value={form.nationality} onChange={(e) => set("nationality", e.target.value)} aria-label="الجنسية" />
             </div>
             <div className="input-group">
               <label className="input-label">الوظيفة</label>
-              <input className="input-field" value={form.job} onChange={(e) => set("job", e.target.value)} />
+              <input className="input-field" value={form.job} onChange={(e) => set("job", e.target.value)} aria-label="الوظيفة" />
             </div>
             <div className="input-group">
               <label className="input-label">الهاتف</label>
-              <input className="input-field" value={form.phone} onChange={(e) => set("phone", e.target.value)} />
+              <input className="input-field" value={form.phone} onChange={(e) => set("phone", e.target.value)} aria-label="الهاتف" />
             </div>
             <div className="input-group">
               <label className="input-label">تاريخ الالتحاق</label>
-              <input className="input-field" type="date" value={form.joining_date} onChange={(e) => set("joining_date", e.target.value)} />
+              <input className="input-field" type="date" value={form.joining_date} onChange={(e) => set("joining_date", e.target.value)} aria-label="تاريخ الالتحاق" />
             </div>
           </div>
         </Card>
@@ -108,11 +108,11 @@ export default function EmployeeFormPage() {
           <div className="grid grid-cols-2 gap-6">
             <div className="input-group">
               <label className="input-label">الراتب الأساسي (مليار)</label>
-              <input className="input-field" type="number" value={form.salary_milli} onChange={(e) => set("salary_milli", Number(e.target.value))} />
+              <input className="input-field" type="number" value={form.salary_milli} onChange={(e) => set("salary_milli", Number(e.target.value))} aria-label="الراتب الأساسي" />
             </div>
             <div className="input-group">
               <label className="input-label">البدلات (مليار)</label>
-              <input className="input-field" type="number" value={form.allowances_milli} onChange={(e) => set("allowances_milli", Number(e.target.value))} />
+              <input className="input-field" type="number" value={form.allowances_milli} onChange={(e) => set("allowances_milli", Number(e.target.value))} aria-label="البدلات" />
             </div>
           </div>
         </Card>
@@ -122,38 +122,38 @@ export default function EmployeeFormPage() {
           <div className="grid grid-cols-3 gap-6">
             <div className="input-group">
               <label className="input-label">رقم الجواز</label>
-              <input className="input-field" value={form.passport_no} onChange={(e) => set("passport_no", e.target.value)} />
+              <input className="input-field" value={form.passport_no} onChange={(e) => set("passport_no", e.target.value)} aria-label="رقم الجواز" />
             </div>
             <div className="input-group">
               <label className="input-label">انتهاء الجواز</label>
-              <input className="input-field" type="date" value={form.passport_expiry} onChange={(e) => set("passport_expiry", e.target.value)} />
+              <input className="input-field" type="date" value={form.passport_expiry} onChange={(e) => set("passport_expiry", e.target.value)} aria-label="انتهاء الجواز" />
             </div>
             <div className="input-group">
               <label className="input-label">انتهاء الإقامة</label>
-              <input className="input-field" type="date" value={form.residence_expiry} onChange={(e) => set("residence_expiry", e.target.value)} />
+              <input className="input-field" type="date" value={form.residence_expiry} onChange={(e) => set("residence_expiry", e.target.value)} aria-label="انتهاء الإقامة" />
             </div>
             <div className="input-group">
               <label className="input-label">انتهاء التأشيرة</label>
-              <input className="input-field" type="date" value={form.visa_expiry} onChange={(e) => set("visa_expiry", e.target.value)} />
+              <input className="input-field" type="date" value={form.visa_expiry} onChange={(e) => set("visa_expiry", e.target.value)} aria-label="انتهاء التأشيرة" />
             </div>
             <div className="input-group">
               <label className="input-label">انتهاء تصريح العمل</label>
-              <input className="input-field" type="date" value={form.workpermit_expiry} onChange={(e) => set("workpermit_expiry", e.target.value)} />
+              <input className="input-field" type="date" value={form.workpermit_expiry} onChange={(e) => set("workpermit_expiry", e.target.value)} aria-label="انتهاء تصريح العمل" />
             </div>
             <div className="input-group">
               <label className="input-label">انتهاء التأمين</label>
-              <input className="input-field" type="date" value={form.insurance_expiry} onChange={(e) => set("insurance_expiry", e.target.value)} />
+              <input className="input-field" type="date" value={form.insurance_expiry} onChange={(e) => set("insurance_expiry", e.target.value)} aria-label="انتهاء التأمين" />
             </div>
             <div className="input-group">
               <label className="input-label">انتهاء العقد</label>
-              <input className="input-field" type="date" value={form.contract_end} onChange={(e) => set("contract_end", e.target.value)} />
+              <input className="input-field" type="date" value={form.contract_end} onChange={(e) => set("contract_end", e.target.value)} aria-label="انتهاء العقد" />
             </div>
           </div>
         </Card>
 
         <div className="input-group mt-4">
           <label className="input-label">ملاحظات</label>
-          <textarea className="input-field" rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} />
+          <textarea className="input-field" rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} aria-label="ملاحظات" />
         </div>
 
         <div className="flex justify-start gap-3 mt-4">

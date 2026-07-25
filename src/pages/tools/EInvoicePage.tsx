@@ -272,7 +272,7 @@ export default function EInvoicePage() {
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
               <label className="form-label">البيئة</label>
-              <select value={sEnv} onChange={(e) => setSEnv(e.target.value)} className="input-field">
+              <select value={sEnv} onChange={(e) => setSEnv(e.target.value)} className="input-field" aria-label="البيئة">
                 <option value="sandbox">Sandbox (اختبار)</option>
                 <option value="production">إنتاج</option>
               </select>
@@ -280,28 +280,28 @@ export default function EInvoicePage() {
             <div>
               <label className="form-label">رابط API</label>
               <input type="text" value={sEndpoint} onChange={(e) => setSEndpoint(e.target.value)}
-                className="input-field" placeholder="https://api.tax.gov.om/einvoicing" />
+                className="input-field" placeholder="https://api.tax.gov.om/einvoicing" aria-label="رابط API" />
             </div>
             <div>
               <label className="form-label">مفتاح API</label>
               <input type="password" value={sApiKey} onChange={(e) => setSApiKey(e.target.value)}
-                className="input-field" placeholder="أدخل مفتاح API" />
+                className="input-field" placeholder="أدخل مفتاح API" aria-label="مفتاح API" />
             </div>
             <div>
               <label className="form-label">Secret Key</label>
               <input type="password" value={sApiSecret} onChange={(e) => setSApiSecret(e.target.value)}
-                className="input-field" placeholder="أدخل Secret Key" />
+                className="input-field" placeholder="أدخل Secret Key" aria-label="المفتاح السري" />
             </div>
           </div>
           <div className="flex items-center gap-4 mb-4">
             <label className="flex items-center gap-2 text-sm text-surface-300 cursor-pointer">
               <input type="checkbox" checked={sAuto} onChange={(e) => setSAuto(e.target.checked)}
-                className="w-4 h-4 rounded border-surface-600 bg-surface-800" />
+                className="w-4 h-4 rounded border-surface-600 bg-surface-800" aria-label="إرسال تلقائي للفواتير المعلقة" />
               إرسال تلقائي للفواتير المعلقة
             </label>
             <label className="flex items-center gap-2 text-sm text-surface-300 cursor-pointer">
               <input type="checkbox" checked={sOnPost} onChange={(e) => setSOnPost(e.target.checked)}
-                className="w-4 h-4 rounded border-surface-600 bg-surface-800" />
+                className="w-4 h-4 rounded border-surface-600 bg-surface-800" aria-label="إرسال عند ترحيل الفاتورة" />
               إرسال عند ترحيل الفاتورة
             </label>
           </div>
@@ -320,7 +320,7 @@ export default function EInvoicePage() {
               <h3 className="section-title mb-0">الفواتير</h3>
               <div className="flex items-center gap-2">
                 <select value={statusFilter || ""} onChange={(e) => setStatusFilter(e.target.value || null)}
-                  className="input-field text-sm py-1.5 w-36">
+                  className="input-field text-sm py-1.5 w-36" aria-label="تصفية الحالة">
                   <option value="">الكل</option>
                   <option value="generated">تم الإنشاء</option>
                   <option value="submitted">تم الإرسال</option>

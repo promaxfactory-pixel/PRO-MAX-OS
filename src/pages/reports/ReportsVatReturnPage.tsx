@@ -66,7 +66,7 @@ export default function ReportsVatReturnPage() {
       <Card>
         <div className="flex items-center gap-4 mb-6">
           <label className="form-label">الفترة</label>
-          <input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} className="input-field w-48" />
+          <input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} className="input-field w-48" aria-label="الفترة" />
         </div>
       </Card>
 

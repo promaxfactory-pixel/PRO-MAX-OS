@@ -77,18 +77,18 @@ export default function CustomerPaymentPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm text-surface-400 mb-1">التاريخ</label>
-                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full input-field" required />
+                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full input-field" required aria-label="التاريخ" />
               </div>
               <div>
                 <label className="block text-sm text-surface-400 mb-1">المبلغ (بالميلي)</label>
-                <input type="number" value={amountMilli} onChange={(e) => setAmountMilli(e.target.value)} className="w-full input-field" placeholder="0" min="1" required />
+                <input type="number" value={amountMilli} onChange={(e) => setAmountMilli(e.target.value)} className="w-full input-field" placeholder="0" min="1" required aria-label="المبلغ بالميلي" />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm text-surface-400 mb-1">طريقة الدفع</label>
-                <select value={method} onChange={(e) => setMethod(e.target.value)} className="w-full input-field">
+                <select value={method} onChange={(e) => setMethod(e.target.value)} className="w-full input-field" aria-label="طريقة الدفع">
                   <option value="cash">نقدي</option>
                   <option value="bank_transfer">تحويل بنكي</option>
                   <option value="cheque">شيك</option>
@@ -96,18 +96,18 @@ export default function CustomerPaymentPage() {
               </div>
               <div>
                 <label className="block text-sm text-surface-400 mb-1">رقم الحساب (اختياري)</label>
-                <input type="number" value={cashbankId} onChange={(e) => setCashbankId(e.target.value)} className="w-full input-field" placeholder="—" />
+                <input type="number" value={cashbankId} onChange={(e) => setCashbankId(e.target.value)} className="w-full input-field" placeholder="—" aria-label="رقم الحساب" />
               </div>
             </div>
 
             <div>
               <label className="block text-sm text-surface-400 mb-1">المرجع (اختياري)</label>
-              <input type="text" value={reference} onChange={(e) => setReference(e.target.value)} className="w-full input-field" placeholder="—" />
+              <input type="text" value={reference} onChange={(e) => setReference(e.target.value)} className="w-full input-field" placeholder="—" aria-label="المرجع" />
             </div>
 
             <div>
               <label className="block text-sm text-surface-400 mb-1">ملاحظات (اختياري)</label>
-              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full input-field" rows={3} placeholder="—" />
+              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full input-field" rows={3} placeholder="—" aria-label="ملاحظات" />
             </div>
 
             <div className="flex justify-end gap-2 pt-2">

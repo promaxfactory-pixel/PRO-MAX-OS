@@ -30,16 +30,16 @@ export default function AuditLogPage() {
   const [dateTo, setDateTo] = useState("");
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
-  useEffect(() => { loadLogs(); }, []);
-
-  const loadLogs = async () => {
+  const loadLogs = useCallback(async () => {
     setLoading(true);
     try {
       const d = await invoke("list_audit_logs");
       setLogs(d as AuditLog[]);
     } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
-  };
+  }, [addNotification]);
+
+  useEffect(() => { loadLogs(); }, [loadLogs]);
 
   const entities = useMemo(() => {
     const set = new Set(logs.map((l) => l.entity).filter(Boolean));
@@ -112,26 +112,26 @@ export default function AuditLogPage() {
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-500" />
-            <input type="text" placeholder="بحث..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pr-10 input-field text-sm" />
+            <input type="text" placeholder="بحث..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pr-10 input-field text-sm" aria-label="بحث" />
           </div>
           <div className="input-group">
             <label className="input-label text-[10px]">الكيان</label>
-            <select value={entityFilter} onChange={(e) => setEntityFilter(e.target.value)} className="input-field text-sm">
+            <select value={entityFilter} onChange={(e) => setEntityFilter(e.target.value)} className="input-field text-sm" aria-label="الكيان">
               <option value="">الكل</option>
               {entities.map((ent) => <option key={ent} value={ent}>{ent}</option>)}
             </select>
           </div>
           <div className="input-group">
             <label className="input-label text-[10px]">المستخدم</label>
-            <input type="text" placeholder="اسم المستخدم..." value={userFilter} onChange={(e) => setUserFilter(e.target.value)} className="input-field text-sm" />
+            <input type="text" placeholder="اسم المستخدم..." value={userFilter} onChange={(e) => setUserFilter(e.target.value)} className="input-field text-sm" aria-label="المستخدم" />
           </div>
           <div className="input-group">
             <label className="input-label text-[10px]">من تاريخ</label>
-            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="input-field text-sm" />
+            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="input-field text-sm" aria-label="من تاريخ" />
           </div>
           <div className="input-group">
             <label className="input-label text-[10px]">إلى تاريخ</label>
-            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="input-field text-sm" />
+            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="input-field text-sm" aria-label="إلى تاريخ" />
           </div>
         </div>
       </Card>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -38,11 +38,7 @@ export default function BOMPage() {
     waste_pct: 0,
   });
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [bomsData, productsData, itemsData] = await Promise.all([
@@ -58,7 +54,11 @@ export default function BOMPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [addNotification]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const set = (key: string, val: any) => setForm((f) => ({ ...f, [key]: val }));
 
@@ -111,7 +111,7 @@ export default function BOMPage() {
             <div className="grid grid-cols-2 gap-6">
               <div className="input-group">
                 <label className="input-label">المنتج *</label>
-                <select className="input-field" value={form.product_id} onChange={(e) => set("product_id", Number(e.target.value))} required>
+                <select className="input-field" value={form.product_id} onChange={(e) => set("product_id", Number(e.target.value))} required aria-label="المنتج">
                   <option value={0}>اختر المنتج</option>
                   {products.map((p) => (
                     <option key={p.id} value={p.id}>{p.name_ar || p.name_en}</option>
@@ -120,7 +120,7 @@ export default function BOMPage() {
               </div>
               <div className="input-group">
                 <label className="input-label">المادة الخام *</label>
-                <select className="input-field" value={form.item_id} onChange={(e) => set("item_id", Number(e.target.value))} required>
+                <select className="input-field" value={form.item_id} onChange={(e) => set("item_id", Number(e.target.value))} required aria-label="المادة الخام">
                   <option value={0}>اختر المادة الخام</option>
                   {items.map((i) => (
                     <option key={i.id} value={i.id}>{i.name_ar || i.name_en}</option>
@@ -129,11 +129,11 @@ export default function BOMPage() {
               </div>
               <div className="input-group">
                 <label className="input-label">الكمية لكل كرتون</label>
-                <input className="input-field" type="number" step="0.01" value={form.qty_per_carton} onChange={(e) => set("qty_per_carton", Number(e.target.value))} required />
+                <input className="input-field" type="number" step="0.01" value={form.qty_per_carton} onChange={(e) => set("qty_per_carton", Number(e.target.value))} required aria-label="الكمية لكل كرتون" />
               </div>
               <div className="input-group">
                 <label className="input-label">نسبة التالف %</label>
-                <input className="input-field" type="number" step="0.01" min="0" max="100" value={form.waste_pct} onChange={(e) => set("waste_pct", Number(e.target.value))} />
+                <input className="input-field" type="number" step="0.01" min="0" max="100" value={form.waste_pct} onChange={(e) => set("waste_pct", Number(e.target.value))} aria-label="نسبة التالف" />
               </div>
             </div>
             <div className="flex justify-start gap-3 mt-6">

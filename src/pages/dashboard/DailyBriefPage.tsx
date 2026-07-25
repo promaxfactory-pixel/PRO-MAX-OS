@@ -24,16 +24,16 @@ export default function DailyBriefPage() {
   const [brief, setBrief] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { loadBrief(); }, []);
-
-  const loadBrief = async () => {
+  const loadBrief = useCallback(async () => {
     setLoading(true);
     try {
       const data = await invoke("get_daily_brief");
       setBrief(data);
     } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
-  };
+  }, [addNotification]);
+
+  useEffect(() => { loadBrief(); }, [loadBrief]);
 
   if (loading) {
     return <div className="flex items-center justify-center h-64"><div className="w-12 h-12 border-2 border-brand-800 border-t-gold-400 rounded-full animate-spin" /></div>;

@@ -318,6 +318,7 @@ export default function EnhancedOcrPage() {
                   accept=".jpg,.jpeg,.png,.pdf,.xlsx,.xls,.csv"
                   className="hidden"
                   onChange={handleFileSelect}
+                  aria-label="اختر ملف"
                 />
                 {scanning ? (
                   <Loader2 className="w-12 h-12 mx-auto mb-3 text-gold-400 animate-spin" />

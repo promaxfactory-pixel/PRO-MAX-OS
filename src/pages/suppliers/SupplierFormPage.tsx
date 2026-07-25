@@ -74,35 +74,35 @@ export default function SupplierFormPage() {
           <div className="grid grid-cols-2 gap-6">
             <div className="input-group">
               <label className="input-label">اسم المورد *</label>
-              <input className="input-field" value={form.name} onChange={(e) => set("name", e.target.value)} required />
+              <input className="input-field" value={form.name} onChange={(e) => set("name", e.target.value)} required aria-label="اسم المورد" />
             </div>
             <div className="input-group">
               <label className="input-label">الكود</label>
-              <input className="input-field" value={form.code} onChange={(e) => set("code", e.target.value)} />
+              <input className="input-field" value={form.code} onChange={(e) => set("code", e.target.value)} aria-label="الكود" />
             </div>
             <div className="input-group">
               <label className="input-label">جهة الاتصال</label>
-              <input className="input-field" value={form.contact} onChange={(e) => set("contact", e.target.value)} />
+              <input className="input-field" value={form.contact} onChange={(e) => set("contact", e.target.value)} aria-label="جهة الاتصال" />
             </div>
             <div className="input-group">
               <label className="input-label">الهاتف</label>
-              <input className="input-field" value={form.phone} onChange={(e) => set("phone", e.target.value)} />
+              <input className="input-field" value={form.phone} onChange={(e) => set("phone", e.target.value)} aria-label="الهاتف" />
             </div>
             <div className="input-group">
               <label className="input-label">البريد الإلكتروني</label>
-              <input className="input-field" type="email" value={form.email} onChange={(e) => set("email", e.target.value)} />
+              <input className="input-field" type="email" value={form.email} onChange={(e) => set("email", e.target.value)} aria-label="البريد الإلكتروني" />
             </div>
             <div className="input-group">
               <label className="input-label">رقم الضريبة</label>
-              <input className="input-field" value={form.vat_number} onChange={(e) => set("vat_number", e.target.value)} />
+              <input className="input-field" value={form.vat_number} onChange={(e) => set("vat_number", e.target.value)} aria-label="رقم الضريبة" />
             </div>
             <div className="input-group col-span-2">
               <label className="input-label">العنوان</label>
-              <input className="input-field" value={form.address} onChange={(e) => set("address", e.target.value)} />
+              <input className="input-field" value={form.address} onChange={(e) => set("address", e.target.value)} aria-label="العنوان" />
             </div>
             <div className="input-group">
               <label className="input-label">العملة</label>
-              <select className="input-field" value={form.currency} onChange={(e) => set("currency", e.target.value)}>
+              <select className="input-field" value={form.currency} onChange={(e) => set("currency", e.target.value)} aria-label="العملة">
                 <option value="OMR">ريال عmani (OMR)</option>
                 <option value="USD">دولار أمريكي (USD)</option>
                 <option value="SAR">ريال سعودي (SAR)</option>
@@ -111,15 +111,15 @@ export default function SupplierFormPage() {
             </div>
             <div className="input-group">
               <label className="input-label">شروط الدفع</label>
-              <input className="input-field" value={form.payment_terms} onChange={(e) => set("payment_terms", e.target.value)} placeholder="مثال: 30 يوم" />
+              <input className="input-field" value={form.payment_terms} onChange={(e) => set("payment_terms", e.target.value)} placeholder="مثال: 30 يوم" aria-label="شروط الدفع" />
             </div>
             <div className="input-group">
               <label className="input-label">الرصيد الافتتاحي (مليار)</label>
-              <input className="input-field" type="number" value={form.opening_balance_milli} onChange={(e) => set("opening_balance_milli", Number(e.target.value))} />
+              <input className="input-field" type="number" value={form.opening_balance_milli} onChange={(e) => set("opening_balance_milli", Number(e.target.value))} aria-label="الرصيد الافتتاحي" />
             </div>
             <div className="input-group">
               <label className="input-label">ملاحظات</label>
-              <input className="input-field" value={form.notes} onChange={(e) => set("notes", e.target.value)} />
+              <input className="input-field" value={form.notes} onChange={(e) => set("notes", e.target.value)} aria-label="ملاحظات" />
             </div>
           </div>
         </Card>

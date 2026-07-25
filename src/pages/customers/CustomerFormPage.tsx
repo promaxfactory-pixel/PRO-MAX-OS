@@ -101,27 +101,27 @@ export default function CustomerFormPage() {
             </div>
             <div className="input-group col-span-2">
               <label className="input-label">العنوان</label>
-              <input className="input-field" value={form.address} onChange={(e) => set("address", e.target.value)} />
+              <input className="input-field" aria-label="العنوان" value={form.address} onChange={(e) => set("address", e.target.value)} />
             </div>
             <div className="input-group">
               <label className="input-label">رقم الضريبة</label>
-              <input className="input-field" value={form.vat_number} onChange={(e) => set("vat_number", e.target.value)} />
+              <input className="input-field" aria-label="رقم الضريبة" value={form.vat_number} onChange={(e) => set("vat_number", e.target.value)} />
             </div>
             <div className="input-group">
               <label className="input-label">الحد الائتماني (مليار)</label>
-              <input className="input-field" type="number" value={form.credit_limit_milli} onChange={(e) => set("credit_limit_milli", Number(e.target.value))} />
+              <input className="input-field" type="number" aria-label="الحد الائتماني" value={form.credit_limit_milli} onChange={(e) => set("credit_limit_milli", Number(e.target.value))} />
             </div>
             <div className="input-group">
               <label className="input-label">الرصيد الافتتاحي (مليار)</label>
-              <input className="input-field" type="number" value={form.opening_balance_milli} onChange={(e) => set("opening_balance_milli", Number(e.target.value))} />
+              <input className="input-field" type="number" aria-label="الرصيد الافتتاحي" value={form.opening_balance_milli} onChange={(e) => set("opening_balance_milli", Number(e.target.value))} />
             </div>
             <div className="input-group">
               <label className="input-label">شروط الدفع</label>
-              <input className="input-field" value={form.payment_terms} onChange={(e) => set("payment_terms", e.target.value)} placeholder="مثال: 30 يوم" />
+              <input className="input-field" aria-label="شروط الدفع" value={form.payment_terms} onChange={(e) => set("payment_terms", e.target.value)} placeholder="مثال: 30 يوم" />
             </div>
             <div className="input-group col-span-2">
               <label className="input-label">ملاحظات</label>
-              <textarea className="input-field" rows={3} value={form.notes} onChange={(e) => set("notes", e.target.value)} />
+              <textarea className="input-field" rows={3} aria-label="ملاحظات" value={form.notes} onChange={(e) => set("notes", e.target.value)} />
             </div>
           </div>
         </Card>

@@ -57,19 +57,19 @@ export default function QualityFormPage() {
           <div className="grid grid-cols-2 gap-6">
             <div className="input-group">
               <label className="input-label">التاريخ *</label>
-              <input className="input-field" type="date" value={form.date} onChange={(e) => set("date", e.target.value)} required />
+              <input className="input-field" type="date" value={form.date} onChange={(e) => set("date", e.target.value)} required aria-label="التاريخ" />
             </div>
             <div className="input-group">
               <label className="input-label">المفتتش *</label>
-              <input className="input-field" value={form.inspector} onChange={(e) => set("inspector", e.target.value)} required />
+              <input className="input-field" value={form.inspector} onChange={(e) => set("inspector", e.target.value)} required aria-label="المفتتش" />
             </div>
             <div className="input-group">
               <label className="input-label">رقم خط الإنتاج</label>
-              <input className="input-field" value={form.production_line_id} onChange={(e) => set("production_line_id", e.target.value)} />
+              <input className="input-field" value={form.production_line_id} onChange={(e) => set("production_line_id", e.target.value)} aria-label="رقم خط الإنتاج" />
             </div>
             <div className="input-group">
               <label className="input-label">النتيجة</label>
-              <select className="input-field" value={form.result} onChange={(e) => set("result", e.target.value)}>
+              <select className="input-field" value={form.result} onChange={(e) => set("result", e.target.value)} aria-label="النتيجة">
                 <option value="pass">ناجح</option>
                 <option value="fail">غير ناجح</option>
                 <option value="rework">إعادة العمل</option>
@@ -77,15 +77,15 @@ export default function QualityFormPage() {
             </div>
             <div className="input-group">
               <label className="input-label">نوع العيب</label>
-              <input className="input-field" value={form.defect_type} onChange={(e) => set("defect_type", e.target.value)} />
+              <input className="input-field" value={form.defect_type} onChange={(e) => set("defect_type", e.target.value)} aria-label="نوع العيب" />
             </div>
             <div className="input-group">
               <label className="input-label">كمية العيب</label>
-              <input className="input-field" type="number" min="0" value={form.defect_qty} onChange={(e) => set("defect_qty", Number(e.target.value))} />
+              <input className="input-field" type="number" min="0" value={form.defect_qty} onChange={(e) => set("defect_qty", Number(e.target.value))} aria-label="كمية العيب" />
             </div>
             <div className="input-group">
               <label className="input-label">الحالة</label>
-              <select className="input-field" value={form.status} onChange={(e) => set("status", e.target.value)}>
+              <select className="input-field" value={form.status} onChange={(e) => set("status", e.target.value)} aria-label="الحالة">
                 <option value="Pending">قيد الانتظار</option>
                 <option value="In Progress">قيد التنفيذ</option>
                 <option value="Completed">مكتمل</option>
@@ -93,7 +93,7 @@ export default function QualityFormPage() {
             </div>
             <div className="input-group col-span-2">
               <label className="input-label">ملاحظات</label>
-              <textarea className="input-field" rows={3} value={form.notes} onChange={(e) => set("notes", e.target.value)} />
+              <textarea className="input-field" rows={3} value={form.notes} onChange={(e) => set("notes", e.target.value)} aria-label="ملاحظات" />
             </div>
           </div>
         </Card>

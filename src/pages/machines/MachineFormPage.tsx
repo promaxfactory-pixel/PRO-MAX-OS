@@ -97,15 +97,15 @@ export default function MachineFormPage() {
           <div className="grid grid-cols-2 gap-6">
             <div className="input-group">
               <label className="input-label">اسم الماكينة *</label>
-              <input className="input-field" value={form.name} onChange={(e) => set("name", e.target.value)} required />
+              <input className="input-field" value={form.name} onChange={(e) => set("name", e.target.value)} required aria-label="اسم الماكينة" />
             </div>
             <div className="input-group">
               <label className="input-label">الكود</label>
-              <input className="input-field" value={form.code} onChange={(e) => set("code", e.target.value)} />
+              <input className="input-field" value={form.code} onChange={(e) => set("code", e.target.value)} aria-label="الكود" />
             </div>
             <div className="input-group">
               <label className="input-label">النوع</label>
-              <select className="input-field" value={form.mtype} onChange={(e) => set("mtype", e.target.value)}>
+              <select className="input-field" value={form.mtype} onChange={(e) => set("mtype", e.target.value)} aria-label="النوع">
                 <option value="single_die">قالب مفرد</option>
                 <option value="multi_die">قالب متعدد</option>
                 <option value="punch">بنش</option>
@@ -116,27 +116,27 @@ export default function MachineFormPage() {
             </div>
             <div className="input-group">
               <label className="input-label">المنتجات المدعومة</label>
-              <input className="input-field" value={form.supported_products} onChange={(e) => set("supported_products", e.target.value)} />
+              <input className="input-field" value={form.supported_products} onChange={(e) => set("supported_products", e.target.value)} aria-label="المنتجات المدعومة" />
             </div>
             <div className="input-group">
               <label className="input-label">تاريخ الشراء</label>
-              <input className="input-field" type="date" value={form.purchase_date} onChange={(e) => set("purchase_date", e.target.value)} />
+              <input className="input-field" type="date" value={form.purchase_date} onChange={(e) => set("purchase_date", e.target.value)} aria-label="تاريخ الشراء" />
             </div>
             <div className="input-group">
               <label className="input-label">المورد</label>
-              <input className="input-field" value={form.supplier} onChange={(e) => set("supplier", e.target.value)} />
+              <input className="input-field" value={form.supplier} onChange={(e) => set("supplier", e.target.value)} aria-label="المورد" />
             </div>
             <div className="input-group">
               <label className="input-label">التكلفة (مليار)</label>
-              <input className="input-field" type="number" value={form.cost_milli} onChange={(e) => set("cost_milli", Number(e.target.value))} />
+              <input className="input-field" type="number" value={form.cost_milli} onChange={(e) => set("cost_milli", Number(e.target.value))} aria-label="التكلفة" />
             </div>
             <div className="input-group">
               <label className="input-label">السعة الدقيقة (كوب/دقيقة)</label>
-              <input className="input-field" type="number" value={form.capacity_cpm} onChange={(e) => set("capacity_cpm", Number(e.target.value))} />
+              <input className="input-field" type="number" value={form.capacity_cpm} onChange={(e) => set("capacity_cpm", Number(e.target.value))} aria-label="السعة الدقيقة" />
             </div>
             <div className="input-group">
               <label className="input-label">الحالة</label>
-              <select className="input-field" value={form.status} onChange={(e) => set("status", e.target.value)}>
+              <select className="input-field" value={form.status} onChange={(e) => set("status", e.target.value)} aria-label="الحالة">
                 <option value="active">نشط</option>
                 <option value="inactive">غير نشط</option>
                 <option value="maintenance">صيانة</option>
@@ -144,7 +144,7 @@ export default function MachineFormPage() {
             </div>
             <div className="input-group col-span-2">
               <label className="input-label">ملاحظات</label>
-              <textarea className="input-field" rows={3} value={form.notes} onChange={(e) => set("notes", e.target.value)} />
+              <textarea className="input-field" rows={3} value={form.notes} onChange={(e) => set("notes", e.target.value)} aria-label="ملاحظات" />
             </div>
           </div>
         </Card>

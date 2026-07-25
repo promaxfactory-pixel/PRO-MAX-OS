@@ -121,21 +121,21 @@ export default function UsersPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="form-label">اسم المستخدم</label>
-                  <input type="text" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} className="input-field" dir="ltr" />
+                  <input type="text" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} className="input-field" dir="ltr" aria-label="اسم المستخدم" />
                 </div>
                 <div>
                   <label className="form-label">الاسم الكامل</label>
-                  <input type="text" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} className="input-field" />
+                  <input type="text" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} className="input-field" aria-label="الاسم الكامل" />
                 </div>
               </div>
               <div>
                 <label className="form-label">البريد الإلكتروني</label>
-                <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="input-field" dir="ltr" />
+                <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="input-field" dir="ltr" aria-label="البريد الإلكتروني" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="form-label">الصلاحية</label>
-                  <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className="input-field">
+                  <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className="input-field" aria-label="الصلاحية">
                     <option value="admin">مدير</option>
                     <option value="accountant">محاسب</option>
                     <option value="hr">موارد بشرية</option>
@@ -145,7 +145,7 @@ export default function UsersPage() {
                 </div>
                 <div>
                   <label className="form-label">كلمة المرور</label>
-                  <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="input-field" dir="ltr" />
+                  <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="input-field" dir="ltr" aria-label="كلمة المرور" />
                 </div>
               </div>
             </div>

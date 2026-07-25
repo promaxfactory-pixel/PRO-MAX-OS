@@ -144,7 +144,7 @@ export default function ExcelImportPage() {
               <div className="space-y-4">
                 <div>
                   <label className="form-label">نوع البيانات</label>
-                  <select value={importType} onChange={(e) => setImportType(e.target.value as ImportType)} className="input-field w-64">
+                  <select value={importType} onChange={(e) => setImportType(e.target.value as ImportType)} className="input-field w-64" aria-label="نوع البيانات">
                     {IMPORT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
                 </div>
@@ -152,7 +152,7 @@ export default function ExcelImportPage() {
                   className="border-2 border-dashed rounded-xl p-8 text-center cursor-pointer border-surface-600 hover:border-brand-500/50 transition-all"
                   onClick={() => document.getElementById("excel-input")?.click()}
                 >
-                  <input id="excel-input" type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileChange} />
+                  <input id="excel-input" type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileChange} aria-label="اختر ملف Excel" />
                   <Upload className="w-12 h-12 mx-auto mb-3 text-surface-500" />
                   <p className="text-surface-400">اختر ملف Excel أو CSV</p>
                 </div>

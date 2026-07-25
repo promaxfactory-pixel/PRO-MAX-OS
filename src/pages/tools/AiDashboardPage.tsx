@@ -42,7 +42,7 @@ export default function AiDashboardPage() {
   const [production, setProduction] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [i, f, r, c, inv, p] = await Promise.all([
@@ -59,9 +59,9 @@ export default function AiDashboardPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [addNotification]);
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(); }, [loadData]);
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">

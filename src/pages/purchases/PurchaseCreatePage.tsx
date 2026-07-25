@@ -108,6 +108,7 @@ export default function PurchaseCreatePage() {
               className="input-field"
               value={supplierId}
               onChange={(e) => setSupplierId(Number(e.target.value))}
+              aria-label="المورد"
             >
               <option value={0}>— اختر المورد —</option>
               {suppliers.map((s) => (
@@ -123,6 +124,7 @@ export default function PurchaseCreatePage() {
               className="input-field"
               value={date}
               onChange={(e) => setDate(e.target.value)}
+              aria-label="التاريخ"
             />
           </div>
 
@@ -134,6 +136,7 @@ export default function PurchaseCreatePage() {
               value={supplierInvoiceNo}
               onChange={(e) => setSupplierInvoiceNo(e.target.value)}
               placeholder="اختياري"
+              aria-label="رقم فاتورة المورد"
             />
           </div>
 
@@ -145,6 +148,7 @@ export default function PurchaseCreatePage() {
                 className="w-4 h-4 rounded bg-surface-700 border-surface-500 text-brand-500 focus:ring-brand-500"
                 checked={vatEnabled}
                 onChange={(e) => setVatEnabled(e.target.checked)}
+                aria-label="تفعيل الضريبة"
               />
               <span className="text-surface-300 text-sm">تفعيل الضريبة</span>
             </label>
@@ -169,6 +173,7 @@ export default function PurchaseCreatePage() {
                   className="input-field"
                   value={line.item_id}
                   onChange={(e) => updateLine(idx, "item_id", Number(e.target.value))}
+                  aria-label="الصنف"
                 >
                   <option value={0}>— اختر الصنف —</option>
                   {items.map((item) => (
@@ -185,6 +190,7 @@ export default function PurchaseCreatePage() {
                   min={1}
                   value={line.qty}
                   onChange={(e) => updateLine(idx, "qty", Number(e.target.value))}
+                  aria-label="الكمية"
                 />
               </div>
 
@@ -196,6 +202,7 @@ export default function PurchaseCreatePage() {
                   min={0}
                   value={line.unit_cost_milli}
                   onChange={(e) => updateLine(idx, "unit_cost_milli", Number(e.target.value))}
+                  aria-label="سعر الوحدة بالملي"
                 />
               </div>
 

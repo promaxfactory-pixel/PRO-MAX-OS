@@ -321,6 +321,7 @@ export default function LiveProductionPage() {
                   value={entryForm.product_id}
                   onChange={(e) => setEntryForm({ ...entryForm, product_id: Number(e.target.value) })}
                   className="input-field"
+                  aria-label="المنتج"
                 >
                   <option value={0}>— اختر المنتج —</option>
                   {products.map((p) => (
@@ -339,6 +340,7 @@ export default function LiveProductionPage() {
                   placeholder="مثال: ريشوس"
                   className="input-field"
                   dir="rtl"
+                  aria-label="العلامة التجارية للعميل"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -351,6 +353,7 @@ export default function LiveProductionPage() {
                     className="input-field"
                     min="0"
                     placeholder="0"
+                    aria-label="كرتون منتج"
                   />
                 </div>
                 <div>
@@ -362,6 +365,7 @@ export default function LiveProductionPage() {
                     className="input-field"
                     min="0"
                     placeholder="0"
+                    aria-label="تالف كرتون"
                   />
                 </div>
               </div>
@@ -440,6 +444,7 @@ export default function LiveProductionPage() {
                                 onChange={(e) => setEditingQty({ id: line.id, val: safeNumber(e.target.value) })}
                                 className="w-20 text-center input-field text-sm py-1"
                                 autoFocus
+                                aria-label="تعديل الكمية"
                                 onBlur={() => handleUpdateLine(line.id, editingQty.val)}
                                 onKeyDown={(e) => {
                                   if (e.key === "Enter") handleUpdateLine(line.id, editingQty.val);

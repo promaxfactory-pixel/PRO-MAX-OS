@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Card from "@/components/ui/Card";
 import DataTable, { Column } from "@/components/ui/DataTable";
@@ -24,16 +24,16 @@ export default function UnpaidInvoicesPage() {
   const [loading, setLoading] = useState(true);
   const [asOf, setAsOf] = useState(new Date().toISOString().split("T")[0]);
 
-  useEffect(() => { loadData(); }, [asOf]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const result = await invoke("unpaid_invoices_report", { asOf: asOf || null });
       setData(result as UnpaidInvoice[]);
     } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
-  };
+  }, [addNotification, asOf]);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   const totalRemaining = data.reduce((s, r) => s + r.remaining_milli, 0);
 
@@ -56,7 +56,7 @@ export default function UnpaidInvoicesPage() {
         <div className="flex items-center gap-2">
           <Calendar className="w-4 h-4 text-surface-400" />
           <span className="text-sm text-surface-400">حتى</span>
-          <input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} className="input-field text-sm" />
+          <input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} className="input-field text-sm" aria-label="حتى تاريخ" />
         </div>
       </div>
 

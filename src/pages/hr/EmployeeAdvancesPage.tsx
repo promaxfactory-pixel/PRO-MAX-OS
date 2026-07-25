@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
@@ -38,9 +38,7 @@ export default function EmployeeAdvancesPage() {
     deduction_per_payroll_milli: "",
   });
 
-  useEffect(() => { loadData(); }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [advData, empData] = await Promise.all([
@@ -51,7 +49,9 @@ export default function EmployeeAdvancesPage() {
       setEmployees(empData as Employee[]);
     } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
-  };
+  }, [addNotification]);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   const handleCreate = async () => {
     setSaving(true);
@@ -127,7 +127,7 @@ export default function EmployeeAdvancesPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="input-group">
                 <label className="input-label">الموظف</label>
-                <select value={form.employee_id} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} className="input-field">
+                <select value={form.employee_id} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} className="input-field" aria-label="الموظف">
                   <option value="">— اختر موظف —</option>
                   {employees.map((emp: any) => (
                     <option key={emp.id} value={emp.id}>{emp.name}</option>
@@ -136,22 +136,22 @@ export default function EmployeeAdvancesPage() {
               </div>
               <div className="input-group">
                 <label className="input-label">المبلغ (مليار)</label>
-                <input type="number" value={form.amount_milli} onChange={(e) => setForm({ ...form, amount_milli: e.target.value })} className="input-field" dir="ltr" />
+                <input type="number" value={form.amount_milli} onChange={(e) => setForm({ ...form, amount_milli: e.target.value })} className="input-field" dir="ltr" aria-label="المبلغ بالمليار" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="input-group">
                 <label className="input-label">التاريخ</label>
-                <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="input-field" />
+                <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="input-field" aria-label="التاريخ" />
               </div>
               <div className="input-group">
                 <label className="input-label">خصم كل راتب (مليار)</label>
-                <input type="number" value={form.deduction_per_payroll_milli} onChange={(e) => setForm({ ...form, deduction_per_payroll_milli: e.target.value })} className="input-field" dir="ltr" />
+                <input type="number" value={form.deduction_per_payroll_milli} onChange={(e) => setForm({ ...form, deduction_per_payroll_milli: e.target.value })} className="input-field" dir="ltr" aria-label="خصم كل راتب بالمليار" />
               </div>
             </div>
             <div className="input-group">
               <label className="input-label">السبب</label>
-              <input type="text" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} className="input-field" placeholder="سبب السلفة..." />
+              <input type="text" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} className="input-field" placeholder="سبب السلفة..." aria-label="السبب" />
             </div>
           </div>
           <div className="flex justify-end gap-3 mt-4">

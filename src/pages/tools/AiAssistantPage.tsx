@@ -332,6 +332,7 @@ export default function AiAssistantPage() {
             value={contextType}
             onChange={(e) => setContextType(e.target.value as ContextType)}
             className="input-field w-full text-sm"
+            aria-label="نوع السياق"
           >
             {CONTEXTS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
           </select>
@@ -524,6 +525,7 @@ export default function AiAssistantPage() {
               className="input-field flex-1"
               disabled={isLoading}
               dir="rtl"
+              aria-label="اكتب رسالتك هنا"
             />
             <Button
               onClick={handleSend}
@@ -575,6 +577,7 @@ export default function AiAssistantPage() {
                     className="input-field w-full ltr text-left"
                     dir="ltr"
                     placeholder="sk-..."
+                    aria-label="مفتاح API"
                   />
                   <button
                     onClick={() => setShowApiKey(!showApiKey)}
@@ -591,6 +594,7 @@ export default function AiAssistantPage() {
                   value={settings.model}
                   onChange={(e) => setSettings((prev) => ({ ...prev, model: e.target.value }))}
                   className="input-field w-full"
+                  aria-label="النموذج"
                 >
                   <option value="gpt-4o">GPT-4o</option>
                   <option value="gpt-4o-mini">GPT-4o Mini</option>
@@ -608,6 +612,7 @@ export default function AiAssistantPage() {
                     className="input-field w-full"
                     min={256}
                     max={8192}
+                    aria-label="الحد الأقصى للرموز"
                   />
                 </div>
                 <div className="input-group">
@@ -620,6 +625,7 @@ export default function AiAssistantPage() {
                     value={settings.temperature}
                     onChange={(e) => setSettings((prev) => ({ ...prev, temperature: Number(e.target.value) }))}
                     className="w-full"
+                    aria-label="الحرارة"
                   />
                   <span className="text-xs text-surface-500">{settings.temperature.toFixed(1)}</span>
                 </div>

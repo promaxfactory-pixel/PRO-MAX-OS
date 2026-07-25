@@ -22,16 +22,16 @@ export default function OwnerSummaryPage() {
   const [fromDate, setFromDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0]);
   const [toDate, setToDate] = useState(new Date().toISOString().split("T")[0]);
 
-  useEffect(() => { loadData(); }, [fromDate, toDate]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const result = await invoke("owner_summary", { fromDate, toDate });
       setData(result);
     } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
-  };
+  }, [addNotification, fromDate, toDate]);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   if (loading || !data) {
     return <div className="flex items-center justify-center h-64"><div className="w-12 h-12 border-2 border-brand-800 border-t-gold-400 rounded-full animate-spin" /></div>;
@@ -45,9 +45,9 @@ export default function OwnerSummaryPage() {
           <p className="page-subtitle">نظرة عامة على الأداء المالي</p>
         </div>
         <div className="flex items-center gap-2">
-          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="input-field text-sm" />
+          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="input-field text-sm" aria-label="من تاريخ" />
           <span className="text-surface-500">إلى</span>
-          <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="input-field text-sm" />
+          <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="input-field text-sm" aria-label="إلى تاريخ" />
         </div>
       </div>
 

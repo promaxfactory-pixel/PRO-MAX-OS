@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
@@ -19,16 +19,16 @@ export default function PayrollPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [form, setForm] = useState({ period_start: "", period_end: "" });
 
-  useEffect(() => { loadRuns(); }, []);
-
-  const loadRuns = async () => {
+  const loadRuns = useCallback(async () => {
     setLoading(true);
     try {
       const d = await invoke("list_payroll_runs");
       setRuns(d as PayrollRun[]);
     } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
-  };
+  }, [addNotification]);
+
+  useEffect(() => { loadRuns(); }, [loadRuns]);
 
   const handleCreate = async () => {
     setSaving(true);

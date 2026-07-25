@@ -18,16 +18,16 @@ export default function DailyClosingPage() {
   const [loading, setLoading] = useState(true);
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
 
-  useEffect(() => { loadData(); }, [date]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const result = await invoke("daily_factory_closing", { date: date || null });
       setData(result);
     } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
-  };
+  }, [addNotification, date]);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   if (loading || !data) {
     return <div className="flex items-center justify-center h-64"><div className="w-12 h-12 border-2 border-brand-800 border-t-gold-400 rounded-full animate-spin" /></div>;
@@ -42,7 +42,7 @@ export default function DailyClosingPage() {
         </div>
         <div className="flex items-center gap-2">
           <Calendar className="w-4 h-4 text-surface-400" />
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="input-field" />
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="input-field" aria-label="التاريخ" />
         </div>
       </div>
 

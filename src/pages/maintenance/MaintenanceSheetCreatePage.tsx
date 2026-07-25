@@ -99,7 +99,7 @@ export default function MaintenanceSheetCreatePage() {
         <div className="grid grid-cols-3 gap-4">
           <div>
             <label className="form-label">التاريخ</label>
-            <input type="date" value={form.date} onChange={(e) => handleChange("date", e.target.value)} className="input-field" />
+            <input type="date" value={form.date} onChange={(e) => handleChange("date", e.target.value)} className="input-field" aria-label="التاريخ" />
           </div>
           <div>
             <label className="form-label">المعدة</label>
@@ -109,11 +109,12 @@ export default function MaintenanceSheetCreatePage() {
               onChange={(e) => handleChange("equipment_name", e.target.value)}
               className="input-field"
               placeholder="اسم المعدة أو Máy"
+              aria-label="المعدة"
             />
           </div>
           <div>
             <label className="form-label">الخطورة</label>
-            <select value={form.severity} onChange={(e) => handleChange("severity", e.target.value)} className="input-field">
+            <select value={form.severity} onChange={(e) => handleChange("severity", e.target.value)} className="input-field" aria-label="الخطورة">
               <option value="critical">حرج</option>
               <option value="high">مرتفع</option>
               <option value="medium">متوسط</option>
@@ -128,6 +129,7 @@ export default function MaintenanceSheetCreatePage() {
             onChange={(e) => handleChange("fault_description", e.target.value)}
             className="input-field min-h-[80px]"
             placeholder="اشرح العطل بالتفصيل..."
+            aria-label="وصف العطل"
           />
         </div>
       </Card>
@@ -142,6 +144,7 @@ export default function MaintenanceSheetCreatePage() {
               onChange={(e) => handleChange("root_cause", e.target.value)}
               className="input-field min-h-[60px]"
               placeholder="ما هو السبب الجذري للعطل؟"
+              aria-label="السبب الجذري"
             />
           </div>
           <div>
@@ -151,6 +154,7 @@ export default function MaintenanceSheetCreatePage() {
               onChange={(e) => handleChange("corrective_action", e.target.value)}
               className="input-field min-h-[60px]"
               placeholder="الإجراءات التي تم اتخاذها..."
+              aria-label="الإجراء التصحيحي"
             />
           </div>
         </div>
@@ -162,16 +166,17 @@ export default function MaintenanceSheetCreatePage() {
               onChange={(e) => handleChange("preventive_action", e.target.value)}
               className="input-field min-h-[60px]"
               placeholder="إجراءات لمنع تكرار العطل..."
+              aria-label="الإجراء الوقائي"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="form-label">وقت التوقف (ساعات)</label>
-              <input type="number" value={form.downtime_hours} onChange={(e) => handleChange("downtime_hours", Number(e.target.value))} className="input-field" min="0" step="0.5" />
+              <input type="number" value={form.downtime_hours} onChange={(e) => handleChange("downtime_hours", Number(e.target.value))} className="input-field" min="0" step="0.5" aria-label="وقت التوقف بالساعات" />
             </div>
             <div>
               <label className="form-label">المسؤول عن التنفيذ</label>
-              <input type="text" value={form.assigned_to} onChange={(e) => handleChange("assigned_to", e.target.value)} className="input-field" placeholder="اسم الفني" />
+              <input type="text" value={form.assigned_to} onChange={(e) => handleChange("assigned_to", e.target.value)} className="input-field" placeholder="اسم الفني" aria-label="المسؤول عن التنفيذ" />
             </div>
           </div>
         </div>
@@ -195,6 +200,7 @@ export default function MaintenanceSheetCreatePage() {
                   onChange={(e) => updatePart(idx, "part_name", e.target.value)}
                   className="input-field flex-1 text-sm"
                   placeholder="اسم القطعة"
+                  aria-label="اسم القطعة"
                 />
                 <input
                   type="number"
@@ -202,6 +208,7 @@ export default function MaintenanceSheetCreatePage() {
                   onChange={(e) => updatePart(idx, "quantity", Number(e.target.value))}
                   className="input-field w-20 text-sm"
                   min="1"
+                  aria-label="الكمية"
                 />
                 <input
                   type="number"
@@ -210,6 +217,7 @@ export default function MaintenanceSheetCreatePage() {
                   className="input-field w-32 text-sm"
                   placeholder="التكلفة"
                   min="0"
+                  aria-label="تكلفة الوحدة"
                 />
                 <button onClick={() => removePart(idx)} className="text-red-400 hover:text-red-300 p-1">
                   <Trash2 className="w-4 h-4" />
@@ -234,6 +242,7 @@ export default function MaintenanceSheetCreatePage() {
           onChange={(e) => handleChange("notes", e.target.value)}
           className="input-field min-h-[60px]"
           placeholder="أي ملاحظات أخرى..."
+          aria-label="ملاحظات إضافية"
         />
       </Card>
     </div>

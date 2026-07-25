@@ -166,39 +166,39 @@ export default function ChequesPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="input-group">
                 <label className="input-label">النوع</label>
-                <select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })} className="input-field">
+                <select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })} className="input-field" aria-label="النوع">
                   <option value="issued">شيك صادر</option>
                   <option value="received">شيك وارد</option>
                 </select>
               </div>
               <div className="input-group">
                 <label className="input-label">رقم الشيك</label>
-                <input type="text" value={form.cheque_no} onChange={(e) => setForm({ ...form, cheque_no: e.target.value })} className="input-field" dir="ltr" />
+                <input type="text" value={form.cheque_no} onChange={(e) => setForm({ ...form, cheque_no: e.target.value })} className="input-field" dir="ltr" aria-label="رقم الشيك" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="input-group">
                 <label className="input-label">البنك</label>
-                <input type="text" value={form.bank} onChange={(e) => setForm({ ...form, bank: e.target.value })} className="input-field" />
+                <input type="text" value={form.bank} onChange={(e) => setForm({ ...form, bank: e.target.value })} className="input-field" aria-label="البنك" />
               </div>
               <div className="input-group">
                 <label className="input-label">الطرف</label>
-                <input type="text" value={form.party} onChange={(e) => setForm({ ...form, party: e.target.value })} className="input-field" />
+                <input type="text" value={form.party} onChange={(e) => setForm({ ...form, party: e.target.value })} className="input-field" aria-label="الطرف" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="input-group">
                 <label className="input-label">المبلغ (ملي)</label>
-                <input type="number" value={form.amount_milli} onChange={(e) => setForm({ ...form, amount_milli: e.target.value })} className="input-field" dir="ltr" />
+                <input type="number" value={form.amount_milli} onChange={(e) => setForm({ ...form, amount_milli: e.target.value })} className="input-field" dir="ltr" aria-label="المبلغ بالملي" />
               </div>
               <div className="input-group">
                 <label className="input-label">تاريخ الاستحقاق</label>
-                <input type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} className="input-field" />
+                <input type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} className="input-field" aria-label="تاريخ الاستحقاق" />
               </div>
             </div>
             <div className="input-group">
               <label className="input-label">ملاحظات</label>
-              <input type="text" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="input-field" />
+              <input type="text" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="input-field" aria-label="ملاحظات" />
             </div>
           </div>
           <div className="flex justify-end gap-3 mt-4">

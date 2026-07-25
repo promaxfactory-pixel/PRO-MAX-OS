@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -30,9 +30,7 @@ export default function CustomerStatementPage() {
   const [printData, setPrintData] = useState<any>(null);
   const [showPrint, setShowPrint] = useState(false);
 
-  useEffect(() => { loadStatement(); }, [id, fromDate, toDate]);
-
-  const loadStatement = async () => {
+  const loadStatement = useCallback(async () => {
     setLoading(true);
     try {
       const result = await invoke("get_customer_statement", {
@@ -43,7 +41,9 @@ export default function CustomerStatementPage() {
       setData(result);
     } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
-  };
+  }, [addNotification, id, fromDate, toDate]);
+
+  useEffect(() => { loadStatement(); }, [loadStatement]);
 
   const handlePrint = async () => {
     try {
@@ -93,9 +93,9 @@ export default function CustomerStatementPage() {
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
           <Calendar className="w-4 h-4 text-surface-400" />
-          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="input-field text-sm" />
+          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="input-field text-sm" aria-label="من تاريخ" />
           <span className="text-surface-500">إلى</span>
-          <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="input-field text-sm" />
+          <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="input-field text-sm" aria-label="إلى تاريخ" />
         </div>
       </div>
 

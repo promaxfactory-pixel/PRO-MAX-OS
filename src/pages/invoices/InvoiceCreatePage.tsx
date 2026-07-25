@@ -100,7 +100,7 @@ export default function InvoiceCreatePage() {
               <div className="flex items-center gap-4">
                 <label className="flex items-center gap-2 text-xs text-surface-400 cursor-pointer">
                   <input type="checkbox" checked={useCustoms} onChange={(e) => setUseCustoms(e.target.checked)}
-                    className="rounded border-surface-600" />
+                    className="rounded border-surface-600" aria-label="أسعار الجمارك" />
                   أسعار الجمارك
                 </label>
                 <Button size="sm" variant="outline" onClick={addLine} icon={<Plus className="w-3 h-3" />}>إضافة بند</Button>
@@ -110,16 +110,16 @@ export default function InvoiceCreatePage() {
               {lines.map((line, i) => (
                 <div key={i} className="flex items-center gap-3 p-3 bg-surface-900/50 rounded-xl border border-surface-700/30">
                   <select value={line.product_id} onChange={(e) => updateLine(i, "product_id", Number(e.target.value))}
-                    className="flex-1 bg-surface-800 border border-surface-700 rounded-lg px-3 py-2 text-sm text-white">
+                    className="flex-1 bg-surface-800 border border-surface-700 rounded-lg px-3 py-2 text-sm text-white" aria-label="المنتج">
                     {products.map(p => <option key={p.id} value={p.id}>{p.name_ar || p.name_en} ({p.code})</option>)}
                   </select>
                   <input type="number" value={line.cartons} onChange={(e) => updateLine(i, "cartons", e.target.value)}
-                    className="w-20 bg-surface-800 border border-surface-700 rounded-lg px-3 py-2 text-sm text-white text-center" placeholder="كرتون" min="0" />
+                    className="w-20 bg-surface-800 border border-surface-700 rounded-lg px-3 py-2 text-sm text-white text-center" placeholder="كرتون" min="0" aria-label="الكراتين" />
                   <input type="number" value={line.unit_price} onChange={(e) => updateLine(i, "unit_price", e.target.value)}
-                    className="w-28 bg-surface-800 border border-surface-700 rounded-lg px-3 py-2 text-sm text-white text-left" placeholder="سعر البيع" min="0" step="0.001" />
+                    className="w-28 bg-surface-800 border border-surface-700 rounded-lg px-3 py-2 text-sm text-white text-left" placeholder="سعر البيع" min="0" step="0.001" aria-label="سعر البيع" />
                   {useCustoms && (
                     <input type="number" value={line.customs_price} onChange={(e) => updateLine(i, "customs_price", e.target.value)}
-                      className="w-28 bg-amber-900/20 border border-amber-700/40 rounded-lg px-3 py-2 text-sm text-amber-300 text-left" placeholder="سعر الجمارك" min="0" step="0.001" />
+                      className="w-28 bg-amber-900/20 border border-amber-700/40 rounded-lg px-3 py-2 text-sm text-amber-300 text-left" placeholder="سعر الجمارك" min="0" step="0.001" aria-label="سعر الجمارك" />
                   )}
                   <span className="text-sm text-surface-400 w-28 text-left shrink-0">{formatOMR(line.cartons * (useCustoms && line.customs_price > 0 ? line.customs_price : line.unit_price) * 1000)}</span>
                   <button onClick={() => removeLine(i)} className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg"><Trash2 className="w-4 h-4" /></button>

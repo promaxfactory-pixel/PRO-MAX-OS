@@ -121,32 +121,32 @@ export default function PettyCashPage() {
           <div className="grid grid-cols-2 gap-6">
             <div className="input-group">
               <label className="input-label">اسم الحساب *</label>
-              <input type="text" className="input-field" value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: صرف نثري المكتب" />
+              <input type="text" className="input-field" value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: صرف نثري المكتب" aria-label="اسم الحساب" />
             </div>
 
             <div className="input-group">
               <label className="input-label">الرمز *</label>
-              <input type="text" className="input-field" value={code} onChange={(e) => setCode(e.target.value)} placeholder="مثال: PC-001" />
+              <input type="text" className="input-field" value={code} onChange={(e) => setCode(e.target.value)} placeholder="مثال: PC-001" aria-label="الرمز" />
             </div>
 
             <div className="input-group">
               <label className="input-label">المسؤول *</label>
-              <input type="text" className="input-field" value={responsible} onChange={(e) => setResponsible(e.target.value)} placeholder="اسم المسؤول" />
+              <input type="text" className="input-field" value={responsible} onChange={(e) => setResponsible(e.target.value)} placeholder="اسم المسؤول" aria-label="المسؤول" />
             </div>
 
             <div className="input-group">
               <label className="input-label">الدور</label>
-              <input type="text" className="input-field" value={role} onChange={(e) => setRole(e.target.value)} placeholder="اختياري" />
+              <input type="text" className="input-field" value={role} onChange={(e) => setRole(e.target.value)} placeholder="اختياري" aria-label="الدور" />
             </div>
 
             <div className="input-group">
               <label className="input-label">حد المصروفات (ملي)</label>
-              <input type="number" className="input-field" min={0} value={spendingLimitMilli} onChange={(e) => setSpendingLimitMilli(Number(e.target.value))} />
+              <input type="number" className="input-field" min={0} value={spendingLimitMilli} onChange={(e) => setSpendingLimitMilli(Number(e.target.value))} aria-label="حد المصروفات" />
             </div>
 
             <div className="input-group">
               <label className="input-label">ملاحظات</label>
-              <input type="text" className="input-field" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="اختياري" />
+              <input type="text" className="input-field" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="اختياري" aria-label="ملاحظات" />
             </div>
           </div>
 

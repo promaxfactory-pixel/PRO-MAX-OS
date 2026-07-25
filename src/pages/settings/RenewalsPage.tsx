@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import Badge from "@/components/ui/Badge";
@@ -42,16 +42,16 @@ export default function RenewalsPage() {
     notes: "",
   });
 
-  useEffect(() => { loadRenewals(); }, []);
-
-  const loadRenewals = async () => {
+  const loadRenewals = useCallback(async () => {
     setLoading(true);
     try {
       const d = await invoke("list_renewals");
       setRenewals(d as Renewal[]);
     } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
-  };
+  }, [addNotification]);
+
+  useEffect(() => { loadRenewals(); }, [loadRenewals]);
 
   const handleCreate = async () => {
     setSaving(true);
@@ -176,46 +176,46 @@ export default function RenewalsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="input-group">
                 <label className="input-label">الاسم</label>
-                <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="input-field" />
+                <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="input-field" aria-label="الاسم" />
               </div>
               <div className="input-group">
                 <label className="input-label">الفئة</label>
-                <input type="text" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="input-field" placeholder="مثال: ترخيص، تأمين..." />
+                <input type="text" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="input-field" placeholder="مثال: ترخيص، تأمين..." aria-label="الفئة" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="input-group">
                 <label className="input-label">الجهة</label>
-                <input type="text" value={form.authority} onChange={(e) => setForm({ ...form, authority: e.target.value })} className="input-field" />
+                <input type="text" value={form.authority} onChange={(e) => setForm({ ...form, authority: e.target.value })} className="input-field" aria-label="الجهة" />
               </div>
               <div className="input-group">
                 <label className="input-label">المسؤول</label>
-                <input type="text" value={form.responsible} onChange={(e) => setForm({ ...form, responsible: e.target.value })} className="input-field" />
+                <input type="text" value={form.responsible} onChange={(e) => setForm({ ...form, responsible: e.target.value })} className="input-field" aria-label="المسؤول" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="input-group">
                 <label className="input-label">تاريخ الإصدار</label>
-                <input type="date" value={form.issue_date} onChange={(e) => setForm({ ...form, issue_date: e.target.value })} className="input-field" />
+                <input type="date" value={form.issue_date} onChange={(e) => setForm({ ...form, issue_date: e.target.value })} className="input-field" aria-label="تاريخ الإصدار" />
               </div>
               <div className="input-group">
                 <label className="input-label">تاريخ الانتهاء</label>
-                <input type="date" value={form.expiry_date} onChange={(e) => setForm({ ...form, expiry_date: e.target.value })} className="input-field" />
+                <input type="date" value={form.expiry_date} onChange={(e) => setForm({ ...form, expiry_date: e.target.value })} className="input-field" aria-label="تاريخ الانتهاء" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="input-group">
                 <label className="input-label">التكلفة (مليار)</label>
-                <input type="number" value={form.cost_milli} onChange={(e) => setForm({ ...form, cost_milli: e.target.value })} className="input-field" dir="ltr" />
+                <input type="number" value={form.cost_milli} onChange={(e) => setForm({ ...form, cost_milli: e.target.value })} className="input-field" dir="ltr" aria-label="التكلفة" />
               </div>
               <div className="input-group">
                 <label className="input-label">أيام التنبيه قبل الانتهاء</label>
-                <input type="number" value={form.alert_days} onChange={(e) => setForm({ ...form, alert_days: e.target.value })} className="input-field" dir="ltr" />
+                <input type="number" value={form.alert_days} onChange={(e) => setForm({ ...form, alert_days: e.target.value })} className="input-field" dir="ltr" aria-label="أيام التنبيه" />
               </div>
             </div>
             <div className="input-group">
               <label className="input-label">ملاحظات</label>
-              <input type="text" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="input-field" />
+              <input type="text" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="input-field" aria-label="ملاحظات" />
             </div>
           </div>
           <div className="flex justify-end gap-3 mt-4">

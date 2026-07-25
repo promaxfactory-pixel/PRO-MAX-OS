@@ -108,17 +108,17 @@ export default function CashBankPage() {
           <div className="grid grid-cols-3 gap-6">
             <div className="input-group">
               <label className="input-label">اسم الحساب *</label>
-              <input type="text" className="input-field" value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: الصندوق الرئيسي" />
+              <input type="text" className="input-field" value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: الصندوق الرئيسي" aria-label="اسم الحساب" />
             </div>
 
             <div className="input-group">
               <label className="input-label">الرمز *</label>
-              <input type="text" className="input-field" value={code} onChange={(e) => setCode(e.target.value)} placeholder="مثال: CB-001" />
+              <input type="text" className="input-field" value={code} onChange={(e) => setCode(e.target.value)} placeholder="مثال: CB-001" aria-label="الرمز" />
             </div>
 
             <div className="input-group">
               <label className="input-label">النوع *</label>
-              <select className="input-field" value={atype} onChange={(e) => setAtype(e.target.value)}>
+              <select className="input-field" value={atype} onChange={(e) => setAtype(e.target.value)} aria-label="النوع">
                 <option value="cash">نقدي</option>
                 <option value="bank">بنكي</option>
               </select>

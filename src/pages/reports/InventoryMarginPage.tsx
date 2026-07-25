@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import Card from "@/components/ui/Card";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import { formatOMR } from "@/lib/utils";
@@ -23,16 +23,16 @@ export default function InventoryMarginPage() {
   const [data, setData] = useState<MarginRow[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { loadData(); }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const result = await invoke("inventory_margin_report");
       setData(result as MarginRow[]);
     } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
-  };
+  }, [addNotification]);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   const totalStockValue = data.reduce((s, r) => s + r.stock_value_milli, 0);
   const totalRevenue = data.reduce((s, r) => s + r.stock_revenue_milli, 0);

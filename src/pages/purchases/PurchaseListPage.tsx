@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import Button from "@/components/ui/Button";
@@ -24,14 +24,14 @@ export default function PurchaseListPage() {
   const [purchases, setPurchases] = useState<PurchaseOrder[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { loadPurchases(); }, []);
-
-  const loadPurchases = async () => {
+  const loadPurchases = useCallback(async () => {
     setLoading(true);
     try { const d = await invoke("list_purchases"); setPurchases(d as PurchaseOrder[]); }
     catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
-  };
+  }, [addNotification]);
+
+  useEffect(() => { loadPurchases(); }, [loadPurchases]);
 
   const totalAmount = purchases.reduce((s: number, p: any) => s + (p.total_milli || 0), 0);
   const totalPaid = purchases.reduce((s: number, p: any) => s + (p.paid_milli || 0), 0);

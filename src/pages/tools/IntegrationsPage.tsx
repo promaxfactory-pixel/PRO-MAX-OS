@@ -77,6 +77,7 @@ export default function IntegrationsPage() {
         onChange={(e) => onChange(e.target.value)}
         className="input-field"
         dir={opts?.dir || "ltr"}
+        aria-label={label}
       />
     </div>
   );
@@ -154,7 +155,7 @@ export default function IntegrationsPage() {
           <div className="space-y-4">
             <div>
               <label className="form-label">اسم الطابعة</label>
-              <input type="text" value={form.printer_name} onChange={(e) => handleChange("printer_name", e.target.value)} className="input-field" />
+              <input type="text" value={form.printer_name} onChange={(e) => handleChange("printer_name", e.target.value)} className="input-field" aria-label="اسم الطابعة" />
             </div>
             <label className="flex items-center gap-3 cursor-pointer">
               <input
@@ -162,6 +163,7 @@ export default function IntegrationsPage() {
                 checked={form.printer_auto}
                 onChange={(e) => handleChange("printer_auto", e.target.checked)}
                 className="rounded"
+                aria-label="طباعة تلقائية"
               />
               <span className="text-sm text-surface-300">طباعة تلقائية</span>
             </label>
