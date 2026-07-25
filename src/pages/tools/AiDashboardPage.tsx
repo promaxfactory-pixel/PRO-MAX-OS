@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { formatOMR, cn } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
+import { useUIStore } from "@/stores/uiStore";
 import {
   Brain, AlertTriangle, AlertCircle, Info, TrendingUp,
   Users, Factory, DollarSign, Warehouse, RefreshCw, Loader2
@@ -31,11 +32,13 @@ const SEVERITY_CONFIG = {
 };
 
 export default function AiDashboardPage() {
+  const addNotification = useUIStore((s) => s.addNotification);
   const [insights, setInsights] = useState<Insight[]>([]);
   const [forecast, setForecast] = useState<Forecast[]>([]);
   const [risks, setRisks] = useState<RiskCustomer[]>([]);
   const [costs, setCosts] = useState<CostItem[]>([]);
   const [invAlerts, setInvAlerts] = useState<InventoryAlert[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [production, setProduction] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -50,9 +53,9 @@ export default function AiDashboardPage() {
         invoke<InventoryAlert[]>("ai_inventory_optimization").catch(() => []),
         invoke("ai_production_analysis").catch(() => null),
       ]);
-      setInsights(i); setForecast(f); setRisks(r); setCosts(c); setInvAlerts(inv); setProduction(p);
+      setInsights(i); setForecast(f); setRisks(r); setCosts(c); setInvAlerts(inv);         setProduction(p);
     } catch (err) {
-      console.error(err);
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(err) });
     } finally {
       setLoading(false);
     }

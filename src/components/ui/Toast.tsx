@@ -16,6 +16,13 @@ const styles = {
   info: "border-brand-500 bg-brand-500/10 text-brand-400",
 } as const;
 
+const typeLabels = {
+  success: "نجاح",
+  error: "خطأ",
+  warning: "تحذير",
+  info: "معلومة",
+} as const;
+
 const Toast = memo(function Toast() {
   const notifications = useUIStore((s) => s.notifications);
   const removeNotification = useUIStore((s) => s.removeNotification);
@@ -31,18 +38,22 @@ const Toast = memo(function Toast() {
   }, [notifications, removeNotification]);
 
   return (
-    <div className="fixed top-4 left-4 z-[100] flex flex-col gap-3 pointer-events-none">
+    <div className="fixed top-4 left-4 z-[100] flex flex-col gap-3 pointer-events-none" role="region" aria-label="الإشعارات" aria-live="polite" aria-relevant="additions removals">
       {notifications.map((n) => {
         const Icon = icons[n.type] ?? Info;
         const colorClass = styles[n.type] ?? styles.info;
+        const typeLabel = typeLabels[n.type] ?? "معلومة";
 
         return (
           <div
             key={n.id ?? n.title}
+            role="status"
+            aria-live="polite"
             className={`pointer-events-auto flex items-start gap-3 min-w-[320px] max-w-[420px] rounded-xl border bg-surface-900 p-4 shadow-lg animate-slide-in-left ${colorClass}`}
           >
-            <Icon className="mt-0.5 h-5 w-5 shrink-0" />
+            <Icon className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
             <div className="flex-1 min-w-0">
+              <p className="sr-only">{typeLabel}:</p>
               {n.title && (
                 <p className="font-semibold text-sm text-white">{n.title}</p>
               )}
@@ -50,9 +61,10 @@ const Toast = memo(function Toast() {
             </div>
             <button
               onClick={() => n.id && removeNotification(n.id)}
+              aria-label="إغلاق الإشعار"
               className="shrink-0 rounded-lg p-1 text-surface-400 hover:text-white hover:bg-surface-700 transition-colors"
             >
-              <X className="h-4 w-4" />
+              <X className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
         );

@@ -6,17 +6,24 @@ import { invoke } from "@tauri-apps/api/core";
 import { TrendingUp, TrendingDown, BarChart3 } from "lucide-react";
 import { useUIStore } from "../../stores/uiStore";
 
+interface FinancialStatement {
+  items: { account: string; amount_milli: number }[];
+  total_milli: number;
+}
+
 export default function FinancialStatementsPage() {
   const { addNotification } = useUIStore();
   const [activeTab, setActiveTab] = useState("income");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [income, setIncome] = useState<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [balance, setBalance] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([invoke("get_income_statement"), invoke("get_balance_sheet")])
       .then(([i, b]) => { setIncome(i); setBalance(b); })
-      .catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
+      .catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
       .finally(() => setLoading(false));
   }, []);
 

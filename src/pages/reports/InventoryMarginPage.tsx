@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Card from "@/components/ui/Card";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import { formatOMR } from "@/lib/utils";
@@ -6,9 +6,21 @@ import { invoke } from "@tauri-apps/api/core";
 import { Package, TrendingUp } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
+interface MarginRow {
+  code: string;
+  name: string;
+  qty_on_hand: number;
+  avg_cost_milli: number;
+  selling_price_milli: number;
+  margin_milli: number;
+  margin_pct: number;
+  stock_value_milli: number;
+  stock_revenue_milli: number;
+}
+
 export default function InventoryMarginPage() {
   const addNotification = useUIStore((s) => s.addNotification);
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<MarginRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { loadData(); }, []);
@@ -17,7 +29,7 @@ export default function InventoryMarginPage() {
     setLoading(true);
     try {
       const result = await invoke("inventory_margin_report");
-      setData(result as any[]);
+      setData(result as MarginRow[]);
     } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
   };
@@ -25,7 +37,7 @@ export default function InventoryMarginPage() {
   const totalStockValue = data.reduce((s, r) => s + r.stock_value_milli, 0);
   const totalRevenue = data.reduce((s, r) => s + r.stock_revenue_milli, 0);
 
-  const columns: Column<any>[] = [
+  const columns: Column<MarginRow>[] = useMemo(() => [
     { key: "code", header: "الكود", render: (r) => r.code || "—" },
     { key: "name", header: "المنتج", render: (r) => r.name || "—" },
     { key: "qty_on_hand", header: "الكمية", align: "center", render: (r) => r.qty_on_hand.toLocaleString() },
@@ -35,7 +47,7 @@ export default function InventoryMarginPage() {
     { key: "margin_pct", header: "النسبة %", align: "center", render: (r) => <span className="font-bold">{r.margin_pct.toFixed(1)}%</span> },
     { key: "stock_value_milli", header: "قيمة المخزون", align: "left", render: (r) => formatOMR(r.stock_value_milli) },
     { key: "stock_revenue_milli", header: "الإيراد المتوقع", align: "left", render: (r) => formatOMR(r.stock_revenue_milli) },
-  ];
+  ], []);
 
   return (
     <div className="space-y-6">

@@ -12,6 +12,11 @@ import {
 } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
+interface FileWithPath {
+  name: string;
+  path?: string;
+}
+
 type EntityType =
   | "customers" | "suppliers" | "products"
   | "inventory" | "invoices" | "purchases"
@@ -123,15 +128,15 @@ export default function HistoricalImportPage() {
     setError(null);
     setLoading(true);
     try {
-      const path = (selected as any).path || selected.name;
+      const path = (selected as FileWithPath).path || selected.name;
       const data = await invoke<PreviewData>("preview_import", {
         filePath: path,
         entityType,
       });
       setPreview(data);
       setMappings(data.mappings.length > 0 ? data.mappings : data.headers.map((h: string) => ({ source: h, target: "" })));
-    } catch (err: any) {
-      setError(err?.toString() || "فشل تحميل الملف");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err) || "فشل تحميل الملف");
     } finally {
       setLoading(false);
     }
@@ -146,7 +151,7 @@ export default function HistoricalImportPage() {
     setLoading(true);
     setError(null);
     try {
-      const path = (file as any).path || file.name;
+      const path = (file as FileWithPath).path || file.name;
       const activeMappings = mappings.filter((m) => m.target);
       const data = await invoke<ImportResult>("execute_import", {
         entityType,
@@ -157,8 +162,8 @@ export default function HistoricalImportPage() {
       setResult(data);
       setStep(3);
       loadHistory();
-    } catch (err: any) {
-      setError(err?.toString() || "فشل الاستيراد");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err) || "فشل الاستيراد");
     } finally {
       setLoading(false);
     }

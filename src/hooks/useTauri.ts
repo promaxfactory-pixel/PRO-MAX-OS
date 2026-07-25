@@ -10,12 +10,12 @@ export function useTauriCommand<T, A = void>(command: string) {
     setError(null);
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      const result = await invoke<T>(command, args as any);
+      const result = await invoke<T>(command, args as Record<string, unknown>);
       setData(result);
       setLoading(false);
       return result;
-    } catch (err: any) {
-      setError(err.toString());
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
       setLoading(false);
       throw err;
     }

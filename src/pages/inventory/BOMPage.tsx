@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -7,18 +7,30 @@ import { invoke } from "@tauri-apps/api/core";
 import { Plus, Save, ChevronDown, ChevronUp } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import type { Product, InventoryItem } from "@/types";
+
+interface Bom {
+  id: number;
+  product_id: number;
+  product_name: string;
+  item_id: number;
+  item_name: string;
+  qty_per_carton: number;
+  waste_pct: number;
+  active: number;
+}
 
 export default function BOMPage() {
   const navigate = useNavigate();
   const { addNotification } = useUIStore();
-  const [boms, setBoms] = useState<any[]>([]);
+  const [boms, setBoms] = useState<Bom[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const [products, setProducts] = useState<any[]>([]);
-  const [items, setItems] = useState<any[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [items, setItems] = useState<InventoryItem[]>([]);
   const [form, setForm] = useState({
     product_id: 0,
     item_id: 0,
@@ -38,9 +50,9 @@ export default function BOMPage() {
         invoke("list_products"),
         invoke("list_inventory_items"),
       ]);
-      setBoms(bomsData as any[]);
-      setProducts(productsData as any[]);
-      setItems(itemsData as any[]);
+      setBoms(bomsData as Bom[]);
+      setProducts(productsData as Product[]);
+      setItems(itemsData as InventoryItem[]);
     } catch (err) {
       addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" });
     } finally {
@@ -50,8 +62,8 @@ export default function BOMPage() {
 
   const set = (key: string, val: any) => setForm((f) => ({ ...f, [key]: val }));
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent | Event) => {
+    if (e && 'preventDefault' in e) e.preventDefault();
     if (!form.product_id || !form.item_id) return addNotification({ id: crypto.randomUUID(), type: "warning", title: "تنبيه", message: "يرجى اختيار المنتج والمادة الخام" });
     setSaving(true);
     try {
@@ -59,8 +71,8 @@ export default function BOMPage() {
       setShowForm(false);
       setForm({ product_id: 0, item_id: 0, qty_per_carton: 0, waste_pct: 0 });
       await loadData();
-    } catch (err: any) {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: err.toString() });
+    } catch (err: unknown) {
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(err) });
     } finally {
       setSaving(false);
     }
@@ -68,7 +80,7 @@ export default function BOMPage() {
 
   const activeCount = boms.filter((b) => b.active).length;
 
-  const columns: Column<any>[] = [
+  const columns: Column<Bom>[] = useMemo(() => [
     { key: "product_name", header: "المنتج", sortable: true, render: (r) => <span className="font-medium text-gold-400">{r.product_name || "—"}</span> },
     { key: "item_name", header: "المادة الخام", sortable: true, render: (r) => <span className="text-brand-400">{r.item_name || "—"}</span> },
     { key: "qty_per_carton", header: "الكمية لكل كرتون", sortable: true, align: "center", render: (r) => <span className="font-bold text-white">{r.qty_per_carton}</span> },
@@ -78,7 +90,7 @@ export default function BOMPage() {
         {r.active ? "نشط" : "غير نشط"}
       </span>
     )},
-  ];
+  ], []);
 
   return (
     <div className="space-y-6">
@@ -102,7 +114,7 @@ export default function BOMPage() {
                 <select className="input-field" value={form.product_id} onChange={(e) => set("product_id", Number(e.target.value))} required>
                   <option value={0}>اختر المنتج</option>
                   {products.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
+                    <option key={p.id} value={p.id}>{p.name_ar || p.name_en}</option>
                   ))}
                 </select>
               </div>
@@ -139,7 +151,7 @@ export default function BOMPage() {
         title="إضافة BOM جديد"
         message="هل أنت متأكد من إضافة Bill of Materials جديد؟"
         variant="warning"
-        onConfirm={() => { handleSubmit(new Event('submit') as any); setShowConfirm(false); }}
+        onConfirm={() => { handleSubmit(); setShowConfirm(false); }}
         onCancel={() => setShowConfirm(false)}
       />
     </div>

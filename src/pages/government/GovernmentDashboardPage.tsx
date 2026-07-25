@@ -60,7 +60,7 @@ export default function GovernmentDashboardPage() {
     ]).then(([d, ds]) => {
       setDashboard(d);
       setDocStatus(ds);
-    }).catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false));
+    }).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false));
   }, []);
 
   if (loading) {

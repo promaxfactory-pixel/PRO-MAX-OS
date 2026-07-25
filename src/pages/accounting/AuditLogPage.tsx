@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
-import DataTable, { Column } from "@/components/ui/DataTable";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import DataTable, { Column, type BadgeVariant } from "@/components/ui/DataTable";
 import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import { formatDate } from "@/lib/utils";
@@ -7,9 +7,21 @@ import { invoke } from "@tauri-apps/api/core";
 import { Search, Shield, Users, Calendar, ChevronDown, ChevronUp } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
+interface AuditLog {
+  id: number;
+  ts: string;
+  username: string;
+  action: string;
+  entity: string;
+  entity_id: number | null;
+  reason: string;
+  old_value: string;
+  new_value: string;
+}
+
 export default function AuditLogPage() {
   const addNotification = useUIStore((s) => s.addNotification);
-  const [logs, setLogs] = useState<any[]>([]);
+  const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [entityFilter, setEntityFilter] = useState("");
@@ -24,7 +36,7 @@ export default function AuditLogPage() {
     setLoading(true);
     try {
       const d = await invoke("list_audit_logs");
-      setLogs(d as any[]);
+      setLogs(d as AuditLog[]);
     } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
   };
@@ -49,12 +61,12 @@ export default function AuditLogPage() {
   const todayCount = logs.filter((l) => l.ts?.slice(0, 10) === today).length;
   const activeUsers = new Set(logs.map((l) => l.username).filter(Boolean)).size;
 
-  const columns: Column<any>[] = [
+  const columns: Column<AuditLog>[] = useMemo(() => [
     { key: "ts", header: "التاريخ والوقت", sortable: true, render: (r) => <span className="text-surface-300 text-xs font-mono">{r.ts ? formatDate(r.ts) : "—"}</span> },
     { key: "username", header: "المستخدم", sortable: true, render: (r) => <span className="font-medium text-brand-400">{r.username || "—"}</span> },
     { key: "action", header: "الإجراء", sortable: true, render: (r) => {
-      const v = r.action?.includes("delete") || r.action?.includes("remove") ? "danger" : r.action?.includes("create") || r.action?.includes("add") ? "success" : "info";
-      return <Badge variant={v as any}>{r.action || "—"}</Badge>;
+      const v: BadgeVariant = r.action?.includes("delete") || r.action?.includes("remove") ? "danger" : r.action?.includes("create") || r.action?.includes("add") ? "success" : "info";
+      return <Badge variant={v}>{r.action || "—"}</Badge>;
     }},
     { key: "entity", header: "الكيان", sortable: true, render: (r) => r.entity || "—" },
     { key: "entity_id", header: "رقم الكيان", render: (r) => r.entity_id != null ? <span className="font-mono text-xs">{r.entity_id}</span> : "—" },
@@ -66,7 +78,7 @@ export default function AuditLogPage() {
         </button>
       ) : null
     )},
-  ];
+  ], [expandedRow]);
 
   return (
     <div className="space-y-6">
@@ -129,22 +141,22 @@ export default function AuditLogPage() {
         data={filtered}
         loading={loading}
         emptyMessage="لا توجد سجلات"
-        onRowClick={(row: any) => setExpandedRow(expandedRow === row.id ? null : row.id)}
+        onRowClick={(row: AuditLog) => setExpandedRow(expandedRow === row.id ? null : row.id)}
       />
 
-      {expandedRow && filtered.find((r: any) => r.id === expandedRow) && (
+      {expandedRow && filtered.find((r: AuditLog) => r.id === expandedRow) && (
         <Card>
           <div className="grid grid-cols-2 gap-4 text-xs">
             <div>
               <p className="text-surface-400 mb-1 font-medium">القيمة القديمة:</p>
               <pre className="text-surface-300 bg-surface-900/80 rounded-lg p-3 overflow-auto max-h-40 whitespace-pre-wrap font-mono">
-                {filtered.find((r: any) => r.id === expandedRow)?.old_value || "—"}
+                {filtered.find((r: AuditLog) => r.id === expandedRow)?.old_value || "—"}
               </pre>
             </div>
             <div>
               <p className="text-surface-400 mb-1 font-medium">القيمة الجديدة:</p>
               <pre className="text-surface-300 bg-surface-900/80 rounded-lg p-3 overflow-auto max-h-40 whitespace-pre-wrap font-mono">
-                {filtered.find((r: any) => r.id === expandedRow)?.new_value || "—"}
+                {filtered.find((r: AuditLog) => r.id === expandedRow)?.new_value || "—"}
               </pre>
             </div>
           </div>

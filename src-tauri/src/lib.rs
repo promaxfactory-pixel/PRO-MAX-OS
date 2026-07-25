@@ -125,6 +125,10 @@ pub fn run() {
             // Expenses
             commands::expenses::list_expenses,
             commands::expenses::create_expense,
+            commands::expenses::reimburse_expense,
+            commands::expenses::approve_expense,
+            commands::expenses::list_employees_for_select,
+            commands::expenses::get_custody_accounts_for_select,
             // Petty Cash
             commands::petty_cash::list_petty_cash_accounts,
             commands::petty_cash::create_petty_cash_account,

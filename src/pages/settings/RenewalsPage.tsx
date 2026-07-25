@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import Badge from "@/components/ui/Badge";
@@ -9,10 +9,24 @@ import { invoke } from "@tauri-apps/api/core";
 import { Plus, FileCheck, AlertTriangle, Clock, ShieldAlert } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
+interface Renewal {
+  id: number;
+  name: string;
+  category: string;
+  authority: string;
+  issue_date: string;
+  expiry_date: string;
+  cost_milli: number;
+  responsible: string;
+  alert_days: number;
+  notes: string;
+  status: string;
+}
+
 export default function RenewalsPage() {
   const navigate = useNavigate();
   const addNotification = useUIStore((s) => s.addNotification);
-  const [renewals, setRenewals] = useState<any[]>([]);
+  const [renewals, setRenewals] = useState<Renewal[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -34,7 +48,7 @@ export default function RenewalsPage() {
     setLoading(true);
     try {
       const d = await invoke("list_renewals");
-      setRenewals(d as any[]);
+      setRenewals(d as Renewal[]);
     } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
   };
@@ -71,14 +85,14 @@ export default function RenewalsPage() {
     return Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
   };
 
-  const getRowBg = (r: any): string => {
+  const getRowBg = (r: Renewal): string => {
     const days = getDaysUntilExpiry(r.expiry_date);
     if (days < 0) return "bg-red-500/10 border-r-2 border-red-500";
     if (days <= (r.alert_days || 30)) return "bg-yellow-500/10 border-r-2 border-yellow-500";
     return "";
   };
 
-  const getStatus = (r: any): string => {
+  const getStatus = (r: Renewal): string => {
     const days = getDaysUntilExpiry(r.expiry_date);
     if (r.status === "cancelled") return "cancelled";
     if (days < 0) return "expired";
@@ -98,7 +112,7 @@ export default function RenewalsPage() {
   const expiringSoon = renewals.filter((r) => getStatus(r) === "expiring").length;
   const expiredCount = renewals.filter((r) => getStatus(r) === "expired").length;
 
-  const columns: Column<any>[] = [
+  const columns: Column<Renewal>[] = useMemo(() => [
     { key: "name", header: "الاسم", sortable: true, render: (r) => <span className="font-medium">{r.name}</span> },
     { key: "category", header: "الفئة", sortable: true, render: (r) => r.category || "—" },
     { key: "authority", header: "الجهة", sortable: true, render: (r) => r.authority || "—" },
@@ -121,7 +135,7 @@ export default function RenewalsPage() {
       const s = statusMap[getStatus(r)] || { label: r.status, variant: "default" };
       return <Badge variant={s.variant}>{s.label}</Badge>;
     }},
-  ];
+  ], []);
 
   return (
     <div className="space-y-6">

@@ -3,23 +3,25 @@ import { useNavigate } from "react-router-dom";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
+import { type BadgeVariant } from "@/components/ui/DataTable";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, Cog, AlertCircle } from "lucide-react";
+import { Machine } from "@/types";
 
 export default function MachineListPage() {
   const navigate = useNavigate();
-  const [machines, setMachines] = useState<any[]>([]);
+  const [machines, setMachines] = useState<Machine[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
   useEffect(() => {
     invoke("list_machines")
-      .then((d: any) => setMachines(d))
+      .then((d) => setMachines(d as Machine[]))
       .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, []);
 
-  const statusMap: Record<string, { label: string; variant: string }> = {
+  const statusMap: Record<string, { label: string; variant: BadgeVariant }> = {
     active: { label: "نشط", variant: "success" },
     maintenance: { label: "صيانة", variant: "warning" },
     inactive: { label: "غير نشط", variant: "danger" },
@@ -58,7 +60,7 @@ export default function MachineListPage() {
                 </div>
                 <div className="text-left">
                   {machine.status && (
-                    <Badge variant={(statusMap[machine.status]?.variant as any) || "info"}>
+                    <Badge variant={statusMap[machine.status]?.variant || "info"}>
                       {statusMap[machine.status]?.label || machine.status}
                     </Badge>
                   )}

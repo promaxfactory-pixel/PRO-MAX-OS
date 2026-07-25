@@ -152,10 +152,12 @@ pub fn create_production_order(
             |r| r.get(0),
         )
         .unwrap_or(1);
-    let _ = conn.execute(
+    if let Err(e) = conn.execute(
         "INSERT INTO doc_sequences(doc_type, year, last_number) VALUES('PROD',?,?) ON CONFLICT(doc_type, year) DO UPDATE SET last_number=excluded.last_number",
         rusqlite::params![year, seq],
-    );
+    ) {
+        eprintln!("ERROR: Failed to increment production order sequence: {}", e);
+    }
     let prod_no = format!("PROD-{}-{:04}", year, seq);
 
     conn.execute(

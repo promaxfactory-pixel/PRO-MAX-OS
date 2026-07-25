@@ -36,7 +36,7 @@ export default function IntegrationsPage() {
   useEffect(() => {
     invoke<Partial<Settings>>("integrations_get_settings")
       .then((d) => setForm((prev) => ({ ...prev, ...d })))
-      .catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }));
+      .catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }));
   }, []);
 
   const handleChange = (field: keyof Settings, value: any) => {
@@ -60,8 +60,8 @@ export default function IntegrationsPage() {
     try {
       const result = await invoke<{ ok: boolean; message: string }>(`integrations_test_${type}`);
       setTestResult({ type, ok: result.ok, msg: result.message });
-    } catch (err: any) {
-      setTestResult({ type, ok: false, msg: err?.toString() || "فشل الاتصال" });
+    } catch (err: unknown) {
+      setTestResult({ type, ok: false, msg: err instanceof Error ? err.message : String(err) || "فشل الاتصال" });
     } finally {
       setTesting(null);
       setTimeout(() => setTestResult(null), 5000);

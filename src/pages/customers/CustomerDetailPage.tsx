@@ -7,16 +7,17 @@ import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowRight, Phone, Mail, MapPin, Edit, FileText, Banknote } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
+import { Customer } from "@/types";
 
 export default function CustomerDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const addNotification = useUIStore((s) => s.addNotification);
-  const [customer, setCustomer] = useState<any>(null);
+  const [customer, setCustomer] = useState<Customer | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    invoke("get_customer", { id: Number(id) }).then((d) => setCustomer(d)).catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false));
+    invoke("get_customer", { id: Number(id) }).then((d) => setCustomer(d as Customer)).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false));
   }, [id]);
 
   if (loading || !customer) {

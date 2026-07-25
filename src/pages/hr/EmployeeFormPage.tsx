@@ -34,7 +34,7 @@ export default function EmployeeFormPage() {
           workpermit_expiry: d.workpermit_expiry || "", insurance_expiry: d.insurance_expiry || "",
           contract_end: d.contract_end || "", joining_date: d.joining_date || "", notes: d.notes || "",
         });
-      }).catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false));
+      }).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false));
     }
   }, [id, isEdit]);
 

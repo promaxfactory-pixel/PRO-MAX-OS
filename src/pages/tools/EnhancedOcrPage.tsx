@@ -12,6 +12,11 @@ import {
 } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
+interface FileWithPath {
+  name: string;
+  path?: string;
+}
+
 type ConfidenceLevel = "high" | "medium" | "low";
 
 interface ExtractedField {
@@ -126,7 +131,7 @@ export default function EnhancedOcrPage() {
     setHistoryLoading(true);
     invoke("ocr_get_history")
       .then((d: any) => setHistory(d || []))
-      .catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
+      .catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
       .finally(() => setHistoryLoading(false));
   }, []);
 
@@ -142,7 +147,7 @@ export default function EnhancedOcrPage() {
     setRejectedSuggestions(new Set());
     setError(null);
 
-    const path = (selected as any).path || selected.name;
+    const path = (selected as FileWithPath).path || selected.name;
     const ext = selected.name.split(".").pop()?.toLowerCase() || "";
 
     if (["jpg", "jpeg", "png"].includes(ext)) {
@@ -186,8 +191,8 @@ export default function EnhancedOcrPage() {
 
       const sugs = await invoke<Suggestion[]>("ocr_get_suggestions", { result: data }).catch(() => []);
       setSuggestions(sugs);
-    } catch (err: any) {
-      setError(err?.toString() || "فشل تحليل المستند");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err) || "فشل تحليل المستند");
     } finally {
       setScanning(false);
     }
@@ -218,8 +223,8 @@ export default function EnhancedOcrPage() {
       setSuccessMsg(`تم تنفيذ: ${suggestion.label}`);
       setTimeout(() => setSuccessMsg(null), 3000);
       loadHistory();
-    } catch (err: any) {
-      setError(err?.toString() || "فشل تنفيذ الإجراء");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err) || "فشل تنفيذ الإجراء");
     } finally {
       setExecuting(null);
     }

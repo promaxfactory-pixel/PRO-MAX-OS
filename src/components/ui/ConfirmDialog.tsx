@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { AlertTriangle, Shield, Info } from "lucide-react";
 import Button from "@/components/ui/Button";
 
@@ -37,14 +37,49 @@ export default function ConfirmDialog({
   onCancel,
   loading = false,
 }: ConfirmDialogProps) {
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const confirmBtnRef = useRef<HTMLButtonElement>(null);
+  const titleId = `confirm-title-${variant}`;
+  const messageId = `confirm-message-${variant}`;
+
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      onCancel();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const focusable = overlayRef.current?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    if (!focusable || focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey) {
+      if (document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      }
+    } else {
+      if (document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  }, [onCancel]);
+
   useEffect(() => {
     if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCancel();
+    previousFocusRef.current = document.activeElement as HTMLElement;
+    window.addEventListener("keydown", handleKeyDown);
+    document.body.style.overflow = 'hidden';
+    setTimeout(() => confirmBtnRef.current?.focus(), 0);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = '';
+      previousFocusRef.current?.focus();
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [open, onCancel]);
+  }, [open, handleKeyDown]);
 
   if (!open) return null;
 
@@ -52,6 +87,11 @@ export default function ConfirmDialog({
 
   return (
     <div
+      ref={overlayRef}
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      aria-describedby={messageId}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
       onClick={onCancel}
     >
@@ -60,12 +100,12 @@ export default function ConfirmDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start gap-4 mb-4">
-          <div className={`shrink-0 rounded-xl p-3 ${variantStyles[variant]}`}>
+          <div className={`shrink-0 rounded-xl p-3 ${variantStyles[variant]}`} aria-hidden="true">
             <Icon className="h-6 w-6" />
           </div>
           <div className="min-w-0">
-            <h3 className="text-lg font-bold text-white">{title}</h3>
-            <p className="mt-1 text-sm text-surface-400 leading-relaxed">{message}</p>
+            <h3 id={titleId} className="text-lg font-bold text-white">{title}</h3>
+            <p id={messageId} className="mt-1 text-sm text-surface-400 leading-relaxed">{message}</p>
           </div>
         </div>
 
@@ -74,13 +114,16 @@ export default function ConfirmDialog({
             variant="outline"
             onClick={onCancel}
             disabled={loading}
+            aria-label={cancelLabel}
             className="border-surface-700 text-surface-400 hover:text-white hover:border-surface-500"
           >
             {cancelLabel}
           </Button>
           <button
+            ref={confirmBtnRef}
             onClick={onConfirm}
             disabled={loading}
+            aria-label={loading ? "جاري..." : confirmLabel}
             className={`rounded-xl px-5 py-2.5 text-sm font-semibold transition-colors disabled:opacity-50 ${variantStyles[variant]}`}
           >
             {loading ? "جاري..." : confirmLabel}

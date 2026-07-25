@@ -1,23 +1,24 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import Badge from "@/components/ui/Badge";
 import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Database, AlertTriangle } from "lucide-react";
 import { useUIStore } from "../../stores/uiStore";
+import { InventoryItem } from "@/types";
 
 export default function InventoryListPage() {
   const { addNotification } = useUIStore();
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [kindFilter, setKindFilter] = useState("all");
 
-  useEffect(() => { invoke("list_inventory_items").then((d: any) => setItems(d)).catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false)); }, []);
+  useEffect(() => { invoke("list_inventory_items").then((d) => setItems(d as InventoryItem[])).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false)); }, []);
 
   const filtered = kindFilter === "all" ? items : items.filter(i => i.kind === kindFilter);
   const lowStock = items.filter(i => i.reorder_level > 0 && i.qty_on_hand <= i.reorder_level);
 
-  const columns: Column<any>[] = [
+  const columns: Column<any>[] = useMemo(() => [
     { key: "code", header: "الكود", sortable: true, render: (r) => <span className="font-mono text-brand-400">{r.code || "—"}</span> },
     { key: "name_ar", header: "الاسم", sortable: true, render: (r) => r.name_ar || r.name_en || "—" },
     { key: "kind", header: "النوع", sortable: true, render: (r) => <Badge variant={r.kind === 'finished' ? 'success' : r.kind === 'raw' ? 'info' : 'default'}>{r.kind}</Badge> },
@@ -25,7 +26,7 @@ export default function InventoryListPage() {
     { key: "qty_on_hand", header: "المخزون", sortable: true, align: "center", render: (r) => <span className={`font-bold ${r.reorder_level > 0 && r.qty_on_hand <= r.reorder_level ? 'text-red-400' : 'text-emerald-400'}`}>{r.qty_on_hand}</span> },
     { key: "reorder_level", header: "حد إعادة الطلب", align: "center" },
     { key: "avg_cost_milli", header: "متوسط التكلفة", align: "left", render: (r) => formatOMR(r.avg_cost_milli) },
-  ];
+  ], []);
 
   return (
     <div className="space-y-6">

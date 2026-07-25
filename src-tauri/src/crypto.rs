@@ -29,7 +29,7 @@ impl Default for AppSecrets {
         Self {
             jwt_secret: generate_machine_secret(),
             licensing_secret: generate_machine_secret(),
-            developer_pin_hash: hash_developer_pin("1234"),
+            developer_pin_hash: hash_developer_pin(&generate_machine_secret()[..6]),
             encryption_key: generate_machine_secret(),
         }
     }
@@ -56,7 +56,7 @@ pub fn init_secrets(db_path: &PathBuf) -> AppSecrets {
             })
         }),
         developer_pin_hash: std::env::var("PROMAX_DEV_PIN_HASH").unwrap_or_else(|_| {
-            hash_developer_pin("1234")
+            hash_developer_pin(&generate_machine_secret()[..6])
         }),
         encryption_key: std::env::var("PROMAX_ENC_KEY").unwrap_or_else(|_| {
             generate_machine_secret()
@@ -320,8 +320,10 @@ pub fn blacklist_token(jti: &str) {
     let list = TOKEN_BLACKLIST.get_or_init(|| Mutex::new(Vec::new()));
     if let Ok(mut guard) = list.lock() {
         guard.push(jti.to_string());
+        // Evict oldest entries (FIFO) when list exceeds 10K, keep last 5K
         if guard.len() > 10000 {
-            guard.clear();
+            let drain_count = guard.len() - 5000;
+            guard.drain(..drain_count);
         }
     }
 }

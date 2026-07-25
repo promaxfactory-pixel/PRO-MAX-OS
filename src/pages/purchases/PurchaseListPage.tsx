@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import Button from "@/components/ui/Button";
@@ -8,17 +8,27 @@ import { invoke } from "@tauri-apps/api/core";
 import { Plus, ShoppingCart } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
+interface PurchaseOrder {
+  id: number;
+  pur_no: string;
+  date: string;
+  supplier_name: string;
+  total_milli: number;
+  paid_milli: number;
+  status: string;
+}
+
 export default function PurchaseListPage() {
   const navigate = useNavigate();
   const addNotification = useUIStore((s) => s.addNotification);
-  const [purchases, setPurchases] = useState<any[]>([]);
+  const [purchases, setPurchases] = useState<PurchaseOrder[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { loadPurchases(); }, []);
 
   const loadPurchases = async () => {
     setLoading(true);
-    try { const d = await invoke("list_purchases"); setPurchases(d as any[]); }
+    try { const d = await invoke("list_purchases"); setPurchases(d as PurchaseOrder[]); }
     catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
   };
@@ -26,7 +36,7 @@ export default function PurchaseListPage() {
   const totalAmount = purchases.reduce((s: number, p: any) => s + (p.total_milli || 0), 0);
   const totalPaid = purchases.reduce((s: number, p: any) => s + (p.paid_milli || 0), 0);
 
-  const columns: Column<any>[] = [
+  const columns: Column<PurchaseOrder>[] = useMemo(() => [
     { key: "pur_no", header: "رقم المشتريات", sortable: true, render: (r) => <span className="font-mono text-brand-400">{r.pur_no || "—"}</span> },
     { key: "date", header: "التاريخ", sortable: true, render: (r) => formatDate(r.date) },
     { key: "supplier_name", header: "المورد", render: (r) => r.supplier_name || "—" },
@@ -39,7 +49,7 @@ export default function PurchaseListPage() {
         'bg-surface-600 text-surface-300'
       }`}>{r.status === 'Posted' ? 'مرسل' : r.status === 'Draft' ? 'مسودة' : r.status}</span>
     )},
-  ];
+  ], []);
 
   return (
     <div className="space-y-6">

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import Card from "@/components/ui/Card";
 import DataTable, { Column } from "@/components/ui/DataTable";
@@ -7,10 +7,20 @@ import { invoke } from "@tauri-apps/api/core";
 import { Calendar, AlertTriangle } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
+interface UnpaidInvoice {
+  id: number;
+  inv_no: string;
+  date: string;
+  customer_name: string;
+  total_milli: number;
+  paid_milli: number;
+  remaining_milli: number;
+}
+
 export default function UnpaidInvoicesPage() {
   const navigate = useNavigate();
   const addNotification = useUIStore((s) => s.addNotification);
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<UnpaidInvoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [asOf, setAsOf] = useState(new Date().toISOString().split("T")[0]);
 
@@ -20,21 +30,21 @@ export default function UnpaidInvoicesPage() {
     setLoading(true);
     try {
       const result = await invoke("unpaid_invoices_report", { asOf: asOf || null });
-      setData(result as any[]);
+      setData(result as UnpaidInvoice[]);
     } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
   };
 
   const totalRemaining = data.reduce((s, r) => s + r.remaining_milli, 0);
 
-  const columns: Column<any>[] = [
+  const columns: Column<UnpaidInvoice>[] = useMemo(() => [
     { key: "inv_no", header: "رقم الفاتورة", render: (r) => <span className="font-mono text-brand-400 cursor-pointer hover:underline" onClick={() => navigate(`/invoices/${r.id}`)}>{r.inv_no || `#${r.id}`}</span> },
     { key: "date", header: "التاريخ", render: (r) => formatDate(r.date) },
     { key: "customer_name", header: "العميل", render: (r) => r.customer_name || "—" },
     { key: "total_milli", header: "الإجمالي", align: "left", render: (r) => formatOMR(r.total_milli) },
     { key: "paid_milli", header: "المدفوع", align: "left", render: (r) => formatOMR(r.paid_milli) },
     { key: "remaining_milli", header: "المتبقي", align: "left", render: (r) => <span className="font-bold text-gold-400">{formatOMR(r.remaining_milli)}</span> },
-  ];
+  ], []);
 
   return (
     <div className="space-y-6">

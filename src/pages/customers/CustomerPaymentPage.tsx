@@ -6,12 +6,13 @@ import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowRight, CreditCard } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
+import { Customer } from "@/types";
 
 export default function CustomerPaymentPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const addNotification = useUIStore((s) => s.addNotification);
-  const [customer, setCustomer] = useState<any>(null);
+  const [customer, setCustomer] = useState<Customer | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -24,8 +25,8 @@ export default function CustomerPaymentPage() {
 
   useEffect(() => {
     invoke("get_customer", { id: Number(id) })
-      .then((d) => setCustomer(d))
-      .catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
+      .then((d) => setCustomer(d as Customer))
+      .catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
       .finally(() => setLoading(false));
   }, [id]);
 

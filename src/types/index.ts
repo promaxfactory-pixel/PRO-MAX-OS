@@ -139,6 +139,7 @@ export interface Supplier {
   bank_details: string;
   notes: string;
   active: number;
+  vat_number: string;
 }
 
 export interface SalesInvoice {
@@ -315,12 +316,14 @@ export interface OperationsSheet {
 
 export interface MaintenanceSheet {
   id: number;
+  ticket_no: string;
   sheet_no: string;
   date: string;
   shift: string;
   maintenance_supervisor: string;
   machine_id: number | null;
   machine_name?: string;
+  equipment_name?: string;
   area: string;
   fault_title: string;
   fault_description: string;
@@ -329,6 +332,8 @@ export interface MaintenanceSheet {
   downtime_start: string;
   downtime_end: string;
   downtime_minutes: number;
+  downtime_hours?: number;
+  assigned_to?: string;
   repair_status: string;
   repair_action: string;
   parts_changed: string;

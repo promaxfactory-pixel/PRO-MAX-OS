@@ -31,7 +31,7 @@ export default function SupplierFormPage() {
           payment_terms: d.payment_terms || "", opening_balance_milli: d.opening_balance_milli || 0,
           notes: d.notes || "",
         });
-      }).catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false));
+      }).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false));
     }
   }, [id, isEdit]);
 

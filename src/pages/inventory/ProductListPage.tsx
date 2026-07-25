@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import Button from "@/components/ui/Button";
@@ -6,16 +6,17 @@ import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, Package } from "lucide-react";
 import { useUIStore } from "../../stores/uiStore";
+import { Product } from "@/types";
 
 export default function ProductListPage() {
   const { addNotification } = useUIStore();
   const navigate = useNavigate();
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { invoke("list_products").then((d: any) => setProducts(d)).catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false)); }, []);
+  useEffect(() => { invoke("list_products").then((d) => setProducts(d as Product[])).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false)); }, []);
 
-  const columns: Column<any>[] = [
+  const columns: Column<any>[] = useMemo(() => [
     { key: "code", header: "الكود", sortable: true, render: (r) => <span className="font-mono text-brand-400">{r.code || "—"}</span> },
     { key: "name_ar", header: "الاسم", sortable: true, render: (r) => r.name_ar || r.name_en || "—" },
     { key: "size", header: "المقاس", render: (r) => r.size || "—" },
@@ -24,7 +25,7 @@ export default function ProductListPage() {
     { key: "default_price_milli", header: "السعر", sortable: true, align: "left", render: (r) => formatOMR(r.default_price_milli) },
     { key: "default_cost_milli", header: "التكلفة", align: "left", render: (r) => formatOMR(r.default_cost_milli) },
     { key: "vat_pct", header: "الضريبة", align: "center", render: (r) => r.vat_pct + "%" },
-  ];
+  ], []);
 
   return (
     <div className="space-y-6">

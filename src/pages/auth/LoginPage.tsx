@@ -1,10 +1,28 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "@/stores/authStore";
-import { Factory, Eye, EyeOff, ArrowLeft } from "lucide-react";
+import { Factory, Eye, EyeOff, ArrowLeft, Shield, Zap } from "lucide-react";
 import LanguageSwitcher from "@/components/layout/LanguageSwitcher";
+
+function Particle({ index }: { index: number }) {
+  const style = useMemo(() => ({
+    left: `${Math.random() * 100}%`,
+    top: `${Math.random() * 100}%`,
+    width: `${2 + Math.random() * 4}px`,
+    height: `${2 + Math.random() * 4}px`,
+    animationDelay: `${Math.random() * 8}s`,
+    animationDuration: `${6 + Math.random() * 10}s`,
+  }), []);
+  return (
+    <div
+      className="absolute rounded-full bg-gold-400/20 animate-pulse-slow"
+      style={style}
+      aria-hidden="true"
+    />
+  );
+}
 
 export default function LoginPage() {
   const { t } = useTranslation();
@@ -13,8 +31,11 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [focusedField, setFocusedField] = useState<string | null>(null);
   const navigate = useNavigate();
   const { login } = useAuthStore();
+
+  const particles = useMemo(() => Array.from({ length: 30 }, (_, i) => i), []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,8 +44,8 @@ export default function LoginPage() {
     try {
       await login(username, password);
       navigate("/");
-    } catch (err: any) {
-      setError(err.toString() || "خطأ في تسجيل الدخول");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err) || "خطأ في تسجيل الدخول");
     } finally {
       setLoading(false);
     }
@@ -32,132 +53,225 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-surface-950 relative overflow-hidden">
-      <div className="absolute top-4 left-4 z-20"><LanguageSwitcher /></div>
-      {/* Animated background */}
-      <div className="absolute inset-0">
-        <div className="absolute top-1/4 right-1/4 w-96 h-96 bg-brand-800/20 rounded-full blur-[120px] animate-pulse-slow" />
-        <div className="absolute bottom-1/4 left-1/4 w-80 h-80 bg-gold-400/5 rounded-full blur-[100px] animate-pulse-slow" style={{ animationDelay: '1s' }} />
-        <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-brand-600/10 rounded-full blur-[80px] animate-pulse-slow" style={{ animationDelay: '2s' }} />
+      {/* Language Switcher */}
+      <div className="absolute top-6 left-6 z-30">
+        <LanguageSwitcher />
       </div>
 
-      {/* Grid pattern overlay */}
-      <div className="absolute inset-0 opacity-[0.03]" style={{
-        backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
-        backgroundSize: '60px 60px'
+      {/* Animated gradient background */}
+      <div className="absolute inset-0">
+        <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-brand-950 via-surface-950 to-brand-950" />
+        <div className="absolute top-1/3 right-1/4 w-[500px] h-[500px] bg-brand-800/15 rounded-full blur-[150px] animate-pulse-slow" />
+        <div className="absolute bottom-1/3 left-1/4 w-[400px] h-[400px] bg-gold-400/5 rounded-full blur-[120px] animate-pulse-slow" style={{ animationDelay: '2s' }} />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-brand-700/8 rounded-full blur-[200px] animate-pulse-slow" style={{ animationDelay: '4s' }} />
+      </div>
+
+      {/* Floating particles */}
+      <div className="absolute inset-0 overflow-hidden">
+        {particles.map((i) => (
+          <Particle key={i} index={i} />
+        ))}
+      </div>
+
+      {/* Grid pattern */}
+      <div className="absolute inset-0 opacity-[0.02]" style={{
+        backgroundImage: `linear-gradient(rgba(212,175,55,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(212,175,55,0.3) 1px, transparent 1px)`,
+        backgroundSize: '80px 80px'
       }} />
 
+      {/* Main content */}
       <motion.div
-        className="relative z-10 w-full max-w-md mx-auto px-4"
-        initial={{ opacity: 0, y: 20 }}
+        className="relative z-20 w-full max-w-md mx-auto px-6"
+        initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1] }}
+        transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
       >
-        {/* Logo */}
+        {/* Logo Section */}
         <motion.div
-          className="text-center mb-10"
-          initial={{ opacity: 0, scale: 0.9 }}
+          className="text-center mb-12"
+          initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.4, delay: 0.1 }}
+          transition={{ duration: 0.6, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
         >
           <motion.div
-            className="w-20 h-20 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-brand-700 via-brand-800 to-brand-900 flex items-center justify-center shadow-glow border border-brand-500/30"
-            whileHover={{ scale: 1.05, rotate: [0, -5, 5, 0] }}
+            className="w-24 h-24 mx-auto mb-8 relative"
+            whileHover={{ scale: 1.05 }}
             transition={{ duration: 0.3 }}
           >
-            <Factory className="w-10 h-10 text-gold-400" />
+            {/* Outer glow ring */}
+            <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-gold-400/20 via-brand-500/10 to-gold-400/20 blur-xl animate-pulse-slow" />
+            {/* Logo container */}
+            <div className="relative w-full h-full rounded-3xl bg-gradient-to-br from-brand-700 via-brand-800 to-brand-900 flex items-center justify-center border border-gold-400/20 shadow-[0_0_40px_rgba(212,175,55,0.15)]">
+              <Factory className="w-12 h-12 text-gold-400" />
+            </div>
           </motion.div>
-          <h1 className="text-3xl font-bold font-display text-white mb-2">PRO MAX OS</h1>
-          <p className="text-gold-400 font-medium text-lg">{t("app.tagline")}</p>
-        </motion.div>
-
-        {/* Login form */}
-        <motion.form
-          onSubmit={handleSubmit}
-          className="bg-surface-800/60 backdrop-blur-xl border border-surface-700/50 rounded-3xl p-8 shadow-luxury"
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
-        >
-          <h2 className="text-xl font-bold text-white mb-1">{t("auth.login")}</h2>
-          <p className="text-sm text-surface-400 mb-6">{t("auth.loginBtn")}</p>
-
-          <AnimatePresence>
-            {error && (
-              <motion.div
-                key="login-error"
-                className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                transition={{ type: "spring", stiffness: 300, damping: 25 }}
-              >
-                {error}
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <div className="space-y-4">
-            <div className="input-group">
-              <label className="input-label">{t("auth.username")}</label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="أدخل اسم المستخدم"
-                className="w-full"
-                required
-                autoFocus
-              />
-            </div>
-
-            <div className="input-group">
-              <label className="input-label">{t("auth.password")}</label>
-              <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="أدخل كلمة المرور"
-                  className="w-full pl-12"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 hover:text-white transition-colors"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <motion.button
-            type="submit"
-            disabled={loading || !username || !password}
-            className="w-full mt-6 bg-gradient-to-l from-brand-800 to-brand-700 text-white font-bold py-3.5 rounded-xl hover:from-brand-700 hover:to-brand-600 transition-all duration-300 shadow-lg shadow-brand-900/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.98 }}
-          >
-            {loading ? (
-              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            ) : (
-              <>
-                <span>{t("auth.loginBtn")}</span>
-                <ArrowLeft className="w-4 h-4" />
-              </>
-            )}
-          </motion.button>
-
-          <motion.p
-            className="text-center text-xs text-surface-500 mt-6"
+          
+          <motion.h1 
+            className="text-4xl font-bold font-display text-white mb-3 tracking-tight"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.6 }}
+            transition={{ delay: 0.4 }}
           >
-            PRO MAX OS v2.0.0 &copy; {new Date().getFullYear()} - {t("app.tagline")}
+            PRO <span className="gradient-text">MAX</span> OS
+          </motion.h1>
+          <motion.p 
+            className="text-gold-400/80 font-medium text-base"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5 }}
+          >
+            {t("app.tagline")}
           </motion.p>
-        </motion.form>
+        </motion.div>
+
+        {/* Login Card */}
+        <motion.div
+          className="relative"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
+        >
+          {/* Card glow effect */}
+          <div className="absolute -inset-1 bg-gradient-to-r from-brand-500/20 via-gold-400/10 to-brand-500/20 rounded-[2rem] blur-xl opacity-50" />
+          
+          <form
+            onSubmit={handleSubmit}
+            className="relative bg-surface-800/70 backdrop-blur-2xl border border-surface-600/30 rounded-[2rem] p-8 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.5)]"
+          >
+            {/* Header */}
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-white mb-1">{t("auth.login")}</h2>
+              <p className="text-sm text-surface-400">أدخل بياناتك للوصول إلى النظام</p>
+            </div>
+
+            {/* Error */}
+            <AnimatePresence>
+              {error && (
+                <motion.div
+                  key="login-error"
+                  className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-400 text-sm flex items-center gap-3"
+                  initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                >
+                  <Shield className="w-5 h-5 flex-shrink-0" />
+                  <span>{error}</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <div className="space-y-5">
+              {/* Username field */}
+              <div className="relative">
+                <label className="input-label mb-1.5 block">{t("auth.username")}</label>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="أدخل اسم المستخدم"
+                  className={`w-full transition-all duration-300 ${focusedField === 'username' ? 'border-gold-400/50 shadow-[0_0_0_3px_rgba(212,175,55,0.1)]' : ''}`}
+                  required
+                  autoFocus
+                  onFocus={() => setFocusedField('username')}
+                  onBlur={() => setFocusedField(null)}
+                  aria-label={t("auth.username")}
+                />
+              </div>
+
+              {/* Password field */}
+              <div className="relative">
+                <label className="input-label mb-1.5 block">{t("auth.password")}</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="أدخل كلمة المرور"
+                    className={`w-full pl-12 transition-all duration-300 ${focusedField === 'password' ? 'border-gold-400/50 shadow-[0_0_0_3px_rgba(212,175,55,0.1)]' : ''}`}
+                    required
+                    onFocus={() => setFocusedField('password')}
+                    onBlur={() => setFocusedField(null)}
+                    aria-label={t("auth.password")}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 hover:text-gold-400 transition-colors p-1"
+                    aria-label={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Submit Button */}
+            <motion.button
+              type="submit"
+              disabled={loading || !username || !password}
+              className="w-full mt-8 py-4 rounded-2xl font-bold text-white text-base relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+              style={{
+                background: loading 
+                  ? 'linear-gradient(to left, #4c1d95, #312e81)' 
+                  : 'linear-gradient(to left, #d4af37, #b8860b)',
+                boxShadow: loading 
+                  ? '0 4px 20px rgba(76,29,149,0.3)' 
+                  : '0 4px 20px rgba(212,175,55,0.3)',
+              }}
+              whileHover={!loading ? { scale: 1.01, boxShadow: '0 6px 30px rgba(212,175,55,0.4)' } : undefined}
+              whileTap={!loading ? { scale: 0.98 } : undefined}
+            >
+              {loading ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span className="text-surface-200">جاري التحقق...</span>
+                  {/* Shimmer effect */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-slide-in-left" />
+                </>
+              ) : (
+                <>
+                  <Zap className="w-5 h-5" />
+                  <span>{t("auth.loginBtn")}</span>
+                  <ArrowLeft className="w-4 h-4" />
+                </>
+              )}
+            </motion.button>
+
+            {/* Footer */}
+            <div className="mt-8 pt-6 border-t border-surface-700/50">
+              <div className="flex items-center justify-between">
+                <motion.p
+                  className="text-xs text-surface-500"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.8 }}
+                >
+                  PRO MAX OS v2.0.0
+                </motion.p>
+                <motion.div
+                  className="flex items-center gap-1.5"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.9 }}
+                >
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-[10px] text-surface-500 font-medium"> نظام آمن</span>
+                </motion.div>
+              </div>
+            </div>
+          </form>
+        </motion.div>
+
+        {/* Copyright */}
+        <motion.p
+          className="text-center text-[11px] text-surface-600 mt-8"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1 }}
+        >
+          &copy; {new Date().getFullYear()} Mayadeen Bahla National Company. All rights reserved.
+        </motion.p>
       </motion.div>
     </div>
   );

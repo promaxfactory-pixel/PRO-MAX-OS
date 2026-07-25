@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -10,14 +10,23 @@ import StatementPrintTemplate from "@/components/print/StatementPrintTemplate";
 import { printComponent } from "@/utils/printUtils";
 import { useUIStore } from "@/stores/uiStore";
 
+interface StatementData {
+  supplier: { id: number; name: string; code: string };
+  transactions: { date: string; ref_type: string; ref_id: number; debit_milli: number; credit_milli: number; balance_milli: number; memo: string }[];
+  opening_balance_milli: number;
+  closing_balance_milli: number;
+}
+
 export default function SupplierStatementPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const addNotification = useUIStore((s) => s.addNotification);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [printData, setPrintData] = useState<any>(null);
   const [showPrint, setShowPrint] = useState(false);
 
@@ -57,7 +66,7 @@ export default function SupplierStatementPage() {
     payment: "دفعة",
   };
 
-  const columns: Column<any>[] = [
+  const columns: Column<any>[] = useMemo(() => [
     { key: "date", header: "التاريخ", render: (r) => formatDate(r.date) },
     { key: "ref_no", header: "المرجع", render: (r) => r.ref_no || "—" },
     { key: "txn_type", header: "النوع", render: (r) => txnLabels[r.txn_type] || r.txn_type },
@@ -65,7 +74,7 @@ export default function SupplierStatementPage() {
     { key: "credit_milli", header: "دائن (مشتريات)", align: "left", render: (r) => r.credit_milli > 0 ? <span className="text-red-400 font-medium">{formatOMR(r.credit_milli)}</span> : "—" },
     { key: "balance_milli", header: "الرصيد", align: "left", render: (r) => <span className="font-bold">{formatOMR(r.balance_milli)}</span> },
     { key: "notes", header: "ملاحظات", render: (r) => r.notes || "—" },
-  ];
+  ], []);
 
   return (
     <div className="space-y-6">

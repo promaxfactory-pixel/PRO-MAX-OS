@@ -1,54 +1,66 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import DataTable, { Column } from "@/components/ui/DataTable";
+import DataTable, { Column, type BadgeVariant } from "@/components/ui/DataTable";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import { formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, ShieldCheck, AlertCircle } from "lucide-react";
 
+interface QualityInspection {
+  id: number;
+  inspection_no: string;
+  date: string;
+  inspector: string;
+  production_line_id: number;
+  result: string;
+  defect_type: string;
+  defect_qty: number;
+  status: string;
+}
+
 export default function QualityListPage() {
   const navigate = useNavigate();
-  const [inspections, setInspections] = useState<any[]>([]);
+  const [inspections, setInspections] = useState<QualityInspection[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
   useEffect(() => {
     invoke("list_quality_inspections")
-      .then((d: any) => setInspections(d))
+      .then((d) => setInspections(d as QualityInspection[]))
       .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, []);
 
-  const resultMap: Record<string, { label: string; variant: string }> = {
+  const resultMap: Record<string, { label: string; variant: BadgeVariant }> = {
     pass: { label: "ناجح", variant: "success" },
     fail: { label: "غير ناجح", variant: "danger" },
     conditional: { label: "مشروط", variant: "warning" },
   };
 
-  const severityMap: Record<string, { label: string; variant: string }> = {
+  const severityMap: Record<string, { label: string; variant: BadgeVariant }> = {
     critical: { label: "حرج", variant: "danger" },
     major: { label: "رئيسي", variant: "warning" },
     minor: { label: "بسيط", variant: "info" },
   };
 
-  const statusMap: Record<string, { label: string; variant: string }> = {
+  const statusMap: Record<string, { label: string; variant: BadgeVariant }> = {
     open: { label: "مفتوح", variant: "info" },
     in_progress: { label: "قيد المراجعة", variant: "warning" },
     closed: { label: "مغلق", variant: "success" },
     rejected: { label: "مرفوض", variant: "danger" },
   };
 
-  const columns: Column<any>[] = [
+  const columns: Column<QualityInspection>[] = useMemo(() => [
     { key: "inspection_no", header: "رقم الفحص", sortable: true, render: (r) => <span className="font-mono text-brand-400">{r.inspection_no || "—"}</span> },
     { key: "date", header: "التاريخ", sortable: true, render: (r) => formatDate(r.date) },
     { key: "inspector", header: "الفاحص", sortable: true, render: (r) => <span className="font-medium">{r.inspector || "—"}</span> },
     { key: "production_line_id", header: "خط الإنتاج", align: "center", render: (r) => r.production_line_id || "—" },
-    { key: "result", header: "النتيجة", render: (r) => { const s = resultMap[r.result] || { label: r.result, variant: "" }; return <Badge variant={s.variant as any}>{s.label}</Badge>; } },
+    { key: "result", header: "النتيجة", render: (r) => { const s = resultMap[r.result] || { label: r.result, variant: "default" as BadgeVariant }; return <Badge variant={s.variant}>{s.label}</Badge>; } },
     { key: "defect_type", header: "نوع العيب", render: (r) => r.defect_type || "—" },
     { key: "defect_qty", header: "كمية العيب", align: "left", render: (r) => r.defect_qty ? <span className="font-bold text-red-400">{r.defect_qty}</span> : "0" },
-    { key: "status", header: "الحالة", render: (r) => { const s = statusMap[r.status] || { label: r.status, variant: "" }; return <Badge variant={s.variant as any}>{s.label}</Badge>; } },
-  ];
+    { key: "status", header: "الحالة", render: (r) => { const s = statusMap[r.status] || { label: r.status, variant: "default" as BadgeVariant }; return <Badge variant={s.variant}>{s.label}</Badge>; } },
+  ], []);
 
   return (
     <div className="space-y-6">

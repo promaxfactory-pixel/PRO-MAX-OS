@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -29,9 +29,7 @@ export default function InvoiceDetailPage() {
   const [printType, setPrintType] = useState<string>("");
   const [showPrintModal, setShowPrintModal] = useState(false);
 
-  useEffect(() => { loadInvoice(); }, [id]);
-
-  const loadInvoice = async () => {
+  const loadInvoice = useCallback(async () => {
     setLoading(true);
     try {
       const inv = await invoke<SalesInvoice>("get_invoice", { id: Number(id) });
@@ -40,7 +38,9 @@ export default function InvoiceDetailPage() {
       setLines(ln);
     } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
-  };
+  }, [id, addNotification]);
+
+  useEffect(() => { loadInvoice(); }, [loadInvoice]);
 
   const handlePost = async () => {
     setActionLoading(true);
@@ -110,7 +110,7 @@ export default function InvoiceDetailPage() {
     return <div className="flex items-center justify-center h-64"><div className="w-12 h-12 border-2 border-brand-800 border-t-gold-400 rounded-full animate-spin" /></div>;
   }
 
-  const lineColumns: Column<InvoiceLine>[] = [
+  const lineColumns: Column<InvoiceLine>[] = useMemo(() => [
     { key: "product_name", header: "المنتج", render: (r) => r.product_name || "—" },
     { key: "cartons", header: "الكراتين", align: "center" },
     { key: "cups_per_carton", header: "كوب/كرتون", align: "center", render: (r) => r.cups_per_carton || "—" },
@@ -118,7 +118,7 @@ export default function InvoiceDetailPage() {
     { key: "unit_price_milli", header: "سعر الوحدة", align: "left", render: (r) => formatOMR(r.unit_price_milli) },
     { key: "line_net_milli", header: "الصافي", align: "left", render: (r) => <span className="font-bold">{formatOMR(r.line_net_milli)}</span> },
     { key: "vat_milli", header: "الضريبة", align: "left", render: (r) => formatOMR(r.vat_milli) },
-  ];
+  ], []);
 
   return (
     <div className="space-y-6">

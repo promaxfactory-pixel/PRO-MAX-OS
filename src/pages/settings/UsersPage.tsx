@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import DataTable, { Column } from "@/components/ui/DataTable";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import DataTable, { Column, type BadgeVariant } from "@/components/ui/DataTable";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
@@ -7,30 +7,31 @@ import { formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, Trash2, Shield, Edit } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
+import { User } from "@/types";
 
 export default function UsersPage() {
   const addNotification = useUIStore((s) => s.addNotification);
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ username: "", full_name: "", email: "", role: "viewer", password: "" });
 
-  const fetchUsers = () => {
+  const fetchUsers = useCallback(() => {
     invoke("list_users")
-      .then((d: any) => setUsers(d))
-      .catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
+      .then((d) => setUsers(d as User[]))
+      .catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
       .finally(() => setLoading(false));
-  };
+  }, [addNotification]);
 
-  useEffect(() => { fetchUsers(); }, []);
+  useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
-  const roleMap: Record<string, { label: string; variant: string }> = {
-    admin: { label: "مدير", variant: "badge-danger" },
-    accountant: { label: "محاسب", variant: "badge-info" },
-    hr: { label: "موارد بشرية", variant: "badge-success" },
-    operator: { label: "مشغل", variant: "badge-warning" },
-    viewer: { label: "مشاهد", variant: "badge-gold" },
+  const roleMap: Record<string, { label: string; variant: BadgeVariant }> = {
+    admin: { label: "مدير", variant: "danger" },
+    accountant: { label: "محاسب", variant: "info" },
+    hr: { label: "موارد بشرية", variant: "success" },
+    operator: { label: "مشغل", variant: "warning" },
+    viewer: { label: "مشاهد", variant: "gold" },
   };
 
   const handleCreate = async () => {
@@ -47,21 +48,21 @@ export default function UsersPage() {
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = useCallback(async (id: number) => {
     if (!confirm('هل أنت متأكد من حذف هذا المستخدم؟')) return;
     try {
       await invoke('delete_user', { id });
       fetchUsers();
-    } catch (err: any) {
-      alert(err.toString());
+    } catch (err: unknown) {
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(err) });
     }
-  };
+  }, [fetchUsers]);
 
-  const columns: Column<any>[] = [
+  const columns: Column<any>[] = useMemo(() => [
     { key: "username", header: "اسم المستخدم", sortable: true, render: (r) => <span className="font-mono text-brand-400">{r.username}</span> },
     { key: "full_name", header: "الاسم الكامل", sortable: true, render: (r) => <span className="font-medium">{r.full_name}</span> },
     { key: "email", header: "البريد الإلكتروني", render: (r) => <span className="text-surface-400" dir="ltr">{r.email || "—"}</span> },
-    { key: "role", header: "الصلاحية", render: (r) => { const role = roleMap[r.role] || { label: r.role, variant: "" }; return <Badge variant={role.variant as any}>{role.label}</Badge>; } },
+    { key: "role", header: "الصلاحية", render: (r) => { const role = roleMap[r.role] || { label: r.role, variant: "default" as BadgeVariant }; return <Badge variant={role.variant}>{role.label}</Badge>; } },
     { key: "last_login", header: "آخر دخول", render: (r) => r.last_login ? formatDate(r.last_login) : <span className="text-surface-500">لم يسجل دخول</span> },
     { key: "actions", header: "", render: (r) => (
       <div className="flex items-center gap-1">
@@ -73,7 +74,7 @@ export default function UsersPage() {
         </button>
       </div>
     )},
-  ];
+  ], [handleDelete, roleMap]);
 
   return (
     <div className="space-y-6">

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
@@ -8,11 +8,24 @@ import { invoke } from "@tauri-apps/api/core";
 import { Plus, HandCoins, Wallet, Lock } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useUIStore } from "@/stores/uiStore";
+import type { Employee } from "@/types";
+
+interface EmployeeAdvance {
+  id: number;
+  employee_id: number;
+  employee_name: string;
+  amount_milli: number;
+  date: string;
+  reason: string;
+  remaining_milli: number;
+  deduction_per_payroll_milli: number;
+  status: string;
+}
 
 export default function EmployeeAdvancesPage() {
   const addNotification = useUIStore((s) => s.addNotification);
-  const [advances, setAdvances] = useState<any[]>([]);
-  const [employees, setEmployees] = useState<any[]>([]);
+  const [advances, setAdvances] = useState<EmployeeAdvance[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -34,8 +47,8 @@ export default function EmployeeAdvancesPage() {
         invoke("list_employee_advances"),
         invoke("list_employees"),
       ]);
-      setAdvances(advData as any[]);
-      setEmployees(empData as any[]);
+      setAdvances(advData as EmployeeAdvance[]);
+      setEmployees(empData as Employee[]);
     } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
   };
@@ -62,7 +75,7 @@ export default function EmployeeAdvancesPage() {
   const totalOutstanding = advances.filter((a) => a.status === "open").reduce((s, a) => s + (a.remaining_milli || 0), 0);
   const closedCount = advances.filter((a) => a.status === "closed").length;
 
-  const columns: Column<any>[] = [
+  const columns: Column<EmployeeAdvance>[] = useMemo(() => [
     { key: "employee_name", header: "الموظف", sortable: true, render: (r) => <span className="font-medium">{r.employee_name}</span> },
     { key: "amount_milli", header: "المبلغ", sortable: true, align: "left", render: (r) => formatOMR(r.amount_milli) },
     { key: "date", header: "التاريخ", sortable: true, render: (r) => formatDate(r.date) },
@@ -73,7 +86,7 @@ export default function EmployeeAdvancesPage() {
         {r.status === "open" ? "مفتوح" : "مغلق"}
       </Badge>
     )},
-  ];
+  ], []);
 
   return (
     <div className="space-y-6">

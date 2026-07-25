@@ -30,8 +30,8 @@ export const useAuthStore = create<AuthState>((set) => {
         localStorage.setItem('auth_token', result.token);
         localStorage.setItem('auth_user', JSON.stringify(result.user));
         set({ user: result.user, isAuthenticated: true, isLoading: false });
-      } catch (err: any) {
-        set({ error: err.toString(), isLoading: false });
+      } catch (err: unknown) {
+        set({ error: err instanceof Error ? err.message : String(err), isLoading: false });
         throw err;
       }
     },

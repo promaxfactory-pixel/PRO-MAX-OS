@@ -7,6 +7,11 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { ScanLine, Upload, Save, Clock, FileText, CheckCircle2 } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
+interface FileWithPath {
+  name: string;
+  path?: string;
+}
+
 interface OcrResult {
   invoice_number: string;
   date: string;
@@ -27,7 +32,7 @@ interface HistoryEntry {
 
 export default function OcrScannerPage() {
   const addNotification = useUIStore((s) => s.addNotification);
-  const [file, setFile] = useState<File | null>(null);
+  const [file, setFile] = useState<FileWithPath | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<OcrResult | null>(null);
@@ -38,8 +43,8 @@ export default function OcrScannerPage() {
   const loadHistory = useCallback(() => {
     setHistoryLoading(true);
     invoke("ocr_get_history")
-      .then((d: any) => setHistory(d || []))
-      .catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
+      .then((d) => setHistory((d as HistoryEntry[]) || []))
+      .catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
       .finally(() => setHistoryLoading(false));
   }, []);
 
@@ -52,7 +57,7 @@ export default function OcrScannerPage() {
     });
     if (!selected) return;
     const filePath = typeof selected === "string" ? selected : selected;
-    setFile({ name: filePath.split(/[\\/]/).pop() || "file", path: filePath } as any);
+    setFile({ name: filePath.split(/[\\/]/).pop() || "file", path: filePath } as FileWithPath);
     setPreview(convertFileSrc(filePath));
     setResult(null);
   };
@@ -61,11 +66,11 @@ export default function OcrScannerPage() {
     if (!file) return;
     setScanning(true);
     try {
-      const filePath = (file as any).path || file.name;
+      const filePath = (file as FileWithPath).path || file.name;
       const data = await invoke<OcrResult>("ocr_extract_from_file", { path: filePath });
       setResult(data);
     } catch (err) {
-      console.error(err);
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(err) });
     } finally {
       setScanning(false);
     }
@@ -81,7 +86,7 @@ export default function OcrScannerPage() {
       setFile(null);
       setPreview(null);
     } catch (err) {
-      console.error(err);
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(err) });
     } finally {
       setSaving(false);
     }

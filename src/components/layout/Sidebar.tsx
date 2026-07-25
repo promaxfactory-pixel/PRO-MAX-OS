@@ -57,9 +57,9 @@ const menuSections = (t: (key: string) => string) => [
       { label: t("accounting.trialBalance"), icon: Calculator, path: '/accounting/trial-balance' },
       { label: t("reports.title"), icon: TrendingUp, path: '/accounting/statements' },
       { label: t("nav.expenses"), icon: Wallet, path: '/expenses' },
-      { label: t("nav.settings"), icon: Landmark, path: '/cashbank' },
-      { label: t("nav.settings"), icon: Coins, path: '/petty-cash' },
-      { label: t("nav.settings"), icon: FileWarning, path: '/cheques' },
+      { label: "الحسابات النقدية والبنكية", icon: Landmark, path: '/cashbank' },
+      { label: "الصرفات النثرية", icon: Coins, path: '/petty-cash' },
+      { label: "الشيكات", icon: FileWarning, path: '/cheques' },
     ],
   },
   {
@@ -67,8 +67,8 @@ const menuSections = (t: (key: string) => string) => [
     items: [
       { label: t("hr.employees"), icon: UserCog, path: '/hr/employees' },
       { label: t("nav.payroll"), icon: Banknote, path: '/payroll' },
-      { label: t("nav.settings"), icon: Clock, path: '/overtime' },
-      { label: t("nav.settings"), icon: HandCoins, path: '/employee-advances' },
+      { label: "العمل الإضافي", icon: Clock, path: '/overtime' },
+      { label: " سلف الموظفين", icon: HandCoins, path: '/employee-advances' },
       { label: t("nav.operations"), icon: ClipboardList, path: '/operations' },
       { label: t("nav.maintenance"), icon: Wrench, path: '/maintenance' },
       { label: t("nav.machines"), icon: Cog, path: '/machines' },
@@ -93,22 +93,22 @@ const menuSections = (t: (key: string) => string) => [
   {
     title: t("nav.tools"),
     items: [
-      { label: t("nav.tools"), icon: FileSearch, path: '/tools/ocr' },
-      { label: t("nav.tools"), icon: TrendingUp, path: '/tools/ai' },
-      { label: t("nav.tools"), icon: Database, path: '/tools/historical-import' },
-      { label: t("nav.tools"), icon: Database, path: '/tools/excel-import' },
-      { label: t("nav.tools"), icon: Receipt, path: '/tools/einvoice' },
-      { label: t("nav.tools"), icon: Database, path: '/tools/backup' },
-      { label: t("nav.tools"), icon: CreditCard, path: '/tools/integrations' },
+      { label: "مسح ضوئي", icon: FileSearch, path: '/tools/ocr' },
+      { label: "مساعد الذكاء الاصطناعي", icon: TrendingUp, path: '/tools/ai' },
+      { label: "استيراد تاريخي", icon: Database, path: '/tools/historical-import' },
+      { label: "استيراد Excel", icon: Database, path: '/tools/excel-import' },
+      { label: "الفواتير الإلكترونية", icon: Receipt, path: '/tools/einvoice' },
+      { label: "النسخ الاحتياطي", icon: Database, path: '/tools/backup' },
+      { label: "التكاملات", icon: CreditCard, path: '/tools/integrations' },
     ],
   },
   {
     title: t("nav.settings"),
     items: [
-      { label: t("nav.settings"), icon: Settings, path: '/settings' },
-      { label: t("nav.settings"), icon: Shield, path: '/settings/users' },
-      { label: t("nav.settings"), icon: FileClock, path: '/renewals' },
-      { label: t("nav.settings"), icon: ClipboardCheck, path: '/audit-log' },
+      { label: "الإعدادات", icon: Settings, path: '/settings' },
+      { label: "إدارة المستخدمين", icon: Shield, path: '/settings/users' },
+      { label: "التجديدات", icon: FileClock, path: '/renewals' },
+      { label: "سجل التدقيق", icon: ClipboardCheck, path: '/audit-log' },
     ],
   },
 ];
@@ -124,15 +124,16 @@ const Sidebar = memo(function Sidebar({ collapsed, onToggle, currentPath }: Side
 
   return (
     <aside
+      role="navigation"
+      aria-label="القائمة الرئيسية"
       className="fixed right-0 top-0 h-full bg-surface-900/80 backdrop-blur-xl border-l border-surface-700/50 z-40 flex flex-col"
       style={{ width: collapsed ? '72px' : '260px', transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)' }}
     >
-      {/* Logo */}
       <div className="h-16 flex items-center px-4 border-b border-surface-700/50">
         {!collapsed ? (
           <div className="flex items-center justify-between w-full cursor-pointer" onClick={() => navigate('/')}>
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-700 to-brand-900 flex items-center justify-center shadow-glow">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-700 to-brand-900 flex items-center justify-center shadow-glow" aria-hidden="true">
                 <Factory className="w-5 h-5 text-gold-400" />
               </div>
               <div>
@@ -144,20 +145,19 @@ const Sidebar = memo(function Sidebar({ collapsed, onToggle, currentPath }: Side
           </div>
         ) : (
           <div className="flex flex-col items-center gap-1">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-700 to-brand-900 flex items-center justify-center shadow-glow mx-auto cursor-pointer" onClick={() => navigate('/')}>
-              <Factory className="w-5 h-5 text-gold-400" />
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-700 to-brand-900 flex items-center justify-center shadow-glow mx-auto cursor-pointer" onClick={() => navigate('/')} aria-label="الصفحة الرئيسية">
+              <Factory className="w-5 h-5 text-gold-400" aria-hidden="true" />
             </div>
             <LanguageSwitcher />
           </div>
         )}
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1">
+      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1" aria-label="التنقل">
         {menuSections(t).map((section) => (
-          <div key={section.title}>
+          <div key={section.title} role="group" aria-label={section.title}>
             {!collapsed && (
-              <div className="sidebar-section-title">{section.title}</div>
+              <div className="sidebar-section-title" aria-hidden="true">{section.title}</div>
             )}
             {section.items.map((item) => {
               const active = isActive(item.path);
@@ -166,10 +166,12 @@ const Sidebar = memo(function Sidebar({ collapsed, onToggle, currentPath }: Side
                 <button
                   key={item.path}
                   onClick={() => navigate(item.path)}
+                  aria-current={active ? "page" : undefined}
+                  aria-label={item.label}
                   className={`sidebar-link w-full ${active ? 'active' : ''} ${collapsed ? 'justify-center px-2' : ''}`}
                   title={collapsed ? item.label : undefined}
                 >
-                  <Icon className="w-[18px] h-[18px] flex-shrink-0" />
+                  <Icon className="w-[18px] h-[18px] flex-shrink-0" aria-hidden="true" />
                   {!collapsed && <span>{item.label}</span>}
                 </button>
               );
@@ -178,10 +180,14 @@ const Sidebar = memo(function Sidebar({ collapsed, onToggle, currentPath }: Side
         ))}
       </nav>
 
-      {/* Collapse toggle */}
       <div className="p-2 border-t border-surface-700/50">
-        <button onClick={onToggle} className="btn-ghost w-full flex items-center justify-center gap-2 py-2">
-          {collapsed ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+        <button
+          onClick={onToggle}
+          aria-label={collapsed ? "توسيع القائمة" : "طي القائمة"}
+          aria-expanded={!collapsed}
+          className="btn-ghost w-full flex items-center justify-center gap-2 py-2"
+        >
+          {collapsed ? <ChevronLeft className="w-4 h-4" aria-hidden="true" /> : <ChevronRight className="w-4 h-4" aria-hidden="true" />}
           {!collapsed && <span className="text-xs">{t("common.close")}</span>}
         </button>
       </div>

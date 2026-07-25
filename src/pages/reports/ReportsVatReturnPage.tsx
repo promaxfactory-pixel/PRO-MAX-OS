@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { formatOMR, formatDate } from "@/lib/utils";
@@ -7,10 +7,22 @@ import { ArrowRight, Printer, Download } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useUIStore } from "@/stores/uiStore";
 
+interface VatReturn {
+  taxable_sales: number;
+  exempt_sales: number;
+  total_sales: number;
+  output_vat: number;
+  taxable_purchases: number;
+  exempt_purchases: number;
+  total_purchases: number;
+  input_vat: number;
+  net_vat: number;
+}
+
 export default function ReportsVatReturnPage() {
   const navigate = useNavigate();
   const addNotification = useUIStore((s) => s.addNotification);
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<VatReturn | null>(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState(() => {
     const now = new Date();
@@ -20,8 +32,8 @@ export default function ReportsVatReturnPage() {
   const fetchData = () => {
     setLoading(true);
     invoke("vat_return", { month: period })
-      .then((d: any) => setData(d))
-      .catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
+      .then((d: unknown) => setData(d as VatReturn))
+      .catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
       .finally(() => setLoading(false));
   };
 

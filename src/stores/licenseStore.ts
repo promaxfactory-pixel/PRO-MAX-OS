@@ -52,8 +52,8 @@ export const useLicenseStore = create<LicenseState>((set) => ({
         set({ isLoading: false, message: result.message });
         return false;
       }
-    } catch (err: any) {
-      set({ isLoading: false, message: err.toString() });
+    } catch (err: unknown) {
+      set({ isLoading: false, message: err instanceof Error ? err.message : String(err) });
       return false;
     }
   },

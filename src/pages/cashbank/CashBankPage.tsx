@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import Button from "@/components/ui/Button";
 import Card, { StatCard } from "@/components/ui/Card";
@@ -7,9 +7,17 @@ import { invoke } from "@tauri-apps/api/core";
 import { Plus, Save, Wallet, ArrowRight } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
+interface CashBankAccount {
+  code: string;
+  name: string;
+  atype: string;
+  balance_milli: number;
+  active: boolean;
+}
+
 export default function CashBankPage() {
   const addNotification = useUIStore((s) => s.addNotification);
-  const [accounts, setAccounts] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<CashBankAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -18,14 +26,14 @@ export default function CashBankPage() {
   const [code, setCode] = useState("");
   const [atype, setAtype] = useState("cash");
 
-  useEffect(() => { loadAccounts(); }, []);
-
-  const loadAccounts = async () => {
+  const loadAccounts = useCallback(async () => {
     setLoading(true);
-    try { const d = await invoke("list_cashbank_accounts"); setAccounts(d as any[]); }
+    try { const d = await invoke("list_cashbank_accounts"); setAccounts(d as CashBankAccount[]); }
     catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
-  };
+  }, [addNotification]);
+
+  useEffect(() => { loadAccounts(); }, [loadAccounts]);
 
   const resetForm = () => {
     setName("");
@@ -52,13 +60,13 @@ export default function CashBankPage() {
 
   const totalCash = accounts
     .filter((a) => a.atype === "cash")
-    .reduce((s: number, a: any) => s + (a.balance_milli || 0), 0);
+    .reduce((s: number, a: CashBankAccount) => s + (a.balance_milli || 0), 0);
   const totalBank = accounts
     .filter((a) => a.atype === "bank")
-    .reduce((s: number, a: any) => s + (a.balance_milli || 0), 0);
+    .reduce((s: number, a: CashBankAccount) => s + (a.balance_milli || 0), 0);
   const combined = totalCash + totalBank;
 
-  const columns: Column<any>[] = [
+  const columns: Column<CashBankAccount>[] = useMemo(() => [
     { key: "code", header: "الرمز", sortable: true, render: (r) => <span className="font-mono text-brand-400">{r.code}</span> },
     { key: "name", header: "الاسم", sortable: true, render: (r) => <span className="text-white font-medium">{r.name}</span> },
     { key: "atype", header: "النوع", render: (r) => (
@@ -74,7 +82,7 @@ export default function CashBankPage() {
         r.active ? "bg-emerald-500/20 text-emerald-400" : "bg-surface-600 text-surface-400"
       }`}>{r.active ? "نشط" : "غير نشط"}</span>
     )},
-  ];
+  ], []);
 
   return (
     <div className="space-y-6">

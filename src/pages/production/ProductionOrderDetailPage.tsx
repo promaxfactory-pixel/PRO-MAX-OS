@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -9,13 +9,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { ArrowRight, Check, Ban } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useUIStore } from "../../stores/uiStore";
+import type { ProductionLine, ProductionOrder } from "@/types";
 
 export default function ProductionOrderDetailPage() {
   const { addNotification } = useUIStore();
   const { id } = useParams();
   const navigate = useNavigate();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [order, setOrder] = useState<any>(null);
-  const [lines, setLines] = useState<any[]>([]);
+  const [lines, setLines] = useState<ProductionLine[]>([]);
   const [loading, setLoading] = useState(true);
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -23,7 +25,7 @@ export default function ProductionOrderDetailPage() {
     Promise.all([
       invoke("get_production_order", { id: Number(id) }),
       invoke("get_production_lines", { orderId: Number(id) }),
-    ]).then(([o, l]) => { setOrder(o); setLines(l as any[]); }).catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false));
+    ]).then(([o, l]) => { setOrder(o); setLines(l as ProductionLine[]); }).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false));
   }, [id]);
 
   const handleApprove = async () => {
@@ -33,7 +35,7 @@ export default function ProductionOrderDetailPage() {
 
   if (loading || !order) return <div className="flex items-center justify-center h-64"><div className="w-12 h-12 border-2 border-brand-800 border-t-gold-400 rounded-full animate-spin" /></div>;
 
-  const cols: Column<any>[] = [
+  const cols: Column<ProductionLine>[] = useMemo(() => [
     { key: "product_name", header: "المنتج" },
     { key: "cartons_good", header: "كرتون صالح", align: "center" },
     { key: "cups_good", header: "كوب صالح", align: "center" },
@@ -41,7 +43,7 @@ export default function ProductionOrderDetailPage() {
     { key: "worker", header: "العامل" },
     { key: "brand_type", header: "العلامة" },
     { key: "quality_status", header: "الجودة", render: (r) => r.quality_status || "—" },
-  ];
+  ], []);
 
   return (
     <div className="space-y-6">

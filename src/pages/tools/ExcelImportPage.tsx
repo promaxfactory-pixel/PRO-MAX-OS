@@ -9,6 +9,11 @@ import {
 } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
+interface FileWithPath {
+  name: string;
+  path?: string;
+}
+
 type ImportType = "journal" | "customers" | "products" | "inventory";
 
 interface PreviewRow { [key: string]: any; }
@@ -56,7 +61,7 @@ export default function ExcelImportPage() {
     setStep("map");
     setErrors([]);
     try {
-      const path = (selected as any).path || selected.name;
+      const path = (selected as FileWithPath).path || selected.name;
       const data = await invoke<{ headers: string[]; rows: PreviewRow[] }>("excel_read_preview", { filePath: path, importType });
       setHeaders(data.headers);
       setRows(data.rows.slice(0, 5));
@@ -73,7 +78,7 @@ export default function ExcelImportPage() {
   const handleAnalyze = async () => {
     if (!file) return;
     try {
-      const path = (file as any).path || file.name;
+      const path = (file as FileWithPath).path || file.name;
       const mapped = mappings.filter((m) => m.target);
       const data = await invoke<ValidationResult[]>("excel_analyze_data", {
         filePath: path, importType, mappings: mapped,
@@ -89,7 +94,7 @@ export default function ExcelImportPage() {
     if (!file) return;
     setImporting(true);
     try {
-      const path = (file as any).path || file.name;
+      const path = (file as FileWithPath).path || file.name;
       const mapped = mappings.filter((m) => m.target);
       const commandMap: Record<ImportType, string> = {
         journal: "excel_import_journal",

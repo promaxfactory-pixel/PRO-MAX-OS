@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import Card from "@/components/ui/Card";
 import { formatOMR } from "@/lib/utils";
@@ -6,22 +6,29 @@ import { invoke } from "@tauri-apps/api/core";
 import { Calculator } from "lucide-react";
 import { useUIStore } from "../../stores/uiStore";
 
+interface TrialBalanceRow {
+  account_code: string;
+  account_name: string;
+  debit_milli: number;
+  credit_milli: number;
+}
+
 export default function TrialBalancePage() {
   const { addNotification } = useUIStore();
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<TrialBalanceRow[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { invoke("get_trial_balance").then((d: any) => setData(d)).catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false)); }, []);
+  useEffect(() => { invoke("get_trial_balance").then((d: unknown) => setData(d as TrialBalanceRow[])).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false)); }, []);
 
   const totalDebit = data.reduce((s, r) => s + (r.debit_milli || 0), 0);
   const totalCredit = data.reduce((s, r) => s + (r.credit_milli || 0), 0);
 
-  const columns: Column<any>[] = [
+  const columns: Column<TrialBalanceRow>[] = useMemo(() => [
     { key: "account_code", header: "الكود", render: (r) => <span className="font-mono text-brand-400">{r.account_code}</span> },
     { key: "account_name", header: "الاسم" },
     { key: "debit_milli", header: "المدين", align: "left", render: (r) => r.debit_milli > 0 ? formatOMR(r.debit_milli) : "—" },
     { key: "credit_milli", header: "الدائن", align: "left", render: (r) => r.credit_milli > 0 ? formatOMR(r.credit_milli) : "—" },
-  ];
+  ], []);
 
   return (
     <div className="space-y-6">

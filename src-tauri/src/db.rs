@@ -64,7 +64,7 @@ fn ensure_admin_user(conn: &Connection) -> Result<()> {
 mod migrations {
     use rusqlite::{Connection, Result};
     
-    const SCHEMA_VERSION: i32 = 20;
+    const SCHEMA_VERSION: i32 = 21;
     
     pub fn run(conn: &Connection) -> Result<()> {
         let current: i32 = conn
@@ -390,6 +390,22 @@ mod migrations {
                     );
                     CREATE INDEX IF NOT EXISTS idx_pca_user ON password_change_attempts(user_id);
                     CREATE INDEX IF NOT EXISTS idx_pca_ts ON password_change_attempts(ts);"
+                ).ok();
+            }
+            21 => {
+                conn.execute_batch(
+                    "-- Enhanced expenses: custody/personal tracking
+                    ALTER TABLE expenses ADD COLUMN paid_by_employee_id INTEGER;
+                    ALTER TABLE expenses ADD COLUMN paid_from_source TEXT DEFAULT 'company';
+                    ALTER TABLE expenses ADD COLUMN petty_id INTEGER;
+                    ALTER TABLE expenses ADD COLUMN custody_txn_id INTEGER;
+                    ALTER TABLE expenses ADD COLUMN reimbursement_status TEXT DEFAULT 'none';
+                    ALTER TABLE expenses ADD COLUMN reimbursement_date TEXT;
+                    ALTER TABLE expenses ADD COLUMN reimbursed_by TEXT;
+                    CREATE INDEX IF NOT EXISTS idx_exp_paid_by ON expenses(paid_by_employee_id);
+                    CREATE INDEX IF NOT EXISTS idx_exp_source ON expenses(paid_from_source);
+                    CREATE INDEX IF NOT EXISTS idx_exp_petty ON expenses(petty_id);
+                    CREATE INDEX IF NOT EXISTS idx_exp_reimburse ON expenses(reimbursement_status);"
                 ).ok();
             }
             _ => {}

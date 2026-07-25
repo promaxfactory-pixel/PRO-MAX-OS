@@ -31,7 +31,7 @@ export default function CustomerFormPage() {
           credit_limit_milli: d.credit_limit_milli || 0, payment_terms: d.payment_terms || "",
           opening_balance_milli: d.opening_balance_milli || 0, notes: d.notes || "",
         });
-      }).catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false));
+      }).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false));
     }
   }, [id, isEdit]);
 
@@ -74,30 +74,30 @@ export default function CustomerFormPage() {
           <div className="grid grid-cols-2 gap-6">
             <div className="input-group">
               <label className="input-label">اسم العميل *</label>
-              <input className="input-field" value={form.name} onChange={(e) => set("name", e.target.value)} required />
+              <input className="input-field" aria-label="اسم العميل" value={form.name} onChange={(e) => set("name", e.target.value)} required />
             </div>
             <div className="input-group">
               <label className="input-label">الكود</label>
-              <input className="input-field" value={form.code} onChange={(e) => set("code", e.target.value)} />
+              <input className="input-field" aria-label="الكود" value={form.code} onChange={(e) => set("code", e.target.value)} />
             </div>
             <div className="input-group">
               <label className="input-label">نوع الحساب</label>
-              <select className="input-field" value={form.ctype} onChange={(e) => set("ctype", e.target.value)}>
+              <select className="input-field" aria-label="نوع الحساب" value={form.ctype} onChange={(e) => set("ctype", e.target.value)}>
                 <option value="credit">آجل</option>
                 <option value="cash">نقد</option>
               </select>
             </div>
             <div className="input-group">
               <label className="input-label">الهاتف</label>
-              <input className="input-field" value={form.phone} onChange={(e) => set("phone", e.target.value)} />
+              <input className="input-field" aria-label="الهاتف" value={form.phone} onChange={(e) => set("phone", e.target.value)} />
             </div>
             <div className="input-group">
               <label className="input-label">جهة الاتصال</label>
-              <input className="input-field" value={form.contact} onChange={(e) => set("contact", e.target.value)} />
+              <input className="input-field" aria-label="جهة الاتصال" value={form.contact} onChange={(e) => set("contact", e.target.value)} />
             </div>
             <div className="input-group">
               <label className="input-label">البريد الإلكتروني</label>
-              <input className="input-field" type="email" value={form.email} onChange={(e) => set("email", e.target.value)} />
+              <input className="input-field" type="email" aria-label="البريد الإلكتروني" value={form.email} onChange={(e) => set("email", e.target.value)} />
             </div>
             <div className="input-group col-span-2">
               <label className="input-label">العنوان</label>

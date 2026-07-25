@@ -1,12 +1,19 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Card from "@/components/ui/Card";
 import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Calendar, Factory, ShoppingCart, Receipt, TrendingDown, Wallet } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
+interface DailyClosingData {
+  date: string; total_sales_milli: number; total_purchases_milli: number;
+  total_expenses_milli: number; net_profit_milli: number;
+  cash_balance_milli: number; bank_balance_milli: number;
+}
+
 export default function DailyClosingPage() {
   const addNotification = useUIStore((s) => s.addNotification);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);

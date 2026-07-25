@@ -244,11 +244,11 @@ export default function AiAssistantPage() {
       setSessions((prev) =>
         prev.map((s) => s.id === activeSessionId ? { ...s, messages: [...s.messages, assistantMsg] } : s)
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       const errMsg: ChatMessage = {
         id: generateId(),
         role: "system",
-        content: err?.toString() || "حدث خطأ غير متوقع",
+        content: err instanceof Error ? err.message : String(err) || "حدث خطأ غير متوقع",
         timestamp: new Date(),
       };
       setSessions((prev) =>
@@ -274,8 +274,8 @@ export default function AiAssistantPage() {
       });
       setStatusMessage({ type: "success", text: "تم حفظ الإعدادات بنجاح" });
       setTimeout(() => setStatusMessage(null), 3000);
-    } catch (err: any) {
-      setStatusMessage({ type: "error", text: err?.toString() || "فشل حفظ الإعدادات" });
+    } catch (err: unknown) {
+      setStatusMessage({ type: "error", text: err instanceof Error ? err.message : String(err) || "فشل حفظ الإعدادات" });
     }
   };
 
@@ -290,8 +290,8 @@ export default function AiAssistantPage() {
         text: result.message,
       });
       setTimeout(() => setStatusMessage(null), 5000);
-    } catch (err: any) {
-      setStatusMessage({ type: "error", text: err?.toString() || "فشل الاتصال" });
+    } catch (err: unknown) {
+      setStatusMessage({ type: "error", text: err instanceof Error ? err.message : String(err) || "فشل الاتصال" });
     } finally {
       setTesting(false);
     }

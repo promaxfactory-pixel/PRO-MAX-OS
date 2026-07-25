@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -6,24 +6,25 @@ import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, Search, Truck } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
+import { Supplier } from "@/types";
 
 export default function SupplierListPage() {
   const navigate = useNavigate();
   const addNotification = useUIStore((s) => s.addNotification);
-  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
-  useEffect(() => { loadSuppliers(); }, []);
-
-  const loadSuppliers = async () => {
+  const loadSuppliers = useCallback(async () => {
     setLoading(true);
     try {
       const data = await invoke("list_suppliers");
-      setSuppliers(data as any[]);
+      setSuppliers(data as Supplier[]);
     } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
-  };
+  }, [addNotification]);
+
+  useEffect(() => { loadSuppliers(); }, [loadSuppliers]);
 
   const filtered = suppliers.filter((s) =>
     !search || s.name.includes(search) || (s.code && s.code.includes(search)) || (s.phone && s.phone.includes(search))

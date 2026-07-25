@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -8,11 +8,24 @@ import { invoke } from "@tauri-apps/api/core";
 import { Plus, Clock, DollarSign, CheckCircle, XCircle } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useUIStore } from "@/stores/uiStore";
+import type { Employee } from "@/types";
+
+interface OvertimeRecord {
+  id: number;
+  employee_id: number;
+  employee_name: string;
+  date: string;
+  hours: number;
+  rate_multiplier: number;
+  reason: string;
+  notes: string;
+  status: string;
+}
 
 export default function OvertimePage() {
   const addNotification = useUIStore((s) => s.addNotification);
-  const [records, setRecords] = useState<any[]>([]);
-  const [employees, setEmployees] = useState<any[]>([]);
+  const [records, setRecords] = useState<OvertimeRecord[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -39,8 +52,8 @@ export default function OvertimePage() {
         invoke("list_overtime_records"),
         invoke("list_employees"),
       ]);
-      setRecords(otData as any[]);
-      setEmployees(empData as any[]);
+      setRecords(otData as OvertimeRecord[]);
+      setEmployees(empData as Employee[]);
     } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
   };
@@ -98,7 +111,7 @@ export default function OvertimePage() {
   const pendingCount = records.filter((r) => r.status === "pending").length;
   const approvedCount = records.filter((r) => r.status === "approved").length;
 
-  const columns: Column<any>[] = [
+  const columns: Column<OvertimeRecord>[] = useMemo(() => [
     { key: "employee_name", header: "الموظف", sortable: true, render: (r) => <span className="font-medium">{r.employee_name}</span> },
     { key: "date", header: "التاريخ", sortable: true, render: (r) => formatDate(r.date) },
     { key: "hours", header: "الساعات", sortable: true, align: "left", render: (r) => <span className="font-bold">{r.hours}</span> },
@@ -111,7 +124,7 @@ export default function OvertimePage() {
         <Button size="sm" variant="danger" onClick={(e) => { e.stopPropagation(); setConfirmTitle("رفض Hours إضافية"); setConfirmMessage("هل أنت متأكد من رفض هذه الساعة الإضافية؟"); setConfirmVariant("danger"); setPendingAction(() => () => handleReject(r.id)); setShowConfirm(true); }}>رفض</Button>
       </div>
     ) : null },
-  ];
+  ], []);
 
   return (
     <div className="space-y-6">

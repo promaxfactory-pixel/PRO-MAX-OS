@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
@@ -10,9 +10,20 @@ import { useUIStore } from "@/stores/uiStore";
 
 type ChequeKind = "all" | "issued" | "received";
 
+interface Cheque {
+  id: number;
+  kind: string;
+  cheque_no: string;
+  bank: string;
+  party: string;
+  amount_milli: number;
+  due_date: string;
+  status: string;
+}
+
 export default function ChequesPage() {
   const addNotification = useUIStore((s) => s.addNotification);
-  const [cheques, setCheques] = useState<any[]>([]);
+  const [cheques, setCheques] = useState<Cheque[]>([]);
   const [loading, setLoading] = useState(true);
   const [kind, setKind] = useState<ChequeKind>("all");
   const [showForm, setShowForm] = useState(false);
@@ -27,16 +38,16 @@ export default function ChequesPage() {
     notes: "",
   });
 
-  useEffect(() => { loadCheques(); }, []);
-
-  const loadCheques = async () => {
+  const loadCheques = useCallback(async () => {
     setLoading(true);
     try {
       const d = await invoke("list_cheques");
-      setCheques(d as any[]);
+      setCheques(d as Cheque[]);
     } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
-  };
+  }, [addNotification]);
+
+  useEffect(() => { loadCheques(); }, [loadCheques]);
 
   const handleCreate = async () => {
     setSaving(true);
@@ -85,7 +96,7 @@ export default function ChequesPage() {
     received: "واردة",
   };
 
-  const columns: Column<any>[] = [
+  const columns: Column<Cheque>[] = useMemo(() => [
     { key: "kind", header: "النوع", render: (r) => (
       <Badge variant={r.kind === "issued" ? "warning" : "info"}>
         {r.kind === "issued" ? "صادرة" : "واردة"}
@@ -100,7 +111,7 @@ export default function ChequesPage() {
       const s = statusMap[r.status] || { label: r.status, variant: "default" };
       return <Badge variant={s.variant}>{s.label}</Badge>;
     }},
-  ];
+  ], []);
 
   return (
     <div className="space-y-6">

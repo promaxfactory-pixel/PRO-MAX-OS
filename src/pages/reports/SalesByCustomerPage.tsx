@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Card from "@/components/ui/Card";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import { formatOMR, formatNumber } from "@/lib/utils";
@@ -6,9 +6,17 @@ import { invoke } from "@tauri-apps/api/core";
 import { Calendar, Users } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
+interface SalesByCustomer {
+  customer_name: string;
+  invoice_count: number;
+  net_milli: number;
+  vat_milli: number;
+  total_milli: number;
+}
+
 export default function SalesByCustomerPage() {
   const addNotification = useUIStore((s) => s.addNotification);
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<SalesByCustomer[]>([]);
   const [loading, setLoading] = useState(true);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -22,7 +30,7 @@ export default function SalesByCustomerPage() {
         fromDate: fromDate || null,
         toDate: toDate || null,
       });
-      setData(result as any[]);
+      setData(result as SalesByCustomer[]);
     } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
   };
@@ -31,13 +39,13 @@ export default function SalesByCustomerPage() {
   const totalVat = data.reduce((s, r) => s + r.vat_milli, 0);
   const totalTotal = data.reduce((s, r) => s + r.total_milli, 0);
 
-  const columns: Column<any>[] = [
+  const columns: Column<SalesByCustomer>[] = useMemo(() => [
     { key: "customer_name", header: "العميل", render: (r) => <span className="font-bold">{r.customer_name}</span> },
     { key: "invoice_count", header: "عدد الفواتير", align: "center", render: (r) => <span className="badge-info">{r.invoice_count}</span> },
     { key: "net_milli", header: "الصافي", align: "left", render: (r) => formatOMR(r.net_milli) },
     { key: "vat_milli", header: "الضريبة", align: "left", render: (r) => formatOMR(r.vat_milli) },
     { key: "total_milli", header: "الإجمالي", align: "left", render: (r) => <span className="font-bold gradient-text">{formatOMR(r.total_milli)}</span> },
-  ];
+  ], []);
 
   return (
     <div className="space-y-6">

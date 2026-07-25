@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import { StatusBadge } from "@/components/ui/Badge";
@@ -7,16 +7,17 @@ import { formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, Factory } from "lucide-react";
 import { useUIStore } from "../../stores/uiStore";
+import type { ProductionOrder } from "@/types";
 
 export default function ProductionOrderListPage() {
   const { addNotification } = useUIStore();
   const navigate = useNavigate();
-  const [orders, setOrders] = useState<any[]>([]);
+  const [orders, setOrders] = useState<ProductionOrder[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { invoke("list_production_orders").then((d: any) => setOrders(d)).catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false)); }, []);
+  useEffect(() => { invoke("list_production_orders").then((d) => setOrders(d as ProductionOrder[])).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false)); }, []);
 
-  const columns: Column<any>[] = [
+  const columns: Column<ProductionOrder>[] = useMemo(() => [
     { key: "prod_no", header: "رقم الأمر", sortable: true, render: (r) => <span className="font-mono text-brand-400">{r.prod_no || "—"}</span> },
     { key: "date", header: "التاريخ", sortable: true, render: (r) => formatDate(r.date) },
     { key: "shift", header: "الوردية", render: (r) => r.shift || "—" },
@@ -25,7 +26,7 @@ export default function ProductionOrderListPage() {
     { key: "supervisor", header: "المشرف", render: (r) => r.supervisor || "—" },
     { key: "run_minutes", header: "دقائق التشغيل", align: "center", render: (r) => r.run_minutes + " دقيقة" },
     { key: "status", header: "الحالة", sortable: true, render: (r) => <StatusBadge status={r.status} /> },
-  ];
+  ], []);
 
   return (
     <div className="space-y-6">

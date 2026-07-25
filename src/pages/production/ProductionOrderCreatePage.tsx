@@ -6,27 +6,34 @@ import Input, { Select, Textarea } from "@/components/ui/Input";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowRight, Save, Plus, Trash2 } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
+import type { Machine, Product, ProductionLine } from "@/types";
 
 export default function ProductionOrderCreatePage() {
   const navigate = useNavigate();
   const { addNotification } = useUIStore();
-  const [machines, setMachines] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
+  const [machines, setMachines] = useState<Machine[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [machineId, setMachineId] = useState<number>(0);
   const [operator, setOperator] = useState("");
   const [supervisor, setSupervisor] = useState("");
   const [shift, setShift] = useState("morning");
   const [notes, setNotes] = useState("");
-  const [lines, setLines] = useState<any[]>([]);
+  interface OrderLineInput {
+    product_id: number;
+    cartons_good: number;
+    cartons_waste: number;
+    worker: string;
+  }
+  const [lines, setLines] = useState<OrderLineInput[]>([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    invoke("list_products").then((d: any) => setProducts(d)).catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }));
+    invoke("list_products").then((d) => setProducts(d as Product[])).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }));
   }, []);
 
   const addLine = () => setLines([...lines, { product_id: products[0]?.id || 0, cartons_good: 0, cartons_waste: 0, worker: "" }]);
   const removeLine = (i: number) => setLines(lines.filter((_, idx) => idx !== i));
-  const updateLine = (i: number, field: string, val: any) => { const nl = [...lines]; (nl[i] as any)[field] = field.includes("cartons") ? Number(val) : val; setLines(nl); };
+  const updateLine = (i: number, field: keyof OrderLineInput, val: number | string) => { const nl = [...lines]; nl[i] = { ...nl[i], [field]: field.includes("cartons") ? Number(val) : val }; setLines(nl); };
 
   const handleSave = async () => {
     setSaving(true);
@@ -35,7 +42,7 @@ export default function ProductionOrderCreatePage() {
         input: { machine_id: machineId || null, operator, supervisor, shift, notes, lines: lines.map(l => ({ product_id: l.product_id, cartons_good: l.cartons_good, cartons_waste: l.cartons_waste, worker: l.worker })) }
       });
       navigate(`/production/${id}`);
-    } catch (err: any) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: err.toString() }); }
+    } catch (err: unknown) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(err) }); }
     finally { setSaving(false); }
   };
 

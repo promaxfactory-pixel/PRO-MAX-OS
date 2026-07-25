@@ -294,11 +294,58 @@ fn tool_run_sql(conn: &Connection, args: &Value) -> Value {
     let sql = args.get("sql").and_then(|v| v.as_str()).unwrap_or("");
     let limit = args.get("limit").and_then(|v| v.as_i64()).unwrap_or(100);
 
-    if !sql.trim().to_lowercase().starts_with("select") {
+    // Strip leading/trailing whitespace and comments
+    let normalized = sql.trim();
+
+    // Reject empty queries
+    if normalized.is_empty() {
+        return json!({ "error": "Empty SQL query" });
+    }
+
+    // Reject multi-statement queries (semicolons)
+    if normalized.contains(';') {
+        return json!({ "error": "Multi-statement queries are not allowed" });
+    }
+
+    // Reject block comments
+    if normalized.contains("/*") || normalized.contains("*/") {
+        return json!({ "error": "Block comments are not allowed" });
+    }
+
+    // Reject line comments
+    if normalized.starts_with("--") {
+        return json!({ "error": "Line comments are not allowed" });
+    }
+
+    // Must start with SELECT (case-insensitive)
+    let lower = normalized.to_lowercase();
+    if !lower.starts_with("select") {
         return json!({ "error": "Only SELECT queries are allowed via MCP" });
     }
 
-    match query_rows(conn, sql, [], Some(limit as usize)) {
+    // Block dangerous keywords anywhere in the query
+    let blocked_keywords = [
+        "insert", "update", "delete", "drop", "alter", "create",
+        "attach", "detach", "pragma", "vacuum", "reindex", "replace",
+        "begin", "commit", "rollback", "savepoint", "release",
+        "into", "values", "set", "from", "where", "having", "group by", "order by",
+    ];
+    for kw in &blocked_keywords {
+        // Check if keyword appears as a whole word (not substring of a column name)
+        if let Some(pos) = lower.find(kw) {
+            let before_ok = pos == 0 || !lower.as_bytes()[pos - 1].is_ascii_alphanumeric();
+            let after_pos = pos + kw.len();
+            let after_ok = after_pos >= lower.len() || !lower.as_bytes()[after_pos].is_ascii_alphanumeric();
+            if before_ok && after_ok {
+                // Allow "from" and "where" and "order by" and "group by" and "having" in SELECT context
+                if !["from", "where", "having", "group by", "order by", "limit", "offset", "join", "on", "as", "and", "or", "not", "in", "like", "between", "is", "null", "case", "when", "then", "else", "end", "select", "distinct", "union", "all", "exists", "having"].contains(kw) {
+                    return json!({ "error": format!("Keyword '{}' is not allowed in SQL queries via MCP", kw) });
+                }
+            }
+        }
+    }
+
+    match query_rows(conn, normalized, [], Some(limit as usize)) {
         Ok(rows) => json!({ "rows": rows, "total": rows.len() }),
         Err(e) => e,
     }

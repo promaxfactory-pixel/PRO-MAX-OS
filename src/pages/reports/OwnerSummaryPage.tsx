@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { formatOMR } from "@/lib/utils";
@@ -6,8 +6,17 @@ import { invoke } from "@tauri-apps/api/core";
 import { Calendar, TrendingUp, TrendingDown, DollarSign, Users, Truck } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
+interface OwnerSummaryData {
+  period: { from: string; to: string };
+  total_revenue_milli: number; total_cogs_milli: number; gross_profit_milli: number;
+  total_expenses_milli: number; net_profit_milli: number;
+  top_customers: { name: string; amount_milli: number }[];
+  top_suppliers: { name: string; amount_milli: number }[];
+}
+
 export default function OwnerSummaryPage() {
   const addNotification = useUIStore((s) => s.addNotification);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [fromDate, setFromDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0]);

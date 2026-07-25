@@ -8,18 +8,20 @@ import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowRight, ClipboardList, User, Clock, ShieldCheck, FileText } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
+import { OperationsSheet } from "@/types";
 
 export default function OperationsSheetDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { addNotification } = useUIStore();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [sheet, setSheet] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     invoke("get_operations_sheet", { id: Number(id) })
       .then((d) => setSheet(d))
-      .catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
+      .catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
       .finally(() => setLoading(false));
   }, [id]);
 

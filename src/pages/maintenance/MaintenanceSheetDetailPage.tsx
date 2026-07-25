@@ -3,26 +3,29 @@ import { useParams, useNavigate } from "react-router-dom";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Badge, { StatusBadge } from "@/components/ui/Badge";
+import { type BadgeVariant } from "@/components/ui/DataTable";
 import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowRight, Wrench, AlertTriangle, Clock, DollarSign, Calendar } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
+import { MaintenanceSheet } from "@/types";
 
 export default function MaintenanceSheetDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { addNotification } = useUIStore();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [sheet, setSheet] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     invoke("get_maintenance_sheet", { id: Number(id) })
       .then((d) => setSheet(d))
-      .catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
+      .catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
       .finally(() => setLoading(false));
   }, [id]);
 
-  const severityMap: Record<string, { label: string; variant: string }> = {
+  const severityMap: Record<string, { label: string; variant: BadgeVariant }> = {
     critical: { label: "حرج", variant: "danger" },
     high: { label: "مرتفع", variant: "warning" },
     medium: { label: "متوسط", variant: "info" },
@@ -33,7 +36,7 @@ export default function MaintenanceSheetDetailPage() {
     return <div className="flex items-center justify-center h-64"><div className="w-12 h-12 border-2 border-brand-800 border-t-gold-400 rounded-full animate-spin" /></div>;
   }
 
-  const sev = severityMap[sheet.severity] || { label: sheet.severity, variant: "info" };
+  const sev = severityMap[sheet.severity] || { label: sheet.severity, variant: "info" as BadgeVariant };
 
   return (
     <div className="space-y-6">
@@ -44,7 +47,7 @@ export default function MaintenanceSheetDetailPage() {
             <h1 className="page-title flex items-center gap-3">
               <span className="font-mono text-brand-400">{sheet.ticket_no || "—"}</span>
               <StatusBadge status={sheet.status} />
-              <Badge variant={sev.variant as any}>{sev.label}</Badge>
+              <Badge variant={sev.variant}>{sev.label}</Badge>
             </h1>
             <p className="page-subtitle">{formatDate(sheet.date)} • {sheet.equipment_name || "—"}</p>
           </div>

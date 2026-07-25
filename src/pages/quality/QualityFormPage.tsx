@@ -31,7 +31,7 @@ export default function QualityFormPage() {
       await invoke("create_quality_inspection", { input: form });
       addNotification({ id: crypto.randomUUID(), type: "success", title: "تم بنجاح", message: "تم تسجيل الفحص بنجاح" });
       navigate("/quality");
-    } catch (err: any) {
+    } catch {
       addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "فشل في تسجيل الفحص" });
     } finally {
       setSaving(false);

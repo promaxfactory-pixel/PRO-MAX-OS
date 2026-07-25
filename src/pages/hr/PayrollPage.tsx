@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
@@ -8,10 +8,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { Plus, DollarSign, Clock, CheckCircle, Play, Eye } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useUIStore } from "@/stores/uiStore";
+import type { PayrollRun } from "@/types";
 
 export default function PayrollPage() {
   const addNotification = useUIStore((s) => s.addNotification);
-  const [runs, setRuns] = useState<any[]>([]);
+  const [runs, setRuns] = useState<PayrollRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -24,7 +25,7 @@ export default function PayrollPage() {
     setLoading(true);
     try {
       const d = await invoke("list_payroll_runs");
-      setRuns(d as any[]);
+      setRuns(d as PayrollRun[]);
     } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
   };
@@ -43,7 +44,7 @@ export default function PayrollPage() {
   const totalPaid = runs.filter((r) => r.status === "paid").length;
   const pendingRuns = runs.filter((r) => r.status === "pending" || r.status === "draft").length;
 
-  const columns: Column<any>[] = [
+  const columns: Column<PayrollRun>[] = useMemo(() => [
     { key: "run_no", header: "رقم التشغيلة", sortable: true, render: (r) => <span className="font-mono text-brand-400">{r.run_no || "—"}</span> },
     { key: "period", header: "الفترة", render: (r) => `${formatDate(r.period_start)} — ${formatDate(r.period_end)}` },
     { key: "total_gross_milli", header: "الإجمالي", sortable: true, align: "left", render: (r) => formatOMR(r.total_gross_milli) },
@@ -71,7 +72,7 @@ export default function PayrollPage() {
         )}
       </div>
     )},
-  ];
+  ], []);
 
   return (
     <div className="space-y-6">

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
@@ -10,9 +10,17 @@ import {
 } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
+interface DailyBrief {
+  date: string; total_sales_milli: number; total_orders: number;
+  production_summary: { product: string; qty: number }[];
+  alerts: { type: string; message: string; severity: string }[];
+  low_stock_items: { name: string; qty: number; reorder: number }[];
+}
+
 export default function DailyBriefPage() {
   const navigate = useNavigate();
   const addNotification = useUIStore((s) => s.addNotification);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [brief, setBrief] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 

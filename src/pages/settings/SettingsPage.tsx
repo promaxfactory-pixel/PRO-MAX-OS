@@ -45,7 +45,7 @@ export default function SettingsPage() {
   useEffect(() => {
     invoke("get_company_settings")
       .then((d: any) => setForm((prev) => ({ ...prev, ...d })))
-      .catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }));
+      .catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }));
   }, []);
 
   const handleChange = (field: string, value: any) => {
@@ -314,8 +314,8 @@ export default function SettingsPage() {
                             features: ["all"],
                           });
                           setGenResult(key);
-                        } catch (err: any) {
-                          setGenResult(`خطأ: ${err}`);
+                        } catch (err: unknown) {
+                          setGenResult(`خطأ: ${String(err)}`);
                         } finally { setGenLoading(false); }
                       }} loading={genLoading} icon={<Key className="w-4 h-4" />}>
                         إنشاء مفتاح الترخيص

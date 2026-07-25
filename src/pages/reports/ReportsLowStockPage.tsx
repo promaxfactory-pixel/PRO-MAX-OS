@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import Card from "@/components/ui/Card";
 import { formatOMR } from "@/lib/utils";
@@ -7,29 +7,40 @@ import { ArrowRight, AlertTriangle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useUIStore } from "@/stores/uiStore";
 
+interface LowStockItem {
+  item_code: string;
+  item_name: string;
+  warehouse: string;
+  current_qty: number;
+  min_level: number;
+  deficit: number;
+  unit_cost_milli: number;
+  cost_gap_milli: number;
+}
+
 export default function ReportsLowStockPage() {
   const navigate = useNavigate();
   const addNotification = useUIStore((s) => s.addNotification);
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<LowStockItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState({ totalItems: 0, totalDeficit: 0, totalCostGap: 0 });
 
   useEffect(() => {
     invoke("low_stock_report")
-      .then((d: any) => {
-        const arr = d || [];
+      .then((d: unknown) => {
+        const arr = (d || []) as LowStockItem[];
         setItems(arr);
         setSummary({
           totalItems: arr.length,
-          totalDeficit: arr.reduce((s: number, i: any) => s + (i.deficit || 0), 0),
-          totalCostGap: arr.reduce((s: number, i: any) => s + (i.cost_gap_milli || 0), 0),
+          totalDeficit: arr.reduce((s: number, i: LowStockItem) => s + (i.deficit || 0), 0),
+          totalCostGap: arr.reduce((s: number, i: LowStockItem) => s + (i.cost_gap_milli || 0), 0),
         });
       })
-      .catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
+      .catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
       .finally(() => setLoading(false));
   }, []);
 
-  const columns: Column<any>[] = [
+  const columns: Column<LowStockItem>[] = useMemo(() => [
     { key: "item_code", header: "الكود", render: (r) => <span className="font-mono text-brand-400">{r.item_code}</span> },
     { key: "item_name", header: "الصنف", sortable: true, render: (r) => <span className="font-medium">{r.item_name}</span> },
     { key: "warehouse", header: "المستودع", render: (r) => r.warehouse || "—" },
@@ -38,7 +49,7 @@ export default function ReportsLowStockPage() {
     { key: "deficit", header: "النقص", align: "left", render: (r) => <span className="text-red-400 font-bold">-{r.deficit}</span> },
     { key: "unit_cost_milli", header: "تكلفة الوحدة", align: "left", render: (r) => formatOMR(r.unit_cost_milli) },
     { key: "cost_gap_milli", header: "قيمة النقص", align: "left", render: (r) => <span className="text-red-400 font-bold">{formatOMR(r.cost_gap_milli)}</span> },
-  ];
+  ], []);
 
   return (
     <div className="space-y-6">

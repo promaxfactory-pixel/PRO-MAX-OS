@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import Button from "@/components/ui/Button";
 import Card, { StatCard } from "@/components/ui/Card";
@@ -7,9 +7,20 @@ import { invoke } from "@tauri-apps/api/core";
 import { Plus, Save, Coins, ArrowRight } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
+interface PettyCashAccount {
+  code: string;
+  name: string;
+  responsible: string;
+  role: string;
+  spending_limit_milli: number;
+  balance_milli: number;
+  status: string;
+  notes: string;
+}
+
 export default function PettyCashPage() {
   const addNotification = useUIStore((s) => s.addNotification);
-  const [accounts, setAccounts] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<PettyCashAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -21,14 +32,14 @@ export default function PettyCashPage() {
   const [spendingLimitMilli, setSpendingLimitMilli] = useState(0);
   const [notes, setNotes] = useState("");
 
-  useEffect(() => { loadAccounts(); }, []);
-
-  const loadAccounts = async () => {
+  const loadAccounts = useCallback(async () => {
     setLoading(true);
-    try { const d = await invoke("list_petty_cash_accounts"); setAccounts(d as any[]); }
+    try { const d = await invoke("list_petty_cash_accounts"); setAccounts(d as PettyCashAccount[]); }
     catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
-  };
+  }, [addNotification]);
+
+  useEffect(() => { loadAccounts(); }, [loadAccounts]);
 
   const resetForm = () => {
     setName("");
@@ -64,10 +75,10 @@ export default function PettyCashPage() {
   };
 
   const totalAccounts = accounts.length;
-  const totalBalance = accounts.reduce((s: number, a: any) => s + (a.balance_milli || 0), 0);
+  const totalBalance = accounts.reduce((s: number, a: PettyCashAccount) => s + (a.balance_milli || 0), 0);
   const activeCount = accounts.filter((a) => a.status === "active").length;
 
-  const columns: Column<any>[] = [
+  const columns: Column<PettyCashAccount>[] = useMemo(() => [
     { key: "code", header: "الرمز", sortable: true, render: (r) => <span className="font-mono text-brand-400">{r.code}</span> },
     { key: "name", header: "الاسم", sortable: true, render: (r) => <span className="text-white font-medium">{r.name}</span> },
     { key: "responsible", header: "المسؤول", render: (r) => <span className="text-surface-300">{r.responsible}</span> },
@@ -84,7 +95,7 @@ export default function PettyCashPage() {
         "bg-surface-600 text-surface-300"
       }`}>{r.status === "active" ? "نشط" : r.status === "closed" ? "مغلق" : r.status || "—"}</span>
     )},
-  ];
+  ], []);
 
   return (
     <div className="space-y-6">

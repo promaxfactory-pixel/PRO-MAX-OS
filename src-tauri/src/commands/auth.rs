@@ -128,10 +128,12 @@ pub fn login(
         .map_err(|_| "اسم المستخدم أو كلمة المرور غير صحيحة".to_string())?;
 
     if !verify_password_stored(&password, &row.7, &row.8) {
-        let _ = conn.execute(
+        if let Err(e) = conn.execute(
             "INSERT INTO login_attempts(username, ts, ok) VALUES(?, ?, 0)",
             rusqlite::params![&username, chrono::Utc::now().timestamp() as f64],
-        );
+        ) {
+            eprintln!("ERROR: Failed to record failed login attempt: {}", e);
+        }
         return Err("اسم المستخدم أو كلمة المرور غير صحيحة".to_string());
     }
 
@@ -142,10 +144,12 @@ pub fn login(
     // Migrate legacy SHA-256 hash to argon2
     if !row.7.starts_with("$argon2") {
         if let Ok(new_hash) = crypto::hash_password(&password) {
-            let _ = conn.execute(
+            if let Err(e) = conn.execute(
                 "UPDATE users SET password_hash = ?, salt = '' WHERE id = ?",
                 rusqlite::params![new_hash, row.0],
-            );
+            ) {
+                eprintln!("ERROR: Failed to migrate password hash to argon2: {}", e);
+            }
         }
     }
 
@@ -162,10 +166,12 @@ pub fn login(
 
     let token = crypto::create_tauri_token(row.0, &username_clone, &row.3);
 
-    let _ = conn.execute(
+    if let Err(e) = conn.execute(
         "INSERT INTO login_attempts(username, ts, ok) VALUES(?, ?, 1)",
         rusqlite::params![&username, chrono::Utc::now().timestamp() as f64],
-    );
+    ) {
+        eprintln!("ERROR: Failed to record successful login attempt: {}", e);
+    }
 
     Ok(LoginResult { user, token })
 }
@@ -219,10 +225,12 @@ pub fn change_password(
         .map_err(|_| "المستخدم غير موجود".to_string())?;
 
     if !verify_password_stored(&old_password, &current.0, &current.1) {
-        let _ = conn.execute(
+        if let Err(e) = conn.execute(
             "INSERT INTO password_change_attempts(user_id, ts, ok) VALUES(?, ?, 0)",
             rusqlite::params![user_id, chrono::Utc::now().timestamp() as f64],
-        );
+        ) {
+            eprintln!("ERROR: Failed to record failed password change attempt: {}", e);
+        }
         return Err("كلمة المرور القديمة غير صحيحة".to_string());
     }
 
@@ -233,7 +241,9 @@ pub fn change_password(
     )
     .map_err(|e| e.to_string())?;
 
-    let _ = rbac::log_audit(&conn, Some(user_id), None, "change_password", "users", Some(user_id), None, None, None);
+    if let Err(e) = rbac::log_audit(&conn, Some(user_id), None, "change_password", "users", Some(user_id), None, None, None) {
+        eprintln!("ERROR: Failed to log password change audit: {}", e);
+    }
 
     Ok("تم تغيير كلمة المرور بنجاح".to_string())
 }
@@ -246,10 +256,12 @@ pub fn validate_token(state: State<'_, DbState>, token: String) -> Result<User, 
         return Err("طلبات التحقق من التوكن كثيرة جداً. حاول مرة أخرى بعد دقيقة".to_string());
     }
 
-    let _ = conn.execute(
+    if let Err(e) = conn.execute(
         "INSERT INTO login_attempts(username, ts, ok) VALUES('_validate_token_', ?, 1)",
         rusqlite::params![chrono::Utc::now().timestamp() as f64],
-    );
+    ) {
+        eprintln!("ERROR: Failed to record token validation attempt: {}", e);
+    }
 
     let (user_id, _username, _role) = crypto::validate_tauri_token(&token)?;
 

@@ -6,12 +6,13 @@ import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowRight, CreditCard } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
+import { Supplier } from "@/types";
 
 export default function SupplierPaymentPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const addNotification = useUIStore((s) => s.addNotification);
-  const [supplier, setSupplier] = useState<any>(null);
+  const [supplier, setSupplier] = useState<Supplier | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -23,8 +24,8 @@ export default function SupplierPaymentPage() {
 
   useEffect(() => {
     invoke("get_supplier", { id: Number(id) })
-      .then((d) => setSupplier(d))
-      .catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
+      .then((d) => setSupplier(d as Supplier))
+      .catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
       .finally(() => setLoading(false));
   }, [id]);
 

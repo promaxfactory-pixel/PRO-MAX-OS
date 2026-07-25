@@ -24,7 +24,7 @@ export default function BackupPage() {
     setLoading(true);
     invoke<Backup[]>("backup_list")
       .then(setBackups)
-      .catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
+      .catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
       .finally(() => setLoading(false));
   }, []);
 
@@ -39,7 +39,7 @@ export default function BackupPage() {
       loadBackups();
     } catch (err) {
       setMessage({ type: "error", text: "فشل إنشاء النسخة الاحتياطية" });
-      console.error(err);
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(err) });
     } finally {
       setCreating(false);
       setTimeout(() => setMessage(null), 4000);
@@ -54,7 +54,7 @@ export default function BackupPage() {
       setMessage({ type: "success", text: "تم الاستعادة بنجاح" });
     } catch (err) {
       setMessage({ type: "error", text: "فشل الاستعادة" });
-      console.error(err);
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(err) });
     } finally {
       setRestoring(null);
       setConfirmRestore(null);

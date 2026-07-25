@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import DataTable, { Column } from "@/components/ui/DataTable";
@@ -7,17 +7,38 @@ import { invoke } from "@tauri-apps/api/core";
 import { Plus, Save, ChevronDown, ChevronUp } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import type { InventoryItem } from "@/types";
+
+interface Warehouse {
+  id: number;
+  name: string;
+}
+
+interface StockTransfer {
+  id: number;
+  transfer_no: string;
+  from_warehouse_id: number;
+  from_warehouse: string;
+  to_warehouse_id: number;
+  to_warehouse: string;
+  item_id: number;
+  item_name: string;
+  qty: number;
+  status: string;
+  notes: string;
+  created_at: string;
+}
 
 export default function StockTransfersPage() {
   const { addNotification } = useUIStore();
-  const [transfers, setTransfers] = useState<any[]>([]);
+  const [transfers, setTransfers] = useState<StockTransfer[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const [warehouses, setWarehouses] = useState<any[]>([]);
-  const [items, setItems] = useState<any[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [items, setItems] = useState<InventoryItem[]>([]);
   const [form, setForm] = useState({
     from_warehouse_id: 0,
     to_warehouse_id: 0,
@@ -38,9 +59,9 @@ export default function StockTransfersPage() {
         invoke("list_warehouses"),
         invoke("list_inventory_items"),
       ]);
-      setTransfers(transfersData as any[]);
-      setWarehouses(warehousesData as any[]);
-      setItems(itemsData as any[]);
+      setTransfers(transfersData as StockTransfer[]);
+      setWarehouses(warehousesData as Warehouse[]);
+      setItems(itemsData as InventoryItem[]);
     } catch (err) {
       addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" });
     } finally {
@@ -50,8 +71,8 @@ export default function StockTransfersPage() {
 
   const set = (key: string, val: any) => setForm((f) => ({ ...f, [key]: val }));
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent | Event) => {
+    if (e && 'preventDefault' in e) e.preventDefault();
     if (!form.item_id) return addNotification({ id: crypto.randomUUID(), type: "warning", title: "تنبيه", message: "يرجى اختيار الصنف" });
     if (!form.from_warehouse_id || !form.to_warehouse_id) return addNotification({ id: crypto.randomUUID(), type: "warning", title: "تنبيه", message: "يرجى اختيار المستودعات" });
     setSaving(true);
@@ -60,8 +81,8 @@ export default function StockTransfersPage() {
       setShowForm(false);
       setForm({ from_warehouse_id: 0, to_warehouse_id: 0, item_id: 0, qty: 0, notes: "" });
       await loadData();
-    } catch (err: any) {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: err.toString() });
+    } catch (err: unknown) {
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(err) });
     } finally {
       setSaving(false);
     }
@@ -77,7 +98,7 @@ export default function StockTransfersPage() {
     cancelled: { label: "ملغي", variant: "danger" },
   };
 
-  const columns: Column<any>[] = [
+  const columns: Column<StockTransfer>[] = useMemo(() => [
     { key: "transfer_no", header: "رقم التحويل", sortable: true, render: (r) => <span className="font-mono text-brand-400">{r.transfer_no || "—"}</span> },
     { key: "from_warehouse", header: "من", sortable: true, render: (r) => <span className="text-white">{r.from_warehouse || "—"}</span> },
     { key: "to_warehouse", header: "إلى", sortable: true, render: (r) => <span className="text-white">{r.to_warehouse || "—"}</span> },
@@ -88,7 +109,7 @@ export default function StockTransfersPage() {
       return <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${s.variant === "success" ? "bg-emerald-500/20 text-emerald-400" : s.variant === "warning" ? "bg-amber-500/20 text-amber-400" : s.variant === "info" ? "bg-blue-500/20 text-blue-400" : s.variant === "danger" ? "bg-red-500/20 text-red-400" : "bg-surface-700 text-surface-400"}`}>{s.label}</span>;
     }},
     { key: "created_at", header: "التاريخ", sortable: true, render: (r) => formatDate(r.created_at) },
-  ];
+  ], []);
 
   return (
     <div className="space-y-6">
@@ -158,7 +179,7 @@ export default function StockTransfersPage() {
         title="إنشاء تحويل مخزون"
         message="هل أنت متأكد من إنشاء تحويل مخزون جديد؟"
         variant="warning"
-        onConfirm={() => { handleSubmit(new Event('submit') as any); setShowConfirm(false); }}
+        onConfirm={() => { handleSubmit(); setShowConfirm(false); }}
         onCancel={() => setShowConfirm(false)}
       />
     </div>

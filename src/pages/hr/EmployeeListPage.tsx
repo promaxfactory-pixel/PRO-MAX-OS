@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import Badge from "@/components/ui/Badge";
@@ -7,23 +7,24 @@ import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, UserCog } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
+import { Employee } from "@/types";
 
 export default function EmployeeListPage() {
   const navigate = useNavigate();
   const { addNotification } = useUIStore();
-  const [employees, setEmployees] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { invoke("list_employees").then((d: any) => setEmployees(d)).catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false)); }, []);
+  useEffect(() => { invoke("list_employees").then((d) => setEmployees(d as Employee[])).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false)); }, []);
 
-  const columns: Column<any>[] = [
+  const columns: Column<any>[] = useMemo(() => [
     { key: "code", header: "الكود", render: (r) => <span className="font-mono text-brand-400">{r.code || "—"}</span> },
     { key: "name", header: "الاسم", sortable: true, render: (r) => <span className="font-medium">{r.name}</span> },
     { key: "job", header: "الوظيفة", render: (r) => r.job || "—" },
     { key: "nationality", header: "الجنسية", render: (r) => r.nationality || "—" },
     { key: "salary_milli", header: "الراتب", align: "left", render: (r) => formatOMR(r.salary_milli) },
     { key: "phone", header: "الهاتف", render: (r) => r.phone || "—" },
-  ];
+  ], []);
 
   return (
     <div className="space-y-6">

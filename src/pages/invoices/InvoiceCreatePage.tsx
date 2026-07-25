@@ -7,29 +7,37 @@ import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, Trash2, Save, Printer, ArrowRight } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
+import { Customer, Product } from "@/types";
+
+interface InvoiceLineInput {
+  product_id: number;
+  cartons: number;
+  unit_price: number;
+  customs_price: number;
+}
 
 export default function InvoiceCreatePage() {
   const navigate = useNavigate();
   const { addNotification } = useUIStore();
-  const [customers, setCustomers] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<number | null>(null);
   const [paymentType, setPaymentType] = useState("credit");
   const [notes, setNotes] = useState("");
-  const [lines, setLines] = useState<{ product_id: number; cartons: number; unit_price: number; customs_price: number }[]>([]);
+  const [lines, setLines] = useState<InvoiceLineInput[]>([]);
   const [saving, setSaving] = useState(false);
   const [useCustoms, setUseCustoms] = useState(false);
 
   useEffect(() => {
-    invoke("list_customers").then((d: any) => setCustomers(d)).catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }));
-    invoke("list_products").then((d: any) => setProducts(d)).catch((e: any) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }));
+    invoke("list_customers").then((d: unknown) => setCustomers(d as Customer[])).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }));
+    invoke("list_products").then((d: unknown) => setProducts(d as Product[])).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }));
   }, []);
 
   const addLine = () => setLines([...lines, { product_id: products[0]?.id || 0, cartons: 1, unit_price: 0, customs_price: 0 }]);
   const removeLine = (i: number) => setLines(lines.filter((_, idx) => idx !== i));
-  const updateLine = (i: number, field: string, val: any) => {
+  const updateLine = (i: number, field: keyof InvoiceLineInput, val: number | string) => {
     const newLines = [...lines];
-    (newLines[i] as any)[field] = field === "cartons" || field === "unit_price" || field === "customs_price" ? Number(val) : val;
+    newLines[i] = { ...newLines[i], [field]: field === "cartons" || field === "unit_price" || field === "customs_price" ? Number(val) : val };
     setLines(newLines);
   };
 
@@ -55,7 +63,7 @@ export default function InvoiceCreatePage() {
         },
       });
       navigate(`/invoices/${id}`);
-    } catch (err: any) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: err.toString() }); }
+    } catch (err: unknown) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(err) }); }
     finally { setSaving(false); }
   };
 
