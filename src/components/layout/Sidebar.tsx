@@ -9,8 +9,9 @@ import {
   Receipt, CreditCard, CircleDollarSign, Landmark, BookOpen,
   Cog, Eye, ShoppingCart, Wallet, Coins, Boxes, ListChecks,
   ClipboardCheck, Award, RefreshCw, Bell, Search,
-  GitBranch, HandCoins, FileClock, FileWarning, Clock,
-  Building2, ScrollText, IdCard, Globe
+  GitBranch,   HandCoins, FileClock, FileWarning, Clock,
+  Building2, ScrollText, IdCard, Globe,
+  Ship, ArrowLeftRight
 } from "lucide-react";
 import LanguageSwitcher from "./LanguageSwitcher";
 
@@ -82,6 +83,14 @@ const menuSections = (t: (key: string) => string) => [
       { label: "وزارة العمل", icon: ScrollText, path: '/government/labour' },
       { label: "الإقامة والجوازات", icon: IdCard, path: '/government/residency' },
       { label: "التكامل الحكومي", icon: Globe, path: '/government/integrations' },
+    ],
+  },
+  {
+    title: "الاستيراد والتعاملات",
+    items: [
+      { label: "تتبع الشحنات", icon: Ship, path: '/imports' },
+      { label: "المبادلة والمقايضة", icon: ArrowLeftRight, path: '/barter' },
+      { label: "الأقساط والقروض", icon: CreditCard, path: '/installments' },
     ],
   },
   {

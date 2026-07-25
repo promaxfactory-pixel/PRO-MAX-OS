@@ -17,6 +17,8 @@ pub struct ShiftLine {
     pub waste_cartons: f64,
     pub ts: String,
     pub recorded_by: Option<String>,
+    pub worker_id: Option<i64>,
+    pub worker_name: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -80,6 +82,7 @@ pub fn record_production(
     cups_per_carton: Option<i64>,
     waste_cartons: Option<f64>,
     recorded_by: Option<String>,
+    worker_id: Option<i64>,
 ) -> Result<ShiftLine, String> {
     let conn = state.0.lock().map_err(|e| e.to_string())?;
 
@@ -87,9 +90,9 @@ pub fn record_production(
     let waste = waste_cartons.unwrap_or(0.0);
 
     conn.execute(
-        "INSERT INTO production_shift_lines (sheet_id, product_id, customer_brand, cartons_produced, cups_per_carton, waste_cartons, recorded_by)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        params![sheet_id, product_id, customer_brand, cartons_produced, cpc, waste, recorded_by],
+        "INSERT INTO production_shift_lines (sheet_id, product_id, customer_brand, cartons_produced, cups_per_carton, waste_cartons, recorded_by, worker_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params![sheet_id, product_id, customer_brand, cartons_produced, cpc, waste, recorded_by, worker_id],
     )
     .map_err(|e| e.to_string())?;
 
@@ -97,9 +100,11 @@ pub fn record_production(
 
     let line = conn.query_row(
         "SELECT psl.id, psl.sheet_id, psl.product_id, COALESCE(p.name_ar, p.name_en, '') as product_name,
-                psl.customer_brand, psl.cartons_produced, psl.cups_per_carton, psl.waste_cartons, psl.ts, psl.recorded_by
+                psl.customer_brand, psl.cartons_produced, psl.cups_per_carton, psl.waste_cartons, psl.ts, psl.recorded_by,
+                psl.worker_id, e.name as worker_name
          FROM production_shift_lines psl
          LEFT JOIN products p ON p.id = psl.product_id
+         LEFT JOIN employees e ON e.id = psl.worker_id
          WHERE psl.id = ?1",
         params![id],
         row_to_shift_line,
@@ -130,9 +135,11 @@ pub fn get_shift_lines(state: State<'_, DbState>, sheet_id: i64) -> Result<Vec<S
     let mut stmt = conn
         .prepare(
             "SELECT psl.id, psl.sheet_id, psl.product_id, COALESCE(p.name_ar, p.name_en, ''),
-                    psl.customer_brand, psl.cartons_produced, psl.cups_per_carton, psl.waste_cartons, psl.ts, psl.recorded_by
+                    psl.customer_brand, psl.cartons_produced, psl.cups_per_carton, psl.waste_cartons, psl.ts, psl.recorded_by,
+                    psl.worker_id, e.name as worker_name
              FROM production_shift_lines psl
              LEFT JOIN products p ON p.id = psl.product_id
+             LEFT JOIN employees e ON e.id = psl.worker_id
              WHERE psl.sheet_id = ?1
              ORDER BY psl.ts DESC",
         )
@@ -327,10 +334,12 @@ pub fn get_live_dashboard(state: State<'_, DbState>) -> Result<LiveProductionSum
 
     let mut recent = conn.prepare(
         "SELECT psl.id, psl.sheet_id, psl.product_id, COALESCE(p.name_ar, p.name_en, ''),
-                psl.customer_brand, psl.cartons_produced, psl.cups_per_carton, psl.waste_cartons, psl.ts, psl.recorded_by
+                psl.customer_brand, psl.cartons_produced, psl.cups_per_carton, psl.waste_cartons, psl.ts, psl.recorded_by,
+                psl.worker_id, e.name as worker_name
          FROM production_shift_lines psl
          JOIN operations_daily_sheets ods ON ods.id = psl.sheet_id
          LEFT JOIN products p ON p.id = psl.product_id
+         LEFT JOIN employees e ON e.id = psl.worker_id
          WHERE ods.date = ?1
          ORDER BY psl.ts DESC LIMIT 20",
     ).map_err(|e| e.to_string())?;
@@ -475,5 +484,155 @@ fn row_to_shift_line(row: &rusqlite::Row) -> rusqlite::Result<ShiftLine> {
         waste_cartons: row.get(7)?,
         ts: row.get(8)?,
         recorded_by: row.get(9)?,
+        worker_id: row.get(10)?,
+        worker_name: row.get(11)?,
     })
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WorkerDailySummary {
+    pub employee_id: i64,
+    pub worker_name: Option<String>,
+    pub total_cartons: f64,
+    pub total_cups: f64,
+    pub total_waste: f64,
+    pub products: Vec<ProductProductionSummary>,
+}
+
+#[tauri::command]
+pub fn get_worker_daily_report(state: State<'_, DbState>, date: String) -> Result<Vec<WorkerDailySummary>, String> {
+    let conn = state.0.lock().map_err(|e| e.to_string())?;
+
+    let mut stmt = conn.prepare(
+        "SELECT psl.worker_id, e.name as worker_name,
+                SUM(psl.cartons_produced) as total_cartons,
+                SUM(psl.cartons_produced * psl.cups_per_carton) as total_cups,
+                SUM(psl.waste_cartons) as total_waste
+         FROM production_shift_lines psl
+         JOIN operations_daily_sheets ods ON ods.id = psl.sheet_id
+         LEFT JOIN employees e ON e.id = psl.worker_id
+         WHERE ods.date = ?1 AND psl.worker_id IS NOT NULL
+         GROUP BY psl.worker_id, e.name
+         ORDER BY total_cartons DESC",
+    ).map_err(|e| e.to_string())?;
+
+    let worker_rows: Vec<(i64, Option<String>, f64, f64, f64)> = stmt
+        .query_map(params![date], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?))
+        })
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    let mut results = Vec::new();
+
+    for (worker_id, worker_name, total_cartons, total_cups, total_waste) in worker_rows {
+        let mut prod_stmt = conn.prepare(
+            "SELECT psl.product_id, COALESCE(p.name_ar, p.name_en, '') as pname, psl.customer_brand,
+                    SUM(psl.cartons_produced) as tot_cartons,
+                    SUM(psl.cartons_produced * psl.cups_per_carton) as tot_cups,
+                    SUM(psl.waste_cartons) as tot_waste
+             FROM production_shift_lines psl
+             JOIN operations_daily_sheets ods ON ods.id = psl.sheet_id
+             LEFT JOIN products p ON p.id = psl.product_id
+             WHERE ods.date = ?1 AND psl.worker_id = ?2
+             GROUP BY psl.product_id, psl.customer_brand
+             ORDER BY tot_cartons DESC",
+        ).map_err(|e| e.to_string())?;
+
+        let products: Vec<ProductProductionSummary> = prod_stmt
+            .query_map(params![date, worker_id], |row| {
+                Ok(ProductProductionSummary {
+                    product_id: row.get(0)?,
+                    product_name: row.get(1)?,
+                    customer_brand: row.get(2)?,
+                    total_cartons: row.get(3)?,
+                    total_cups: row.get(4)?,
+                    waste_cartons: row.get(5)?,
+                })
+            })
+            .map_err(|e| e.to_string())?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        results.push(WorkerDailySummary {
+            employee_id: worker_id,
+            worker_name,
+            total_cartons,
+            total_cups,
+            total_waste,
+            products,
+        });
+    }
+
+    Ok(results)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ShiftInventorySnapshot {
+    pub id: i64,
+    pub date: String,
+    pub shift: String,
+    pub item_id: i64,
+    pub opening_qty: f64,
+    pub closing_qty: f64,
+    pub recorded_by: Option<String>,
+    pub ts: String,
+}
+
+#[tauri::command]
+pub fn record_shift_inventory_snapshot(
+    state: State<'_, DbState>,
+    date: String,
+    shift: String,
+    item_id: i64,
+    opening_qty: f64,
+    closing_qty: f64,
+    recorded_by: Option<String>,
+) -> Result<String, String> {
+    let conn = state.0.lock().map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "INSERT INTO shift_inventory_snapshots (date, shift, item_id, opening_qty, closing_qty, recorded_by, ts)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now'))",
+        params![date, shift, item_id, opening_qty, closing_qty, recorded_by],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let _ = rbac::log_audit(&conn, None, None, "record_shift_inventory_snapshot", "shift_inventory_snapshots", None, None, None, None);
+
+    Ok("تم حفظ جرد الوردية".to_string())
+}
+
+#[tauri::command]
+pub fn get_shift_inventory_snapshots(state: State<'_, DbState>, date: String) -> Result<Vec<ShiftInventorySnapshot>, String> {
+    let conn = state.0.lock().map_err(|e| e.to_string())?;
+
+    let mut stmt = conn.prepare(
+        "SELECT id, date, shift, item_id, opening_qty, closing_qty, recorded_by, ts
+         FROM shift_inventory_snapshots
+         WHERE date = ?1
+         ORDER BY shift, item_id",
+    ).map_err(|e| e.to_string())?;
+
+    let rows = stmt
+        .query_map(params![date], |row| {
+            Ok(ShiftInventorySnapshot {
+                id: row.get(0)?,
+                date: row.get(1)?,
+                shift: row.get(2)?,
+                item_id: row.get(3)?,
+                opening_qty: row.get(4)?,
+                closing_qty: row.get(5)?,
+                recorded_by: row.get(6)?,
+                ts: row.get(7)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+
+    let mut snapshots = Vec::new();
+    for row in rows {
+        snapshots.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(snapshots)
 }

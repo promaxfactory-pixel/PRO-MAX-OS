@@ -71,6 +71,21 @@ export interface Product {
   barcode: string;
   notes: string;
   active: number;
+  product_type: string;
+  brand_name: string;
+  family_id: string;
+  cup_size_ml: number;
+  cup_diameter_mm: number;
+  paper_weight_gsm: number;
+  lid_type: string;
+  material_type: string;
+  color: string;
+  print_colors: number;
+  carton_length_cm: number;
+  carton_width_cm: number;
+  carton_height_cm: number;
+  weight_kg: number;
+  min_stock: number;
 }
 
 export interface InventoryItem {
@@ -265,17 +280,35 @@ export interface Employee {
   name: string;
   nationality: string;
   job: string;
-  salary_milli: number;
-  allowances_milli: number;
   phone: string;
+  id_number: string;
+  date_of_birth: string;
+  gender: string;
+  marital_status: string;
+  email: string;
+  salary_milli: number;
+  basic_salary_milli: number;
+  housing_allowance_milli: number;
+  transport_allowance_milli: number;
+  food_allowance_milli: number;
+  other_allowances_milli: number;
+  allowances_milli: number;
+  overtime_rate_milli: number;
   passport_no: string;
   passport_expiry: string;
   residence_expiry: string;
   visa_expiry: string;
   workpermit_expiry: string;
   insurance_expiry: string;
+  insurance_policy_no: string;
+  insurance_premium_milli: number;
+  ticket_allowance_milli: number;
   contract_end: string;
   joining_date: string;
+  bank_name: string;
+  bank_account_no: string;
+  sponsor_name: string;
+  sponsor_id: string;
   active: number;
   notes: string;
 }

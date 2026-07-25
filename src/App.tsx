@@ -80,6 +80,9 @@ const ExcelImportPage = lazy(() => import("./pages/tools/ExcelImportPage"));
 const EInvoicePage = lazy(() => import("./pages/tools/EInvoicePage"));
 const BackupPage = lazy(() => import("./pages/tools/BackupPage"));
 const IntegrationsPage = lazy(() => import("./pages/tools/IntegrationsPage"));
+const ImportTrackingPage = lazy(() => import("./pages/imports/ImportTrackingPage"));
+const BarterExchangePage = lazy(() => import("./pages/barter/BarterExchangePage"));
+const InstallmentTrackingPage = lazy(() => import("./pages/installments/InstallmentTrackingPage"));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore();
@@ -184,6 +187,15 @@ export default function App() {
           <Route path="/reports/inventory-margin" element={<ProtectedRoute><InventoryMarginPage /></ProtectedRoute>} />
           <Route path="/reports/sales-by-customer" element={<ProtectedRoute><SalesByCustomerPage /></ProtectedRoute>} />
           <Route path="/reports/unpaid-invoices" element={<ProtectedRoute><UnpaidInvoicesPage /></ProtectedRoute>} />
+
+          {/* Import Tracking */}
+          <Route path="/imports" element={<ProtectedRoute><ImportTrackingPage /></ProtectedRoute>} />
+
+          {/* Barter Exchange */}
+          <Route path="/barter" element={<ProtectedRoute><BarterExchangePage /></ProtectedRoute>} />
+
+          {/* Installments */}
+          <Route path="/installments" element={<ProtectedRoute><InstallmentTrackingPage /></ProtectedRoute>} />
 
           {/* Settings */}
           <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />

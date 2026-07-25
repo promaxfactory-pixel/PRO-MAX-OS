@@ -54,6 +54,8 @@ export default function LiveProductionPage() {
   const [saving, setSaving] = useState(false);
   const [deletingLine, setDeletingLine] = useState<number | null>(null);
   const [closingShift, setClosingShift] = useState(false);
+  const [workerId, setWorkerId] = useState<number | null>(null);
+  const [workers, setWorkers] = useState<{id: number; name: string; code: string | null; job: string | null}[]>([]);
   const { addNotification } = useUIStore();
   const currentUser = useAuthStore((s) => s.user);
 
@@ -72,6 +74,13 @@ export default function LiveProductionPage() {
       addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "فشل تحميل المنتجات: " + String(e) });
     }
   }, [addNotification]);
+
+  const loadWorkers = useCallback(async () => {
+    try {
+      const w = await invoke<{id: number; name: string; code: string | null; job: string | null}[]>("list_employees_for_production");
+      setWorkers(w);
+    } catch { /* optional */ }
+  }, []);
 
   const initShift = useCallback(async () => {
     try {
@@ -95,7 +104,8 @@ export default function LiveProductionPage() {
 
   useEffect(() => {
     loadProducts();
-  }, [loadProducts]);
+    loadWorkers();
+  }, [loadProducts, loadWorkers]);
 
   useEffect(() => {
     if (today && shift) {
@@ -122,8 +132,10 @@ export default function LiveProductionPage() {
         cupsPerCarton: null,
         wasteCartons: entryForm.waste_cartons || null,
         recordedBy: currentUser?.full_name || null,
+        workerId: workerId,
       });
       setEntryForm({ product_id: 0, customer_brand: "", cartons_produced: 0, waste_cartons: 0 });
+      setWorkerId(null);
       const shiftLines = await invoke<ShiftLine[]>("get_shift_lines", { sheetId });
       setLines(shiftLines);
       await refreshDashboard();
@@ -342,6 +354,20 @@ export default function LiveProductionPage() {
                   dir="rtl"
                   aria-label="العلامة التجارية للعميل"
                 />
+              </div>
+              <div>
+                <label className="form-label">العامل *</label>
+                <select
+                  className="input-field"
+                  value={workerId || ''}
+                  onChange={(e) => setWorkerId(Number(e.target.value) || null)}
+                  aria-label="اختر العامل"
+                >
+                  <option value="">اختر العامل...</option>
+                  {workers.map((w) => (
+                    <option key={w.id} value={w.id}>{w.name} ({w.code || w.job})</option>
+                  ))}
+                </select>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>

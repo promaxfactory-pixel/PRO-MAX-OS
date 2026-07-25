@@ -64,7 +64,7 @@ fn ensure_admin_user(conn: &Connection) -> Result<()> {
 mod migrations {
     use rusqlite::{Connection, Result};
     
-    const SCHEMA_VERSION: i32 = 21;
+    const SCHEMA_VERSION: i32 = 22;
     
     pub fn run(conn: &Connection) -> Result<()> {
         let current: i32 = conn
@@ -406,6 +406,222 @@ mod migrations {
                     CREATE INDEX IF NOT EXISTS idx_exp_source ON expenses(paid_from_source);
                     CREATE INDEX IF NOT EXISTS idx_exp_petty ON expenses(petty_id);
                     CREATE INDEX IF NOT EXISTS idx_exp_reimburse ON expenses(reimbursement_status);"
+                ).ok();
+            }
+            22 => {
+                conn.execute_batch(
+                    "-- ============================================================
+                    -- MIGRATION 22: Factory ERP Complete Enhancement
+                    -- ============================================================
+
+                    -- PRODUCTS: Add factory-specific fields
+                    ALTER TABLE products ADD COLUMN brand_name TEXT;
+                    ALTER TABLE products ADD COLUMN cup_size_ml REAL;
+                    ALTER TABLE products ADD COLUMN cup_diameter_mm REAL;
+                    ALTER TABLE products ADD COLUMN paper_weight_gsm REAL;
+                    ALTER TABLE products ADD COLUMN lid_type TEXT;
+                    ALTER TABLE products ADD COLUMN print_colors INTEGER DEFAULT 0;
+                    ALTER TABLE products ADD COLUMN carton_length_cm REAL;
+                    ALTER TABLE products ADD COLUMN carton_width_cm REAL;
+                    ALTER TABLE products ADD COLUMN carton_height_cm REAL;
+                    ALTER TABLE products ADD COLUMN color TEXT;
+                    ALTER TABLE products ADD COLUMN material_type TEXT;
+                    ALTER TABLE products ADD COLUMN product_type TEXT DEFAULT 'cup';
+                    ALTER TABLE products ADD COLUMN family_id INTEGER;
+                    ALTER TABLE products ADD COLUMN min_stock REAL DEFAULT 0;
+                    ALTER TABLE products ADD COLUMN weight_kg REAL;
+
+                    -- EMPLOYEES: Fix broken fields + salary breakdown
+                    ALTER TABLE employees ADD COLUMN id_number TEXT;
+                    ALTER TABLE employees ADD COLUMN date_of_birth TEXT;
+                    ALTER TABLE employees ADD COLUMN gender TEXT;
+                    ALTER TABLE employees ADD COLUMN marital_status TEXT;
+                    ALTER TABLE employees ADD COLUMN email TEXT;
+                    ALTER TABLE employees ADD COLUMN bank_name TEXT;
+                    ALTER TABLE employees ADD COLUMN bank_account_no TEXT;
+                    ALTER TABLE employees ADD COLUMN basic_salary_milli INTEGER DEFAULT 0;
+                    ALTER TABLE employees ADD COLUMN housing_allowance_milli INTEGER DEFAULT 0;
+                    ALTER TABLE employees ADD COLUMN transport_allowance_milli INTEGER DEFAULT 0;
+                    ALTER TABLE employees ADD COLUMN food_allowance_milli INTEGER DEFAULT 0;
+                    ALTER TABLE employees ADD COLUMN other_allowances_milli INTEGER DEFAULT 0;
+                    ALTER TABLE employees ADD COLUMN overtime_rate_milli REAL DEFAULT 0;
+                    ALTER TABLE employees ADD COLUMN insurance_policy_no TEXT;
+                    ALTER TABLE employees ADD COLUMN insurance_premium_milli INTEGER DEFAULT 0;
+                    ALTER TABLE employees ADD COLUMN ticket_allowance_milli INTEGER DEFAULT 0;
+                    ALTER TABLE employees ADD COLUMN sponsor_name TEXT;
+                    ALTER TABLE employees ADD COLUMN sponsor_id TEXT;
+
+                    -- PRODUCTION: Add worker tracking
+                    ALTER TABLE production_shift_lines ADD COLUMN worker_id INTEGER;
+                    ALTER TABLE operations_daily_sheets ADD COLUMN worker_id INTEGER;
+                    ALTER TABLE operations_daily_sheets ADD COLUMN machine_id INTEGER;
+                    ALTER TABLE operations_daily_sheets ADD COLUMN starting_qty REAL DEFAULT 0;
+                    ALTER TABLE operations_daily_sheets ADD COLUMN ending_qty REAL DEFAULT 0;
+                    ALTER TABLE operations_daily_sheets ADD COLUMN break_minutes REAL DEFAULT 0;
+
+                    -- IMPORT SHIPMENTS: Enrich for Chinese imports
+                    ALTER TABLE import_shipments ADD COLUMN shipping_company TEXT;
+                    ALTER TABLE import_shipments ADD COLUMN container_no TEXT;
+                    ALTER TABLE import_shipments ADD COLUMN bl_no TEXT;
+                    ALTER TABLE import_shipments ADD COLUMN vessel_flight TEXT;
+                    ALTER TABLE import_shipments ADD COLUMN port_of_loading TEXT;
+                    ALTER TABLE import_shipments ADD COLUMN port_of_discharge TEXT DEFAULT 'Port Sultan Qaboos';
+                    ALTER TABLE import_shipments ADD COLUMN estimated_arrival TEXT;
+                    ALTER TABLE import_shipments ADD COLUMN actual_arrival TEXT;
+                    ALTER TABLE import_shipments ADD COLUMN customs_declaration_no TEXT;
+                    ALTER TABLE import_shipments ADD COLUMN customs_clearance_date TEXT;
+                    ALTER TABLE import_shipments ADD COLUMN duty_amount_milli INTEGER DEFAULT 0;
+                    ALTER TABLE import_shipments ADD COLUMN vat_on_import_milli INTEGER DEFAULT 0;
+                    ALTER TABLE import_shipments ADD COLUMN freight_cost_milli INTEGER DEFAULT 0;
+                    ALTER TABLE import_shipments ADD COLUMN insurance_cost_milli INTEGER DEFAULT 0;
+                    ALTER TABLE import_shipments ADD COLUMN handling_cost_milli INTEGER DEFAULT 0;
+                    ALTER TABLE import_shipments ADD COLUMN commercial_invoice_no TEXT;
+                    ALTER TABLE import_shipments ADD COLUMN packing_list_no TEXT;
+                    ALTER TABLE import_shipments ADD COLUMN origin_country TEXT DEFAULT 'China';
+                    ALTER TABLE import_shipments ADD COLUMN gross_weight_kg REAL DEFAULT 0;
+                    ALTER TABLE import_shipments ADD COLUMN cbm REAL DEFAULT 0;
+                    ALTER TABLE import_shipments ADD COLUMN clearance_agent TEXT;
+                    ALTER TABLE import_shipments ADD COLUMN total_landed_cost_milli INTEGER DEFAULT 0;
+
+                    -- INSTALLMENTS: Enrich for factory loans
+                    ALTER TABLE installments ADD COLUMN interest_pct REAL DEFAULT 0;
+                    ALTER TABLE installments ADD COLUMN monthly_installment_milli INTEGER DEFAULT 0;
+                    ALTER TABLE installments ADD COLUMN num_installments INTEGER DEFAULT 0;
+                    ALTER TABLE installments ADD COLUMN paid_installments INTEGER DEFAULT 0;
+                    ALTER TABLE installments ADD COLUMN penalty_pct REAL DEFAULT 0;
+                    ALTER TABLE installments ADD COLUMN collateral TEXT;
+                    ALTER TABLE installments ADD COLUMN guarantor TEXT;
+
+                    -- SUPPLIERS: Add type and exchange support
+                    ALTER TABLE suppliers ADD COLUMN supplier_type TEXT DEFAULT 'local';
+                    ALTER TABLE suppliers ADD COLUMN lead_time_days INTEGER DEFAULT 0;
+                    ALTER TABLE suppliers ADD COLUMN local_exchange_enabled INTEGER DEFAULT 0;
+
+                    -- CUSTOMERS: Add credit days
+                    ALTER TABLE customers ADD COLUMN credit_days INTEGER DEFAULT 0;
+                    ALTER TABLE customers ADD COLUMN default_discount_pct REAL DEFAULT 0;
+                    ALTER TABLE customers ADD COLUMN route TEXT;
+
+                    -- NEW TABLE: Local Supplier Exchanges (Barter: Bags for Cartons)
+                    CREATE TABLE IF NOT EXISTS local_supplier_exchanges (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        exchange_no TEXT NOT NULL,
+                        date TEXT NOT NULL,
+                        local_supplier_id INTEGER NOT NULL REFERENCES suppliers(id),
+                        product_id INTEGER REFERENCES products(id),
+                        cartons_given REAL DEFAULT 0,
+                        carton_value_milli INTEGER DEFAULT 0,
+                        received_item_id INTEGER REFERENCES inventory_items(id),
+                        bags_received REAL DEFAULT 0,
+                        bag_value_milli INTEGER DEFAULT 0,
+                        net_value_milli INTEGER DEFAULT 0,
+                        balance_milli INTEGER DEFAULT 0,
+                        settlement_status TEXT DEFAULT 'open',
+                        reference TEXT,
+                        notes TEXT,
+                        status TEXT DEFAULT 'Draft',
+                        created_by TEXT,
+                        created_at TEXT
+                    );
+
+                    -- NEW TABLE: Installment Payment Schedule
+                    CREATE TABLE IF NOT EXISTS installment_payments (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        installment_id INTEGER NOT NULL REFERENCES installments(id),
+                        installment_number INTEGER NOT NULL,
+                        due_date TEXT NOT NULL,
+                        amount_milli INTEGER NOT NULL,
+                        paid_milli INTEGER DEFAULT 0,
+                        paid_date TEXT,
+                        penalty_milli INTEGER DEFAULT 0,
+                        status TEXT DEFAULT 'pending',
+                        notes TEXT,
+                        journal_id INTEGER
+                    );
+
+                    -- NEW TABLE: Shift Inventory Snapshots
+                    CREATE TABLE IF NOT EXISTS shift_inventory_snapshots (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        date TEXT NOT NULL,
+                        shift TEXT NOT NULL,
+                        item_id INTEGER NOT NULL REFERENCES inventory_items(id),
+                        opening_qty REAL NOT NULL DEFAULT 0,
+                        received_qty REAL NOT NULL DEFAULT 0,
+                        consumed_qty REAL NOT NULL DEFAULT 0,
+                        produced_qty REAL NOT NULL DEFAULT 0,
+                        waste_qty REAL NOT NULL DEFAULT 0,
+                        closing_qty REAL NOT NULL DEFAULT 0,
+                        recorded_by TEXT,
+                        created_at TEXT
+                    );
+
+                    -- NEW TABLE: Employee Leave
+                    CREATE TABLE IF NOT EXISTS employee_leave_types (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        code TEXT UNIQUE NOT NULL,
+                        name TEXT NOT NULL,
+                        default_days_per_year INTEGER DEFAULT 0,
+                        paid INTEGER DEFAULT 1,
+                        active INTEGER DEFAULT 1
+                    );
+
+                    CREATE TABLE IF NOT EXISTS employee_leave_requests (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        employee_id INTEGER NOT NULL REFERENCES employees(id),
+                        leave_type_id INTEGER NOT NULL REFERENCES employee_leave_types(id),
+                        from_date TEXT NOT NULL,
+                        to_date TEXT NOT NULL,
+                        days REAL NOT NULL DEFAULT 1,
+                        reason TEXT,
+                        status TEXT DEFAULT 'Pending',
+                        approved_by TEXT,
+                        approved_at TEXT,
+                        created_by TEXT,
+                        created_at TEXT
+                    );
+
+                    -- NEW TABLE: Worker Production Summary (per worker per day)
+                    CREATE TABLE IF NOT EXISTS worker_daily_production (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        employee_id INTEGER NOT NULL REFERENCES employees(id),
+                        date TEXT NOT NULL,
+                        shift TEXT NOT NULL,
+                        total_cartons REAL DEFAULT 0,
+                        total_cups REAL DEFAULT 0,
+                        total_waste_cartons REAL DEFAULT 0,
+                        products_breakdown TEXT,
+                        recorded_by TEXT,
+                        created_at TEXT
+                    );
+
+                    -- SEED: Default leave types
+                    INSERT OR IGNORE INTO employee_leave_types(code, name, default_days_per_year, paid) VALUES
+                        ('annual', 'إجازة سنوية', 30, 1),
+                        ('sick', 'إجازة مرضية', 15, 1),
+                        ('casual', 'إجازة طارئة', 5, 1),
+                        ('hajj', 'إجازة حج', 15, 1),
+                        ('maternity', 'إجازة أمومة', 60, 1),
+                        ('unpaid', 'إجازة بدون راتب', 0, 0);
+
+                    -- INDEXES for performance
+                    CREATE INDEX IF NOT EXISTS idx_products_brand ON products(brand_name);
+                    CREATE INDEX IF NOT EXISTS idx_products_type ON products(product_type);
+                    CREATE INDEX IF NOT EXISTS idx_products_family ON products(family_id);
+                    CREATE INDEX IF NOT EXISTS idx_psl_worker ON production_shift_lines(worker_id);
+                    CREATE INDEX IF NOT EXISTS idx_ops_worker ON operations_daily_sheets(worker_id);
+                    CREATE INDEX IF NOT EXISTS idx_ops_machine ON operations_daily_sheets(machine_id);
+                    CREATE INDEX IF NOT EXISTS idx_lse_supplier ON local_supplier_exchanges(local_supplier_id);
+                    CREATE INDEX IF NOT EXISTS idx_lse_date ON local_supplier_exchanges(date);
+                    CREATE INDEX IF NOT EXISTS idx_inst_pay_installment ON installment_payments(installment_id);
+                    CREATE INDEX IF NOT EXISTS idx_inst_pay_status ON installment_payments(status);
+                    CREATE INDEX IF NOT EXISTS idx_shift_inv_date ON shift_inventory_snapshots(date, shift);
+                    CREATE INDEX IF NOT EXISTS idx_emp_leave_emp ON employee_leave_requests(employee_id);
+                    CREATE INDEX IF NOT EXISTS idx_emp_leave_type ON employee_leave_requests(leave_type_id);
+                    CREATE INDEX IF NOT EXISTS idx_emp_leave_status ON employee_leave_requests(status);
+                    CREATE INDEX IF NOT EXISTS idx_wdp_emp ON worker_daily_production(employee_id);
+                    CREATE INDEX IF NOT EXISTS idx_wdp_date ON worker_daily_production(date);
+                    CREATE INDEX IF NOT EXISTS idx_emp_insurance ON employees(insurance_expiry);
+                    CREATE INDEX IF NOT EXISTS idx_emp_contract ON employees(contract_end);"
                 ).ok();
             }
             _ => {}

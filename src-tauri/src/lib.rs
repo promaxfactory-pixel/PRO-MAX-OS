@@ -59,6 +59,7 @@ pub fn run() {
             commands::invoices::get_credit_note_for_print,
             // Products
             commands::products::list_products,
+            commands::products::list_products_for_select,
             commands::products::get_product,
             commands::products::create_product,
             commands::products::update_product,
@@ -100,6 +101,8 @@ pub fn run() {
             commands::hr::get_employee,
             commands::hr::create_employee,
             commands::hr::update_employee,
+            commands::hr::delete_employee,
+            commands::hr::list_employees_for_production,
             // Operations
             commands::operations::list_operations_sheets,
             commands::operations::get_operations_sheet,
@@ -290,6 +293,9 @@ pub fn run() {
             commands::production_shift::delete_production_line,
             commands::production_shift::get_live_dashboard,
             commands::production_shift::print_shift_report_thermal,
+            commands::production_shift::get_worker_daily_report,
+            commands::production_shift::record_shift_inventory_snapshot,
+            commands::production_shift::get_shift_inventory_snapshots,
             // Production Reports
             commands::reports::get_daily_production_report,
             commands::reports::get_monthly_production_report,
@@ -300,6 +306,21 @@ pub fn run() {
             commands::government::gov_list_submissions,
             commands::government::gov_get_employee_doc_status,
             commands::government::gov_submit_report,
+            // Import Tracking
+            commands::import_tracking::list_shipments,
+            commands::import_tracking::get_shipment,
+            commands::import_tracking::create_shipment,
+            commands::import_tracking::update_shipment,
+            commands::import_tracking::update_shipment_status,
+            // Barter Exchange
+            commands::barter_exchange::list_barter_exchanges,
+            commands::barter_exchange::create_barter_exchange,
+            commands::barter_exchange::get_barter_balance,
+            // Installment Payments
+            commands::installment_payments::list_installment_payments,
+            commands::installment_payments::create_installment_payment,
+            commands::installment_payments::mark_installment_paid,
+            commands::installment_payments::get_installment_summary,
         ])
         .run(tauri::generate_context!())
         .expect("error while running ProMax ERP");
