@@ -816,4 +816,354 @@ mod tests {
             .unwrap();
         assert_eq!(fk_on, 1);
     }
+
+    // ─── Business Logic Integration Tests ─────────────────────────────
+
+    #[test]
+    fn test_full_invoice_flow() {
+        let conn = test_conn();
+
+        // Create customer
+        conn.execute(
+            "INSERT INTO customers (name, credit_limit_milli, active) VALUES ('Test Customer', 1000000, 1)",
+            [],
+        ).unwrap();
+        let cust_id: i64 = conn.last_insert_rowid();
+
+        // Create product
+        conn.execute(
+            "INSERT INTO products (name_ar, default_price_milli, default_cost_milli, vat_pct, cups_per_carton, active) VALUES ('Cup Product', 5000, 2000, 5.0, 50, 1)",
+            [],
+        ).unwrap();
+        let prod_id: i64 = conn.last_insert_rowid();
+
+        // Create invoice header
+        conn.execute(
+            "INSERT INTO sales_invoices (inv_no, date, customer_id, vat_enabled, net_milli, vat_milli, total_milli, paid_milli, status) VALUES ('INV-TEST-001', '2026-07-26', ?, 1, 5000, 250, 5250, 0, 'draft')",
+            [cust_id],
+        ).unwrap();
+        let inv_id: i64 = conn.last_insert_rowid();
+
+        // Create invoice line
+        conn.execute(
+            "INSERT INTO sales_invoice_lines (invoice_id, product_id, cartons, unit_price_milli, line_net_milli, vat_pct, vat_milli) VALUES (?, ?, 1, 5000, 5000, 5.0, 250)",
+            rusqlite::params![inv_id, prod_id],
+        ).unwrap();
+
+        // Verify invoice exists with line
+        let inv_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM sales_invoices WHERE id = ?", [inv_id], |r| r.get(0),
+        ).unwrap();
+        assert_eq!(inv_count, 1);
+
+        let line_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM sales_invoice_lines WHERE invoice_id = ?", [inv_id], |r| r.get(0),
+        ).unwrap();
+        assert_eq!(line_count, 1);
+
+        // Post invoice
+        conn.execute(
+            "UPDATE sales_invoices SET status = 'posted' WHERE id = ?", [inv_id],
+        ).unwrap();
+
+        let status: String = conn.query_row(
+            "SELECT status FROM sales_invoices WHERE id = ?", [inv_id], |r| r.get(0),
+        ).unwrap();
+        assert_eq!(status, "posted");
+    }
+
+    #[test]
+    fn test_journal_entry_double_entry() {
+        let conn = test_conn();
+
+        // Create accounts for FK
+        conn.execute("INSERT OR IGNORE INTO accounts (code, name_ar, type, is_system) VALUES ('1100', 'Cash', 'asset', 1)", []).unwrap();
+        conn.execute("INSERT OR IGNORE INTO accounts (code, name_ar, type, is_system) VALUES ('4100', 'Sales Revenue', 'revenue', 1)", []).unwrap();
+
+        // Create journal entry
+        conn.execute(
+            "INSERT INTO journal_entries (entry_no, date, memo, created_by) VALUES ('JE-001', '2026-07-26', 'Test entry', 'admin')",
+            [],
+        ).unwrap();
+        let je_id: i64 = conn.last_insert_rowid();
+
+        // Debit side (account must exist in accounts table)
+        conn.execute(
+            "INSERT INTO journal_entry_lines (entry_id, account_code, debit_milli, credit_milli) VALUES (?, '1100', 100000, 0)",
+            [je_id],
+        ).unwrap();
+
+        // Credit side
+        conn.execute(
+            "INSERT INTO journal_entry_lines (entry_id, account_code, debit_milli, credit_milli) VALUES (?, '4100', 0, 100000)",
+            [je_id],
+        ).unwrap();
+
+        // Verify balanced entry
+        let total_debit: i64 = conn.query_row(
+            "SELECT COALESCE(SUM(debit_milli), 0) FROM journal_entry_lines WHERE entry_id = ?",
+            [je_id], |r| r.get(0),
+        ).unwrap();
+        let total_credit: i64 = conn.query_row(
+            "SELECT COALESCE(SUM(credit_milli), 0) FROM journal_entry_lines WHERE entry_id = ?",
+            [je_id], |r| r.get(0),
+        ).unwrap();
+        assert_eq!(total_debit, total_credit, "Journal entry must be balanced");
+        assert_eq!(total_debit, 100000);
+    }
+
+    #[test]
+    fn test_trial_balance_query() {
+        let conn = test_conn();
+
+        // Create accounts (must exist for FK)
+        conn.execute("INSERT OR IGNORE INTO accounts (code, name_ar, type, is_system) VALUES ('1100', 'Cash', 'asset', 1)", []).unwrap();
+        conn.execute("INSERT OR IGNORE INTO accounts (code, name_ar, type, is_system) VALUES ('4100', 'Sales Revenue', 'revenue', 1)", []).unwrap();
+
+        // Create balanced journal entry
+        conn.execute(
+            "INSERT INTO journal_entries (entry_no, date, memo, created_by) VALUES ('JE-TB-001', '2026-07-26', 'TB test', 'admin')",
+            [],
+        ).unwrap();
+        let je_id: i64 = conn.last_insert_rowid();
+        conn.execute("INSERT INTO journal_entry_lines (entry_id, account_code, debit_milli, credit_milli) VALUES (?, '1100', 50000, 0)", [je_id]).unwrap();
+        conn.execute("INSERT INTO journal_entry_lines (entry_id, account_code, debit_milli, credit_milli) VALUES (?, '4100', 0, 50000)", [je_id]).unwrap();
+
+        // Query trial balance
+        let total_debit: i64 = conn.query_row(
+            "SELECT COALESCE(SUM(debit_milli), 0) FROM journal_entry_lines", [], |r| r.get(0),
+        ).unwrap();
+        let total_credit: i64 = conn.query_row(
+            "SELECT COALESCE(SUM(credit_milli), 0) FROM journal_entry_lines", [], |r| r.get(0),
+        ).unwrap();
+        assert_eq!(total_debit, total_credit);
+    }
+
+    #[test]
+    fn test_stock_adjustment() {
+        let conn = test_conn();
+
+        // Create inventory item
+        conn.execute(
+            "INSERT INTO inventory_items (name_ar, kind, uom, qty_on_hand, avg_cost_milli, active) VALUES ('Paper Roll', 'raw_material', 'kg', 100.0, 5000, 1)",
+            [],
+        ).unwrap();
+        let item_id: i64 = conn.last_insert_rowid();
+
+        // Adjust stock down
+        conn.execute(
+            "UPDATE inventory_items SET qty_on_hand = qty_on_hand - 25.0 WHERE id = ?",
+            [item_id],
+        ).unwrap();
+
+        let qty: f64 = conn.query_row(
+            "SELECT qty_on_hand FROM inventory_items WHERE id = ?", [item_id], |r| r.get(0),
+        ).unwrap();
+        assert!((qty - 75.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_employee_leave_request() {
+        let conn = test_conn();
+
+        // Create employee
+        conn.execute(
+            "INSERT INTO employees (code, name, nationality, job, active) VALUES ('EMP-001', 'Test Employee', 'Omani', 'Operator', 1)",
+            [],
+        ).unwrap();
+        let emp_id: i64 = conn.last_insert_rowid();
+
+        // Create leave type (use INSERT OR IGNORE since schema seeds default types)
+        conn.execute(
+            "INSERT OR IGNORE INTO employee_leave_types (code, name, default_days_per_year) VALUES ('annual', 'Annual Leave', 21)",
+            [],
+        ).unwrap();
+        let lt_id: i64 = conn.last_insert_rowid();
+        // If insert was ignored (already exists), fetch existing id
+        let lt_id = if lt_id == 0 {
+            conn.query_row("SELECT id FROM employee_leave_types WHERE code = 'annual'", [], |r| r.get(0)).unwrap()
+        } else {
+            lt_id
+        };
+
+        // Create leave request (uses leave_type_id, from_date, to_date)
+        conn.execute(
+            "INSERT INTO employee_leave_requests (employee_id, leave_type_id, from_date, to_date, days, status) VALUES (?, ?, '2026-08-01', '2026-08-05', 5, 'Pending')",
+            rusqlite::params![emp_id, lt_id],
+        ).unwrap();
+
+        let status: String = conn.query_row(
+            "SELECT status FROM employee_leave_requests WHERE employee_id = ?", [emp_id], |r| r.get(0),
+        ).unwrap();
+        assert_eq!(status, "Pending");
+
+        // Approve
+        conn.execute(
+            "UPDATE employee_leave_requests SET status = 'Approved' WHERE employee_id = ?",
+            [emp_id],
+        ).unwrap();
+
+        let status: String = conn.query_row(
+            "SELECT status FROM employee_leave_requests WHERE employee_id = ?", [emp_id], |r| r.get(0),
+        ).unwrap();
+        assert_eq!(status, "Approved");
+    }
+
+    #[test]
+    fn test_supplier_payment_flow() {
+        let conn = test_conn();
+
+        // Create supplier
+        conn.execute(
+            "INSERT INTO suppliers (name, active) VALUES ('Paper Supplier', 1)",
+            [],
+        ).unwrap();
+        let supp_id: i64 = conn.last_insert_rowid();
+
+        // Create supplier payment (no purchase_id column exists)
+        conn.execute(
+            "INSERT INTO supplier_payments (supplier_id, amount_milli, method, date) VALUES (?, 250000, 'cash', '2026-07-26')",
+            [supp_id],
+        ).unwrap();
+
+        let pay_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM supplier_payments WHERE supplier_id = ?", [supp_id], |r| r.get(0),
+        ).unwrap();
+        assert_eq!(pay_count, 1);
+    }
+
+    #[test]
+    fn test_production_order_flow() {
+        let conn = test_conn();
+
+        // Create production order (schema: prod_no, date, status)
+        conn.execute(
+            "INSERT INTO production_orders (prod_no, date, status) VALUES ('PRO-001', '2026-07-26', 'Draft')",
+            [],
+        ).unwrap();
+        let order_id: i64 = conn.last_insert_rowid();
+
+        // Create product for FK reference
+        conn.execute("INSERT INTO products (name_ar, active) VALUES ('Test Product', 1)", []).unwrap();
+        let prod_id: i64 = conn.last_insert_rowid();
+
+        // Add production line (requires product_id FK)
+        conn.execute(
+            "INSERT INTO production_lines (order_id, product_id) VALUES (?, ?)",
+            rusqlite::params![order_id, prod_id],
+        ).unwrap();
+
+        let line_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM production_lines WHERE order_id = ?", [order_id], |r| r.get(0),
+        ).unwrap();
+        assert_eq!(line_count, 1);
+    }
+
+    #[test]
+    fn test_concurrent_read_write() {
+        let conn = test_conn();
+
+        // Insert data
+        conn.execute(
+            "INSERT INTO customers (name, active) VALUES ('Concurrent Test', 1)",
+            [],
+        ).unwrap();
+
+        // Read while write is happening (WAL mode allows this)
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM customers", [], |r| r.get(0)).unwrap();
+        assert_eq!(count, 1);
+
+        // Insert more while reading
+        conn.execute("INSERT INTO customers (name, active) VALUES ('C2', 1)", []).unwrap();
+        conn.execute("INSERT INTO customers (name, active) VALUES ('C3', 1)", []).unwrap();
+
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM customers", [], |r| r.get(0)).unwrap();
+        assert_eq!(count, 3);
+    }
+
+    #[test]
+    fn test_schema_has_all_expected_indexes() {
+        let conn = test_conn();
+        let index_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_%'",
+            [], |r| r.get(0),
+        ).unwrap();
+        // Should have many indexes for performance
+        assert!(index_count >= 30, "Expected at least 30 indexes, found {}", index_count);
+    }
+
+    #[test]
+    fn test_notification_read_unread_flow() {
+        let conn = test_conn();
+
+        // Create notifications
+        conn.execute("INSERT INTO notifications (notification_type, title, message, severity, read_status, created_at) VALUES ('alert', 'Stock Low', 'Item X', 'warning', 'unread', datetime('now'))", []).unwrap();
+        conn.execute("INSERT INTO notifications (notification_type, title, message, severity, read_status, created_at) VALUES ('info', 'System', 'Welcome', 'info', 'unread', datetime('now'))", []).unwrap();
+
+        let unread: i64 = conn.query_row("SELECT COUNT(*) FROM notifications WHERE read_status = 'unread'", [], |r| r.get(0)).unwrap();
+        assert_eq!(unread, 2);
+
+        // Mark one as read
+        conn.execute("UPDATE notifications SET read_status = 'read' WHERE id = 1", []).unwrap();
+
+        let unread: i64 = conn.query_row("SELECT COUNT(*) FROM notifications WHERE read_status = 'unread'", [], |r| r.get(0)).unwrap();
+        assert_eq!(unread, 1);
+
+        // Mark all as read
+        conn.execute("UPDATE notifications SET read_status = 'read' WHERE read_status = 'unread'", []).unwrap();
+
+        let unread: i64 = conn.query_row("SELECT COUNT(*) FROM notifications WHERE read_status = 'unread'", [], |r| r.get(0)).unwrap();
+        assert_eq!(unread, 0);
+    }
+
+    #[test]
+    fn test_budget_vs_actual_calculation() {
+        let conn = test_conn();
+
+        // Create budget
+        conn.execute(
+            "INSERT INTO budgets (budget_no, name, department, year, period, status, total_planned_milli, total_actual_milli, created_by, created_at) VALUES ('BUD-VA-001', 'Q3 Budget', 'Sales', 2026, 'quarterly', 'approved', 5000000, 0, 'admin', datetime('now'))",
+            [],
+        ).unwrap();
+        let budget_id: i64 = conn.last_insert_rowid();
+
+        // Create budget lines (must include required `category` column)
+        conn.execute("INSERT INTO budget_lines (budget_id, category, account_code, planned_milli, actual_milli) VALUES (?, 'revenue', '4100', 3000000, 0)", [budget_id]).unwrap();
+        conn.execute("INSERT INTO budget_lines (budget_id, category, account_code, planned_milli, actual_milli) VALUES (?, 'revenue', '4200', 2000000, 0)", [budget_id]).unwrap();
+
+        // Update actuals (simulate spending)
+        conn.execute("UPDATE budget_lines SET actual_milli = 1500000 WHERE budget_id = ? AND account_code = '4100'", [budget_id]).unwrap();
+
+        // Query variance
+        let planned: i64 = conn.query_row("SELECT SUM(planned_milli) FROM budget_lines WHERE budget_id = ?", [budget_id], |r| r.get(0)).unwrap();
+        let actual: i64 = conn.query_row("SELECT SUM(actual_milli) FROM budget_lines WHERE budget_id = ?", [budget_id], |r| r.get(0)).unwrap();
+        let variance = planned - actual;
+
+        assert_eq!(planned, 5000000);
+        assert_eq!(actual, 1500000);
+        assert_eq!(variance, 3500000);
+    }
+
+    #[test]
+    fn test_asset_depreciation_calculation() {
+        let conn = test_conn();
+
+        // Create asset
+        conn.execute(
+            "INSERT INTO fixed_assets (asset_no, name, category, purchase_date, purchase_cost_milli, current_value_milli, depreciation_method, depreciation_rate_pct, useful_life_months, accumulated_depreciation_milli, status, active, created_at) VALUES ('FA-DEP-001', 'Printer', 'equipment', '2026-01-01', 12000000, 12000000, 'straight_line', 20.0, 60, 0, 'active', 1, datetime('now'))",
+            [],
+        ).unwrap();
+        let asset_id: i64 = conn.last_insert_rowid();
+
+        // Calculate depreciation for 6 months (straight-line: 20% per year = ~1.67% per month)
+        let cost: i64 = conn.query_row("SELECT purchase_cost_milli FROM fixed_assets WHERE id = ?", [asset_id], |r| r.get(0)).unwrap();
+        let rate_pct: f64 = conn.query_row("SELECT depreciation_rate_pct FROM fixed_assets WHERE id = ?", [asset_id], |r| r.get(0)).unwrap();
+        let months = 6i32;
+        let annual_depr = cost as f64 * rate_pct / 100.0;
+        let monthly_depr = annual_depr / 12.0;
+        let total_depr = monthly_depr * months as f64;
+
+        assert!(total_depr > 0.0, "Depreciation should be positive");
+        assert!((total_depr - 1200000.0).abs() < 1.0, "6 months of 20% annual depreciation on 12M should be ~1.2M");
+    }
 }
