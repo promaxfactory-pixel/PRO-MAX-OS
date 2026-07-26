@@ -42,3 +42,7 @@ pub mod government;
 pub mod import_tracking;
 pub mod barter_exchange;
 pub mod installment_payments;
+pub mod approvals;
+pub mod budget;
+pub mod assets;
+pub mod notifications;

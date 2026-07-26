@@ -780,3 +780,131 @@ CREATE INDEX IF NOT EXISTS idx_machines_active ON machines(active);
 
 -- Doc Sequences
 CREATE INDEX IF NOT EXISTS idx_ds_type_year ON doc_sequences(doc_type, year);
+
+-- Approval Workflow
+CREATE TABLE IF NOT EXISTS approval_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_type TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id INTEGER NOT NULL,
+    entity_number TEXT NOT NULL,
+    requested_by TEXT NOT NULL,
+    requested_at TEXT NOT NULL,
+    amount_milli INTEGER,
+    description TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    approved_by TEXT,
+    approved_at TEXT,
+    rejection_reason TEXT,
+    priority TEXT NOT NULL DEFAULT 'normal'
+);
+CREATE INDEX IF NOT EXISTS idx_ar_status ON approval_requests(status);
+CREATE INDEX IF NOT EXISTS idx_ar_type ON approval_requests(request_type);
+CREATE INDEX IF NOT EXISTS idx_ar_entity ON approval_requests(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_ar_priority ON approval_requests(priority);
+
+-- Budget Planning
+CREATE TABLE IF NOT EXISTS budgets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    budget_no TEXT NOT NULL,
+    name TEXT NOT NULL,
+    department TEXT,
+    year INTEGER NOT NULL,
+    period TEXT NOT NULL DEFAULT 'annual',
+    status TEXT NOT NULL DEFAULT 'Draft',
+    total_planned_milli INTEGER NOT NULL DEFAULT 0,
+    total_actual_milli INTEGER NOT NULL DEFAULT 0,
+    notes TEXT,
+    created_by TEXT,
+    created_at TEXT,
+    approved_by TEXT,
+    approved_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_budget_year ON budgets(year);
+CREATE INDEX IF NOT EXISTS idx_budget_status ON budgets(status);
+CREATE INDEX IF NOT EXISTS idx_budget_dept ON budgets(department);
+
+CREATE TABLE IF NOT EXISTS budget_lines (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    budget_id INTEGER NOT NULL,
+    category TEXT NOT NULL,
+    account_code TEXT,
+    description TEXT,
+    planned_milli INTEGER NOT NULL DEFAULT 0,
+    actual_milli INTEGER NOT NULL DEFAULT 0,
+    notes TEXT,
+    FOREIGN KEY (budget_id) REFERENCES budgets(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_bl_budget ON budget_lines(budget_id);
+CREATE INDEX IF NOT EXISTS idx_bl_category ON budget_lines(category);
+
+-- Fixed Assets
+CREATE TABLE IF NOT EXISTS fixed_assets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    asset_no TEXT NOT NULL,
+    name TEXT NOT NULL,
+    category TEXT NOT NULL,
+    description TEXT,
+    serial_number TEXT,
+    purchase_date TEXT,
+    purchase_cost_milli INTEGER NOT NULL DEFAULT 0,
+    current_value_milli INTEGER NOT NULL DEFAULT 0,
+    depreciation_method TEXT NOT NULL DEFAULT 'straight_line',
+    depreciation_rate_pct REAL NOT NULL DEFAULT 0,
+    useful_life_months INTEGER NOT NULL DEFAULT 60,
+    accumulated_depreciation_milli INTEGER NOT NULL DEFAULT 0,
+    location TEXT,
+    department TEXT,
+    assigned_to TEXT,
+    supplier TEXT,
+    warranty_expiry TEXT,
+    last_maintenance TEXT,
+    next_maintenance TEXT,
+    condition_status TEXT NOT NULL DEFAULT 'good',
+    status TEXT NOT NULL DEFAULT 'active',
+    notes TEXT,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_fa_category ON fixed_assets(category);
+CREATE INDEX IF NOT EXISTS idx_fa_status ON fixed_assets(status);
+CREATE INDEX IF NOT EXISTS idx_fa_location ON fixed_assets(location);
+CREATE INDEX IF NOT EXISTS idx_fa_next_maint ON fixed_assets(next_maintenance);
+CREATE INDEX IF NOT EXISTS idx_fa_warranty ON fixed_assets(warranty_expiry);
+
+CREATE TABLE IF NOT EXISTS asset_maintenance_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    asset_id INTEGER NOT NULL,
+    maintenance_type TEXT NOT NULL,
+    date TEXT NOT NULL,
+    description TEXT NOT NULL,
+    cost_milli INTEGER NOT NULL DEFAULT 0,
+    performed_by TEXT,
+    next_due TEXT,
+    notes TEXT,
+    FOREIGN KEY (asset_id) REFERENCES fixed_assets(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_aml_asset ON asset_maintenance_logs(asset_id);
+CREATE INDEX IF NOT EXISTS idx_aml_date ON asset_maintenance_logs(date);
+
+-- Notifications
+CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    notification_type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    entity_type TEXT,
+    entity_id INTEGER,
+    severity TEXT NOT NULL DEFAULT 'info',
+    read_status TEXT NOT NULL DEFAULT 'unread',
+    action_url TEXT,
+    created_at TEXT NOT NULL,
+    read_at TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notif_read ON notifications(read_status);
+CREATE INDEX IF NOT EXISTS idx_notif_type ON notifications(notification_type);
+CREATE INDEX IF NOT EXISTS idx_notif_severity ON notifications(severity);
+CREATE INDEX IF NOT EXISTS idx_notif_created ON notifications(created_at);

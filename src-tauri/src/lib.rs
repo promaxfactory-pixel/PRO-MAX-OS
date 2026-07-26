@@ -2,6 +2,7 @@ mod db;
 mod commands;
 pub mod mcp;
 pub mod crypto;
+pub mod error;
 
 use tauri::Manager;
 
@@ -321,6 +322,33 @@ pub fn run() {
             commands::installment_payments::create_installment_payment,
             commands::installment_payments::mark_installment_paid,
             commands::installment_payments::get_installment_summary,
+            // Approvals
+            commands::approvals::list_approval_requests,
+            commands::approvals::create_approval_request,
+            commands::approvals::decide_approval,
+            commands::approvals::get_approval_summary,
+            // Budget Planning
+            commands::budget::list_budgets,
+            commands::budget::get_budget,
+            commands::budget::get_budget_lines,
+            commands::budget::create_budget,
+            commands::budget::approve_budget,
+            commands::budget::update_budget_actuals,
+            commands::budget::get_budget_vs_actual,
+            // Fixed Assets
+            commands::assets::list_assets,
+            commands::assets::get_asset,
+            commands::assets::create_asset,
+            commands::assets::list_asset_maintenance,
+            commands::assets::create_asset_maintenance,
+            commands::assets::get_asset_register_summary,
+            commands::assets::calculate_depreciation,
+            // Notifications
+            commands::notifications::list_notifications,
+            commands::notifications::create_notification,
+            commands::notifications::mark_notification_read,
+            commands::notifications::mark_all_notifications_read,
+            commands::notifications::get_notification_count,
         ])
         .run(tauri::generate_context!())
         .expect("error while running ProMax ERP");
