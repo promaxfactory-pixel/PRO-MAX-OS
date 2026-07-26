@@ -629,3 +629,191 @@ mod migrations {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_conn() -> Connection {
+        // Use a temp file for WAL mode support
+        let db_path = std::env::temp_dir().join(format!("promax_test_{}.db", uuid::Uuid::new_v4()));
+        let conn = Connection::open(&db_path).expect("Failed to open test DB");
+        conn.execute_batch("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;").unwrap();
+        conn.execute_batch(include_str!("schema.sql")).expect("Failed to apply schema");
+
+        // Ensure admin user exists (same as init_database)
+        crate::crypto::hash_password("test").ok(); // warm up crypto
+        let admin_exists: bool = conn
+            .query_row("SELECT COUNT(*) FROM users WHERE username='admin'", [], |r| r.get::<_, i64>(0))
+            .unwrap_or(0) > 0;
+        if !admin_exists {
+            let hash = crate::crypto::hash_password("temppass123").unwrap_or_else(|_| "fallback".into());
+            conn.execute(
+                "INSERT INTO users(username, full_name, password_hash, salt, role, active, must_change_password, created_at) VALUES('admin', 'Admin', ?, '', 'admin', 1, 1, datetime('now'))",
+                [&hash],
+            ).ok();
+        }
+
+        migrations::run(&conn).expect("Migrations failed");
+        conn
+    }
+
+    fn cleanup_db(path: &std::path::Path) {
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(path.with_extension("db-wal"));
+        let _ = std::fs::remove_file(path.with_extension("db-shm"));
+    }
+
+    #[test]
+    fn test_schema_creates_all_core_tables() {
+        let conn = test_conn();
+        let tables_empty = [
+            "customers", "suppliers", "inventory_items",
+            "sales_invoices", "purchases", "production_orders",
+            "accounts", "journal_entries", "audit_logs",
+            "einvoice_settings", "cashbank_accounts",
+        ];
+        for table in &tables_empty {
+            let count: i64 = conn
+                .query_row(&format!("SELECT COUNT(*) FROM {}", table), [], |r| r.get(0))
+                .unwrap_or_else(|e| panic!("Table '{}' not found: {}", table, e));
+            assert_eq!(count, 0, "Table '{}' should be empty after init", table);
+        }
+        // Users table has admin user
+        let user_count: i64 = conn.query_row("SELECT COUNT(*) FROM users", [], |r| r.get(0)).unwrap();
+        assert!(user_count >= 1, "users table should have at least admin user");
+    }
+
+    #[test]
+    fn test_schema_creates_new_tables() {
+        let conn = test_conn();
+        let tables = [
+            "approval_requests", "budgets", "budget_lines",
+            "fixed_assets", "asset_maintenance_logs", "notifications",
+        ];
+        for table in &tables {
+            let count: i64 = conn
+                .query_row(&format!("SELECT COUNT(*) FROM {}", table), [], |r| r.get(0))
+                .unwrap_or_else(|e| panic!("New table '{}' not found: {}", table, e));
+            assert_eq!(count, 0, "Table '{}' should be empty after init", table);
+        }
+    }
+
+    #[test]
+    fn test_schema_version_is_22() {
+        let conn = test_conn();
+        let version: i32 = conn
+            .query_row(
+                "SELECT CAST(value AS INTEGER) FROM app_settings WHERE key='schema_version'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap_or(0);
+        assert_eq!(version, 22, "Schema version should be 22");
+    }
+
+    #[test]
+    fn test_admin_user_exists() {
+        let conn = test_conn();
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM users WHERE username='admin'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1, "Admin user should exist after init");
+    }
+
+    #[test]
+    fn test_insert_and_query_customer() {
+        let conn = test_conn();
+        conn.execute(
+            "INSERT INTO customers (name, phone, address, credit_limit_milli, active) VALUES ('Test Corp', '99887766', '123 Main St', 500000, 1)",
+            [],
+        ).unwrap();
+        let name: String = conn
+            .query_row("SELECT name FROM customers LIMIT 1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(name, "Test Corp");
+    }
+
+    #[test]
+    fn test_insert_and_query_approval_request() {
+        let conn = test_conn();
+        conn.execute(
+            "INSERT INTO approval_requests (request_type, entity_type, entity_id, entity_number, requested_by, requested_at, amount_milli, status, priority) VALUES ('purchase', 'purchase', 1, 'PO-001', 'admin', datetime('now'), 100000, 'pending', 'high')",
+            [],
+        ).unwrap();
+        let status: String = conn
+            .query_row("SELECT status FROM approval_requests LIMIT 1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(status, "pending");
+    }
+
+    #[test]
+    fn test_insert_and_query_budget() {
+        let conn = test_conn();
+        conn.execute(
+            "INSERT INTO budgets (budget_no, name, department, year, period, status, total_planned_milli, total_actual_milli, created_by, created_at) VALUES ('BUD-2026-001', 'Production Budget', 'Production', 2026, 'annual', 'draft', 10000000, 0, 'admin', datetime('now'))",
+            [],
+        ).unwrap();
+        let name: String = conn
+            .query_row("SELECT name FROM budgets LIMIT 1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(name, "Production Budget");
+    }
+
+    #[test]
+    fn test_insert_and_query_fixed_asset() {
+        let conn = test_conn();
+        conn.execute(
+            "INSERT INTO fixed_assets (asset_no, name, category, purchase_date, purchase_cost_milli, current_value_milli, status, active, created_at) VALUES ('FA-001', 'Cup Machine', 'machinery', '2026-01-15', 50000000, 45000000, 'active', 1, datetime('now'))",
+            [],
+        ).unwrap();
+        let name: String = conn
+            .query_row("SELECT name FROM fixed_assets LIMIT 1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(name, "Cup Machine");
+    }
+
+    #[test]
+    fn test_insert_and_query_notification() {
+        let conn = test_conn();
+        conn.execute(
+            "INSERT INTO notifications (notification_type, title, message, severity, read_status, created_at) VALUES ('alert', 'Low Stock', 'Item X is low', 'warning', 'unread', datetime('now'))",
+            [],
+        ).unwrap();
+        let title: String = conn
+            .query_row("SELECT title FROM notifications LIMIT 1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(title, "Low Stock");
+    }
+
+    #[test]
+    fn test_audit_log_insert() {
+        let conn = test_conn();
+        conn.execute(
+            "INSERT INTO audit_logs (ts, user_id, username, action, entity, entity_id) VALUES (datetime('now'), 1, 'admin', 'create', 'customers', 1)",
+            [],
+        ).unwrap();
+        let action: String = conn
+            .query_row("SELECT action FROM audit_logs LIMIT 1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(action, "create");
+    }
+
+    #[test]
+    fn test_wal_mode_enabled() {
+        let conn = test_conn();
+        let mode: String = conn
+            .query_row("PRAGMA journal_mode", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(mode, "wal");
+    }
+
+    #[test]
+    fn test_foreign_keys_enabled() {
+        let conn = test_conn();
+        let fk_on: i32 = conn
+            .query_row("PRAGMA foreign_keys", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(fk_on, 1);
+    }
+}

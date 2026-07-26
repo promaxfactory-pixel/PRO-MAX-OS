@@ -213,7 +213,7 @@ pub fn create_tauri_token(user_id: i64, username: &str, role: &str) -> String {
     let ts = chrono::Utc::now().timestamp();
     let payload = format!("{}-{}-{}-{}-{}", user_id, username, role, ts, secrets.jwt_secret);
     let hash = format!("{:x}", Sha256::digest(payload.as_bytes()));
-    format!("promax_{}_{}_{}_{}", user_id, ts, role, hash)
+    format!("promax_{}_{}_{}_{}_{}", user_id, ts, username, role, hash)
 }
 
 pub fn validate_tauri_token(token: &str) -> Result<(i64, String, String), String> {
@@ -221,18 +221,19 @@ pub fn validate_tauri_token(token: &str) -> Result<(i64, String, String), String
         return Err("Invalid token format".to_string());
     }
     let parts: Vec<&str> = token.split('_').collect();
-    if parts.len() < 5 {
+    if parts.len() < 6 {
         return Err("Invalid token structure".to_string());
     }
     let user_id: i64 = parts[1].parse().map_err(|_| "Invalid user ID in token".to_string())?;
     let ts: i64 = parts[2].parse().map_err(|_| "Invalid timestamp in token".to_string())?;
-    let role = parts[3].to_string();
-    let hash = parts[4..].join("_");
+    let username = parts[3].to_string();
+    let role = parts[4].to_string();
+    let hash = parts[5..].join("_");
 
     let secrets = get_secrets();
     use sha2::{Digest, Sha256};
     let expected = format!("{:x}", Sha256::digest(
-        format!("{}-{}-{}-{}-{}", user_id, parts[3], role, ts, secrets.jwt_secret).as_bytes()
+        format!("{}-{}-{}-{}-{}", user_id, username, role, ts, secrets.jwt_secret).as_bytes()
     ));
 
     if hash != expected {
@@ -245,7 +246,7 @@ pub fn validate_tauri_token(token: &str) -> Result<(i64, String, String), String
         return Err("Token expired".to_string());
     }
 
-    Ok((user_id, parts[3].to_string(), role))
+    Ok((user_id, username, role))
 }
 
 // ─── AES-256-GCM Encryption at Rest ──────────────────────────────────
@@ -336,4 +337,133 @@ pub fn is_token_blacklisted(jti: &str) -> bool {
         }
     }
     false
+}
+
+// ─── Tests ────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Ensure SECRETS is initialized once for all crypto tests
+    fn init_test_secrets() {
+        SECRETS.set(AppSecrets {
+            jwt_secret: "test-jwt-secret-key-for-unit-tests".into(),
+            licensing_secret: "test-licensing-secret".into(),
+            developer_pin_hash: hash_developer_pin("1234"),
+            encryption_key: "test-encryption-key-32-chars-long!?!".into(),
+        }).ok();
+    }
+
+    #[test]
+    fn test_hash_and_verify_password() {
+        let password = "SuperSecure!123";
+        let hash = hash_password(password).expect("hash_password failed");
+        assert!(verify_password(password, &hash).expect("verify_password failed"));
+        assert!(!verify_password("wrong", &hash).expect("verify_password failed"));
+    }
+
+    #[test]
+    fn test_different_hashes_for_same_password() {
+        let h1 = hash_password("test").expect("hash1 failed");
+        let h2 = hash_password("test").expect("hash2 failed");
+        assert_ne!(h1, h2, "Argon2 should produce different hashes with different salts");
+        assert!(verify_password("test", &h1).unwrap());
+        assert!(verify_password("test", &h2).unwrap());
+    }
+
+    #[test]
+    fn test_developer_pin_hash_and_verify() {
+        let pin = "1234";
+        let hash = hash_developer_pin(pin);
+        assert!(verify_password(pin, &hash).unwrap());
+        assert!(!verify_password("9999", &hash).unwrap());
+    }
+
+    #[test]
+    fn test_jwt_create_and_verify() {
+        init_test_secrets();
+        let token = create_jwt("admin", "admin").expect("JWT creation failed");
+        assert!(!token.is_empty());
+        let claims = verify_jwt(&token).expect("JWT verification failed");
+        assert_eq!(claims.sub, "admin");
+        assert_eq!(claims.role, "admin");
+        assert!(!claims.jti.is_empty());
+    }
+
+    #[test]
+    fn test_jwt_rejects_wrong_secret() {
+        init_test_secrets();
+        let token = create_jwt("user", "user").expect("JWT creation failed");
+        // Tamper with token to simulate wrong secret
+        let tampered = format!("{}.tampered_signature", &token[..token.rfind('.').unwrap()]);
+        let result = verify_jwt(&tampered);
+        assert!(result.is_err(), "Should reject tampered token");
+    }
+
+    #[test]
+    fn test_encrypt_decrypt_roundtrip() {
+        init_test_secrets();
+        let plaintext = "Hello PRO MAX OS!";
+        let encrypted = encrypt_if_needed(plaintext).expect("encrypt_if_needed failed");
+        assert!(encrypted.starts_with("gcm:"));
+        assert_ne!(encrypted, plaintext, "Encrypted should differ from plaintext");
+        let decrypted = decrypt_if_needed(&encrypted).expect("decrypt_if_needed failed");
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn test_encrypt_empty_string() {
+        let result = encrypt_if_needed("").expect("encrypt empty failed");
+        assert_eq!(result, "", "Empty string should pass through unchanged");
+    }
+
+    #[test]
+    fn test_encrypt_if_needed_and_decrypt_if_needed() {
+        init_test_secrets();
+        let plaintext = "API_KEY_12345";
+        let encrypted = encrypt_if_needed(plaintext).expect("encrypt_if_needed failed");
+        assert!(encrypted.starts_with("gcm:"));
+        let decrypted = decrypt_if_needed(&encrypted).expect("decrypt_if_needed failed");
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn test_decrypt_if_needed_passthrough() {
+        let plain = "not_encrypted_value";
+        let result = decrypt_if_needed(plain).expect("decrypt_if_needed failed");
+        assert_eq!(result, plain, "Non-gcm: values should pass through");
+    }
+
+    #[test]
+    fn test_token_blacklist() {
+        let jti = uuid::Uuid::new_v4().to_string();
+        assert!(!is_token_blacklisted(&jti));
+        blacklist_token(&jti);
+        assert!(is_token_blacklisted(&jti));
+    }
+
+    #[test]
+    fn test_tauri_token_create_and_validate() {
+        init_test_secrets();
+        let token = create_tauri_token(42, "testuser", "manager");
+        assert!(token.starts_with("promax_"));
+        let (user_id, username, role) = validate_tauri_token(&token).expect("validate failed");
+        assert_eq!(user_id, 42);
+        assert_eq!(username, "testuser");
+        assert_eq!(role, "manager");
+    }
+
+    #[test]
+    fn test_tauri_token_rejects_invalid() {
+        assert!(validate_tauri_token("bad_token").is_err());
+        assert!(validate_tauri_token("promax_abc_def").is_err());
+    }
+
+    #[test]
+    fn test_derive_encryption_key_deterministic() {
+        let key1 = derive_encryption_key(b"secret123");
+        let key2 = derive_encryption_key(b"secret123");
+        assert_eq!(key1, key2, "Same input should produce same key");
+    }
 }
