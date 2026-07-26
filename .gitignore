@@ -6,6 +6,7 @@ node_modules/
 dist/
 build/
 target/
+src-tauri/target/
 
 # Environment files
 .env
@@ -25,7 +26,7 @@ lerna-debug.log*
 Thumbs.db
 
 # IDE files
-.vscode/settings.json
+.vscode/
 .idea/
 
 # Coverage reports
@@ -37,3 +38,21 @@ coverage/
 *.temp
 *.swp
 *~
+
+# Security — NEVER commit these
+*.secrets.json
+promax.secrets.json
+
+# Database files
+*.db
+*.db-wal
+*.db-shm
+database/backups/
+
+# Release artifacts
+releases/
+*.msi
+*.exe
+
+# Generated schemas
+src-tauri/gen/

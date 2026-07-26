@@ -22,6 +22,8 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
       - name: Cargo cache
         uses: actions/cache@v4
@@ -41,7 +43,6 @@ jobs:
 
       - name: Cargo clippy
         run: cargo clippy --lib --bins -- -D warnings
-        continue-on-error: true
 
   typescript-check:
     name: TypeScript Check
@@ -59,14 +60,13 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: TypeScript type check
         run: npx tsc --noEmit
-        continue-on-error: true
 
       - name: ESLint
-        run: npx eslint src/ --ext .ts,.tsx --max-warnings 50
+        run: npx eslint src/ --ext .ts,.tsx --max-warnings 0
         continue-on-error: true
 
   build-windows:
@@ -100,16 +100,15 @@ jobs:
           cache: npm
 
       - name: Install frontend dependencies
-        run: npm install
+        run: npm ci
         working-directory: .
 
       - name: Build frontend
         run: npm run build
         working-directory: .
-        continue-on-error: true
 
       - name: Install Tauri CLI
-        run: cargo install tauri-cli --version "^2"
+        run: cargo install tauri-cli --version "^2" --locked
 
       - name: Build Tauri app
         run: cargo tauri build

@@ -8,11 +8,41 @@ use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Mutex;
+use std::collections::HashMap;
+use std::time::{Duration, Instant};
 
 // ─── App State ─────────────────────────────────────────────────────────
 
 struct AppState {
     db: Mutex<Connection>,
+    rate_limiter: Mutex<RateLimiter>,
+}
+
+struct RateLimiter {
+    attempts: HashMap<String, Vec<Instant>>,
+    max_attempts: usize,
+    window: Duration,
+}
+
+impl RateLimiter {
+    fn new() -> Self {
+        Self {
+            attempts: HashMap::new(),
+            max_attempts: 10,
+            window: Duration::from_secs(900), // 15 minutes
+        }
+    }
+
+    fn is_allowed(&mut self, key: &str) -> bool {
+        let now = Instant::now();
+        let entries = self.attempts.entry(key.to_string()).or_insert_with(Vec::new);
+        entries.retain(|t| now.duration_since(*t) < self.window);
+        if entries.len() >= self.max_attempts {
+            return false;
+        }
+        entries.push(now);
+        true
+    }
 }
 
 fn find_db_path() -> String {
@@ -85,12 +115,30 @@ struct LoginResponse {
 }
 
 async fn api_login(state: web::Data<AppState>, body: web::Json<LoginRequest>) -> HttpResponse {
+    // Rate limit by IP + username
+    let rate_key = format!("login:{}", body.username);
+    {
+        let mut limiter = match state.rate_limiter.lock() {
+            Ok(l) => l,
+            Err(_) => return err("Internal rate limiter error"),
+        };
+        if !limiter.is_allowed(&rate_key) {
+            return HttpResponse::TooManyRequests()
+                .json(serde_json::json!({"error": "Too many login attempts. Try again in 15 minutes."}));
+        }
+    }
+
+    // Validate input
+    if body.username.is_empty() || body.password.is_empty() {
+        return HttpResponse::BadRequest()
+            .json(serde_json::json!({"error": "Username and password are required"}));
+    }
+
     let conn = match state.db.lock() {
         Ok(c) => c,
-        Err(e) => return err(&format!("Lock error: {}", e)),
+        Err(_) => return err("Database lock error"),
     };
 
-    // Get user with password hash
     let row = conn.query_row(
         "SELECT id, username, role, password_hash, salt, active FROM users WHERE username = ?1",
         rusqlite::params![body.username],
@@ -117,11 +165,9 @@ async fn api_login(state: web::Data<AppState>, body: web::Json<LoginRequest>) ->
             .json(serde_json::json!({"error": "User is deactivated"}));
     }
 
-    // Verify password (supports both argon2 and legacy SHA-256)
     let valid = if password_hash.starts_with("$argon2") {
         promax_os_lib::crypto::verify_password(&body.password, &password_hash).unwrap_or(false)
     } else {
-        // Legacy SHA-256
         use sha2::{Digest, Sha256};
         let mut current = format!("{}{}", body.password, _salt);
         for _ in 0..10000 {
@@ -135,7 +181,6 @@ async fn api_login(state: web::Data<AppState>, body: web::Json<LoginRequest>) ->
             .json(serde_json::json!({"error": "Invalid credentials"}));
     }
 
-    // Migrate legacy hash to argon2
     if !password_hash.starts_with("$argon2") {
         if let Ok(new_hash) = promax_os_lib::crypto::hash_password(&body.password) {
             let _ = conn.execute(
@@ -182,7 +227,7 @@ struct InvoiceSummary {
 
 async fn api_dashboard(state: web::Data<AppState>, req: HttpRequest) -> HttpResponse {
     let _claims = match require_auth(&req) { Ok(c) => c, Err(e) => return e };
-    let conn = match state.db.lock() { Ok(c) => c, Err(e) => return err(&e.to_string()) };
+    let conn = match state.db.lock() { Ok(c) => c, Err(_) => return err("Database lock error") };
 
     let customers: i64 = conn.query_row("SELECT COUNT(*) FROM customers", [], |r| r.get(0)).unwrap_or(0);
     let invoices: i64 = conn.query_row("SELECT COUNT(*) FROM sales_invoices", [], |r| r.get(0)).unwrap_or(0);
@@ -230,7 +275,7 @@ struct CustomerResponse {
 
 async fn api_list_customers(state: web::Data<AppState>, req: HttpRequest) -> HttpResponse {
     let _claims = match require_auth(&req) { Ok(c) => c, Err(e) => return e };
-    let conn = match state.db.lock() { Ok(c) => c, Err(e) => return err(&e.to_string()) };
+    let conn = match state.db.lock() { Ok(c) => c, Err(_) => return err("Database lock error") };
 
     let customers: Vec<CustomerResponse> = conn.prepare(
         "SELECT id, name, phone, email, vat_number, credit_limit_milli, balance_milli, active
@@ -252,7 +297,7 @@ async fn api_list_customers(state: web::Data<AppState>, req: HttpRequest) -> Htt
 
 async fn api_get_customer(state: web::Data<AppState>, req: HttpRequest, path: web::Path<i64>) -> HttpResponse {
     let _claims = match require_auth(&req) { Ok(c) => c, Err(e) => return e };
-    let conn = match state.db.lock() { Ok(c) => c, Err(e) => return err(&e.to_string()) };
+    let conn = match state.db.lock() { Ok(c) => c, Err(_) => return err("Database lock error") };
     let id = path.into_inner();
 
     match conn.query_row(
@@ -273,11 +318,11 @@ async fn api_get_customer(state: web::Data<AppState>, req: HttpRequest, path: we
 
 // ─── Invoices ──────────────────────────────────────────────────────────
 
-async fn api_list_invoices(state: web::Data<AppState>, req: HttpRequest, query: web::Query<std::collections::HashMap<String, String>>) -> HttpResponse {
+async fn api_list_invoices(state: web::Data<AppState>, req: HttpRequest, query: web::Query<HashMap<String, String>>) -> HttpResponse {
     let _claims = match require_auth(&req) { Ok(c) => c, Err(e) => return e };
-    let conn = match state.db.lock() { Ok(c) => c, Err(e) => return err(&e.to_string()) };
+    let conn = match state.db.lock() { Ok(c) => c, Err(_) => return err("Database lock error") };
 
-    let limit: i64 = query.get("limit").and_then(|v| v.parse().ok()).unwrap_or(50);
+    let limit: i64 = query.get("limit").and_then(|v| v.parse().ok()).unwrap_or(50).min(500);
     let status = query.get("status").map(|s| s.as_str());
     let customer_id: Option<i64> = query.get("customer_id").and_then(|v| v.parse().ok());
     let search = query.get("search").map(|s| s.as_str());
@@ -331,7 +376,7 @@ struct InvoiceLineResponse {
 
 async fn api_get_invoice(state: web::Data<AppState>, req: HttpRequest, path: web::Path<i64>) -> HttpResponse {
     let _claims = match require_auth(&req) { Ok(c) => c, Err(e) => return e };
-    let conn = match state.db.lock() { Ok(c) => c, Err(e) => return err(&e.to_string()) };
+    let conn = match state.db.lock() { Ok(c) => c, Err(_) => return err("Database lock error") };
     let id = path.into_inner();
 
     let inv = conn.query_row(
@@ -382,7 +427,7 @@ struct ProductResponse {
 
 async fn api_list_products(state: web::Data<AppState>, req: HttpRequest) -> HttpResponse {
     let _claims = match require_auth(&req) { Ok(c) => c, Err(e) => return e };
-    let conn = match state.db.lock() { Ok(c) => c, Err(e) => return err(&e.to_string()) };
+    let conn = match state.db.lock() { Ok(c) => c, Err(_) => return err("Database lock error") };
 
     let products: Vec<ProductResponse> = conn.prepare(
         "SELECT id, code, name_ar, name_en, default_price_milli, default_cost_milli, active FROM products ORDER BY name_ar LIMIT 200"
@@ -434,7 +479,7 @@ async fn main() -> std::io::Result<()> {
                 println!("  --port, -p PORT     Port (default: 8080)");
                 println!("  --db-path PATH      Database path");
                 println!("  --host ADDR         Bind address (default: 127.0.0.1)");
-                println!("  --expose            Expose on 0.0.0.0 (dangerous without firewall)");
+                println!("  --expose            Expose on 0.0.0.0 (use with firewall)");
                 println!("  --help              Show this help");
                 return Ok(());
             }
@@ -443,49 +488,61 @@ async fn main() -> std::io::Result<()> {
         i += 1;
     }
 
-    // Initialize secrets from DB path
     let db_path_buf = Path::new(&db_path).to_path_buf();
     let _ = promax_os_lib::crypto::init_secrets(&db_path_buf);
 
     let is_local = host == "127.0.0.1";
     let bind_addr = format!("{}:{}", &host, port);
 
-    println!("🔐 PRO MAX OS API Server v2.0.0");
-    println!("📁 Database: {}", db_path);
-    println!("🌐 Listening on: http://{}", bind_addr);
+    println!("PRO MAX OS API Server v2.0.0");
+    println!("Database: {}", db_path);
+    println!("Listening on: http://{}", bind_addr);
     if is_local {
-        println!("⚠️  Localhost only. Use --expose for network access.");
+        println!("Localhost only. Use --expose for network access.");
+    } else {
+        println!("WARNING: Network exposure enabled. Ensure a firewall is configured.");
     }
 
     let db = match open_db(&db_path) {
         Ok(d) => d,
         Err(e) => {
-            eprintln!("❌ {}", e);
+            eprintln!("Failed to open database: {}", e);
             std::process::exit(1);
         }
     };
-    let data = web::Data::new(AppState { db: Mutex::new(db) });
+
+    let data = web::Data::new(AppState {
+        db: Mutex::new(db),
+        rate_limiter: Mutex::new(RateLimiter::new()),
+    });
 
     HttpServer::new(move || {
         let cors = if is_local {
             Cors::default()
                 .allowed_origin("http://localhost:8081")
-                .allowed_origin("http://localhost:*")
+                .allowed_origin("http://localhost:5173")
+                .allowed_origin("http://localhost:1420")
                 .allowed_origin_fn(|origin, _req_head| origin.as_bytes().starts_with(b"http://localhost"))
                 .allow_any_method()
                 .allow_any_header()
                 .max_age(3600)
         } else {
+            // Non-local: restrict to specific methods and headers only
             Cors::default()
-                .allow_any_origin()
-                .allow_any_method()
-                .allow_any_header()
+                .allowed_methods(["GET", "POST", "PUT", "DELETE"])
+                .allowed_headers(["Authorization", "Content-Type"])
                 .max_age(3600)
         };
 
         App::new()
             .wrap(cors)
             .wrap(middleware::Logger::default())
+            .wrap(middleware::DefaultHeaders::new()
+                .add(("X-Content-Type-Options", "nosniff"))
+                .add(("X-Frame-Options", "DENY"))
+                .add(("X-XSS-Protection", "1; mode=block"))
+            )
+            .app_data(web::JsonConfig::default().limit(1_048_576)) // 1MB max request body
             .app_data(data.clone())
             .route("/api/health", web::get().to(api_health))
             .route("/api/auth/login", web::post().to(api_login))

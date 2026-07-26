@@ -10,11 +10,16 @@ setlocal EnableDelayedExpansion
 echo === PRO MAX OS - Environment Setup ===
 echo.
 
+:: Resolve project root relative to this script
+set "PROJECT_ROOT=%~dp0.."
+pushd "%PROJECT_ROOT%"
+
 :: Step 1: Check for Node.js
 echo [1/6] Checking Node.js installation...
 node --version >nul 2>&1
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Node.js is not installed. Please install Node.js (LTS) from https://nodejs.org
+    popd
     exit /b 1
 )
 for /f "tokens=*" %%i in ('node --version') do set "NODE_VER=%%i"
@@ -26,6 +31,7 @@ echo [2/6] Checking Rust installation...
 rustc --version >nul 2>&1
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Rust is not installed. Please install Rust from https://rustup.rs
+    popd
     exit /b 1
 )
 for /f "tokens=*" %%i in ('rustc --version') do set "RUST_VER=%%i"
@@ -37,6 +43,7 @@ echo [3/6] Checking Git installation...
 git --version >nul 2>&1
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Git is not installed. Please install Git from https://git-scm.com
+    popd
     exit /b 1
 )
 for /f "tokens=*" %%i in ('git --version') do set "GIT_VER=%%i"
@@ -48,7 +55,7 @@ echo [4/6] Setting up environment file...
 if exist ".env.example" (
     if not exist ".env" (
         copy ".env.example" ".env" >nul
-        if %ERRORLEVEL% equ 0 (
+        if !ERRORLEVEL! equ 0 (
             echo [OK] Created .env from .env.example
         ) else (
             echo [WARN] Failed to copy .env.example to .env
@@ -63,24 +70,32 @@ echo.
 
 :: Step 5: Install npm dependencies
 echo [5/6] Installing npm dependencies...
-npm install
+call npm ci
 if %ERRORLEVEL% neq 0 (
-    echo [ERROR] npm install failed with exit code !ERRORLEVEL!
+    echo [ERROR] npm ci failed with exit code !ERRORLEVEL!
+    popd
     exit /b !ERRORLEVEL!
 )
 echo [OK] npm dependencies installed.
 echo.
 
-:: Step 6: Run tauri build
-echo [6/6] Running initial Tauri build...
-npm run tauri build
+:: Step 6: Run dev mode (not build) for initial setup
+echo [6/6] Running initial cargo check (faster than full build)...
+pushd src-tauri
+cargo check --lib --bins
 if %ERRORLEVEL% neq 0 (
-    echo [ERROR] Tauri build failed with exit code !ERRORLEVEL!
-    exit /b !ERRORLEVEL%
+    echo [ERROR] cargo check failed with exit code !ERRORLEVEL!
+    popd
+    popd
+    exit /b !ERRORLEVEL!
 )
-echo [OK] Tauri build completed successfully.
+popd
+echo [OK] Cargo check passed.
 echo.
 
 echo === Setup Complete ===
 echo Your development environment is ready.
+echo Run 'npm run tauri dev' to start development.
+
+popd
 endlocal

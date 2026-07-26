@@ -1,6 +1,7 @@
 use crate::commands::rbac;
 use crate::crypto;
 use crate::db::DbState;
+use crate::validation::Validator;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -98,6 +99,10 @@ pub fn login(
     username: String,
     password: String,
 ) -> Result<LoginResult, String> {
+    Validator::required("username", &username).map_err(|e| e)?;
+    Validator::required("password", &password).map_err(|e| e)?;
+    Validator::max_length("username", &username, 50).map_err(|e| e)?;
+
     let conn = state.0.lock().map_err(|e| e.to_string())?;
 
     if is_rate_limited(&conn, &username)? {
@@ -212,9 +217,8 @@ pub fn change_password(
         return Err("تم حظر تغيير كلمة المرور مؤقتاً بسبب محاولات كثيرة. حاول مرة أخرى بعد 30 دقيقة".to_string());
     }
 
-    if new_password.len() < 8 {
-        return Err("كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل".to_string());
-    }
+    Validator::min_length("new_password", &new_password, 8).map_err(|e| e)?;
+    Validator::max_length("new_password", &new_password, 128).map_err(|e| e)?;
 
     let current: (String, String) = conn
         .query_row(

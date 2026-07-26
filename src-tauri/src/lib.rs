@@ -3,6 +3,7 @@ mod commands;
 pub mod mcp;
 pub mod crypto;
 pub mod error;
+pub mod validation;
 
 use tauri::Manager;
 

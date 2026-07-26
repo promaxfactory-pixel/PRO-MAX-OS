@@ -197,7 +197,7 @@ pub fn get_budget_vs_actual(state: State<'_, DbState>, budget_id: i64) -> Result
     let lines = get_budget_lines(state.clone(), budget_id)?;
 
     let line_data: Vec<serde_json::Value> = lines.iter().map(|l| {
-        let pct = if l.planned_milli > 0 { (l.actual_milli as f64 / l.planned_milli as f64 * 100.0) } else { 0.0 };
+        let pct = if l.planned_milli > 0 { l.actual_milli as f64 / l.planned_milli as f64 * 100.0 } else { 0.0 };
         serde_json::json!({
             "category": l.category,
             "description": l.description,

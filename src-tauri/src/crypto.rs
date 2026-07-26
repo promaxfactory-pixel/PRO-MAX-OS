@@ -56,7 +56,10 @@ pub fn init_secrets(db_path: &PathBuf) -> AppSecrets {
             })
         }),
         developer_pin_hash: std::env::var("PROMAX_DEV_PIN_HASH").unwrap_or_else(|_| {
-            hash_developer_pin(&generate_machine_secret()[..6])
+            let mut pin_bytes = [0u8; 4];
+            OsRng.fill_bytes(&mut pin_bytes);
+            let pin: String = pin_bytes.iter().map(|b| format!("{}", b % 10)).collect();
+            hash_developer_pin(&pin)
         }),
         encryption_key: std::env::var("PROMAX_ENC_KEY").unwrap_or_else(|_| {
             generate_machine_secret()
@@ -87,16 +90,23 @@ pub fn init_secrets(db_path: &PathBuf) -> AppSecrets {
 
         // Auto-generate secrets file if it doesn't exist
         if !config_path.exists() {
+            let mut pin_bytes = [0u8; 4];
+            OsRng.fill_bytes(&mut pin_bytes);
+            let auto_pin: String = pin_bytes.iter().map(|b| format!("{}", b % 10)).collect();
             let auto_secrets = AppSecrets {
                 jwt_secret: generate_machine_secret(),
                 licensing_secret: generate_machine_secret(),
-                developer_pin_hash: hash_developer_pin("1234"),
+                developer_pin_hash: hash_developer_pin(&auto_pin),
                 encryption_key: generate_machine_secret(),
             };
             if let Ok(json) = serde_json::to_string_pretty(&auto_secrets) {
-                std::fs::write(&config_path, json).ok();
+                if let Err(e) = std::fs::write(&config_path, json) {
+                    eprintln!("Warning: Failed to write secrets file: {}", e);
+                }
             }
-            SECRETS.set(auto_secrets.clone()).ok();
+            if SECRETS.set(auto_secrets.clone()).is_err() {
+                return SECRETS.get().cloned().unwrap_or_default();
+            }
             return auto_secrets;
         }
     }
@@ -112,31 +122,29 @@ pub fn get_secrets() -> AppSecrets {
 fn generate_machine_secret() -> String {
     use sha2::{Digest, Sha256};
     let machine_id = machine_uid();
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    let hash = Sha256::digest(format!("promax-{}-{}", machine_id, now / 86400).as_bytes());
+    // Use only machine_id + application salt for stable, non-rotating secrets
+    let hash = Sha256::digest(format!("promax-os-v2-{}", machine_id).as_bytes());
     format!("{:x}", hash)
 }
 
 fn machine_uid() -> String {
-    // Works on Windows via wmic
+    // Windows: use PowerShell to get machine UUID (wmic is deprecated)
     if cfg!(target_os = "windows") {
-        if let Ok(output) = std::process::Command::new("wmic")
-            .args(["csproduct", "get", "uuid"])
+        if let Ok(output) = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-Command", "(Get-CimInstance Win32_ComputerSystemProduct).UUID"])
             .output()
         {
             let stdout = String::from_utf8_lossy(&output.stdout);
-            for line in stdout.lines() {
-                let trimmed = line.trim();
-                if !trimmed.is_empty() && trimmed != "UUID" && trimmed.len() > 5 {
-                    return trimmed.to_string();
-                }
+            let trimmed = stdout.trim();
+            if !trimmed.is_empty() && trimmed.len() > 5 && trimmed != "UUID" {
+                return trimmed.to_string();
             }
         }
     }
-    "unknown-machine".into()
+    // Fallback: use hostname + username
+    let hostname = std::env::var("COMPUTERNAME").unwrap_or_else(|_| "unknown".into());
+    let username = std::env::var("USERNAME").unwrap_or_else(|_| "user".into());
+    format!("{}-{}", hostname, username)
 }
 
 // ─── Secure Password Hashing (Argon2id) ──────────────────────────────
@@ -314,26 +322,29 @@ pub fn decrypt_if_needed(value: &str) -> Result<String, String> {
 
 // ─── Token Blacklist (for revocation) ─────────────────────────────────
 
+use std::collections::HashSet;
 use std::sync::Mutex;
-static TOKEN_BLACKLIST: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
+static TOKEN_BLACKLIST: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
 pub fn blacklist_token(jti: &str) {
-    let list = TOKEN_BLACKLIST.get_or_init(|| Mutex::new(Vec::new()));
+    let list = TOKEN_BLACKLIST.get_or_init(|| Mutex::new(HashSet::new()));
     if let Ok(mut guard) = list.lock() {
-        guard.push(jti.to_string());
-        // Evict oldest entries (FIFO) when list exceeds 10K, keep last 5K
+        guard.insert(jti.to_string());
+        // Evict oldest entries when list exceeds 10K
         if guard.len() > 10000 {
-            let drain_count = guard.len() - 5000;
-            guard.drain(..drain_count);
+            // HashSet doesn't preserve order; just clear half arbitrarily
+            let to_remove: Vec<String> = guard.iter().take(5000).cloned().collect();
+            for k in &to_remove {
+                guard.remove(k);
+            }
         }
     }
 }
 
 pub fn is_token_blacklisted(jti: &str) -> bool {
-    let list = TOKEN_BLACKLIST.get();
-    if let Some(l) = list {
+    if let Some(l) = TOKEN_BLACKLIST.get() {
         if let Ok(guard) = l.lock() {
-            return guard.contains(&jti.to_string());
+            return guard.contains(jti);
         }
     }
     false
