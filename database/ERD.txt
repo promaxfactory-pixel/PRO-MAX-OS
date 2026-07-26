@@ -1,0 +1,336 @@
+# Entity Relationship Diagram — PRO MAX OS
+
+## Text-Based ERD (Mermaid-compatible)
+
+```mermaid
+erDiagram
+    %% Core Config
+    app_settings ||--o{ doc_sequences : uses
+    company_settings ||--o{ app_settings : owns
+
+    %% Users & Security
+    users ||--o{ user_roles : has
+    roles ||--o{ user_roles : assigned
+    roles ||--o{ role_permissions : has
+    permissions ||--o{ role_permissions : assigned
+
+    %% Chart of Accounts
+    accounts ||--o{ journal_entry_lines : referenced
+    journal_entries ||--o{ journal_entry_lines : contains
+    journal_entries }|--|| users : created_by
+
+    %% Products & Inventory
+    products ||--o{ product_prices : has
+    products ||--o{ product_price_history : tracked
+    products ||--o{ bom : consumes
+    products ||--o{ inventory_items : linked
+    products ||--o{ sales_invoice_lines : sold
+    products ||--o{ production_lines : produced
+    products ||--o{ operations_daily_sheets : produced
+    products ||--o{ production_shift_lines : produced
+    product_families ||--o{ products : groups
+
+    inventory_items ||--o{ inventory_movements : tracked
+    inventory_items ||--o{ purchase_lines : purchased
+    inventory_items ||--o{ bom : component_of
+    inventory_items ||--o{ stock_transfers : transferred
+    inventory_items ||--o{ shift_inventory_snapshots : counted
+    inventory_items ||--o{ inventory_adjustments : adjusted
+    inventory_items ||--o{ import_shipment_allocations : allocated
+
+    %% Customers & Sales
+    customers ||--o{ customer_aliases : has
+    customers ||--o{ sales_invoices : billed
+    customers ||--o{ customer_payments : pays
+    customers ||--o{ credit_notes : credited
+    customers ||--o{ product_prices : specific_pricing
+    sales_invoices ||--o{ sales_invoice_lines : contains
+    sales_invoices ||--o{ customer_payments : allocated
+    sales_invoices ||--o{ credit_notes : referenced
+    sales_invoices ||--o{ e_invoices : generated
+    sales_invoice_lines }|--|| products : for
+    customer_payments ||--o{ payment_allocations : allocates
+    payment_allocations }|--|| sales_invoices : to
+    credit_notes ||--o{ credit_note_lines : contains
+
+    %% Suppliers & Purchases
+    suppliers ||--o{ supplier_price_history : tracked
+    suppliers ||--o{ purchases : supplies
+    suppliers ||--o{ supplier_payments : paid
+    suppliers ||--o{ import_shipments : ships
+    suppliers ||--o{ local_supplier_exchanges : barters
+    purchases ||--o{ purchase_lines : contains
+    purchases ||--o{ supplier_payments : allocated
+    purchase_lines }|--|| inventory_items : for
+
+    %% Production
+    production_orders ||--o{ production_lines : contains
+    production_orders }|--|| machines : uses
+    production_orders }|--|| employees : supervised
+    production_lines }|--|| products : produces
+    operations_daily_sheets ||--o{ production_shift_lines : contains
+    operations_daily_sheets }|--|| employees : worker
+    operations_daily_sheets }|--|| machines : uses
+    operations_daily_sheets }|--|| products : produces
+    production_shift_lines }|--|| products : produces
+    production_shift_lines }|--|| employees : worker
+    worker_daily_production }|--|| employees : by
+    worker_daily_production }|--|| products : breakdown
+    shift_inventory_snapshots }|--|| inventory_items : counts
+
+    %% Maintenance
+    maintenance_daily_sheets }|--|| machines : for
+    machine_temp_logs }|--|| machines : records
+
+    %% HR & Payroll
+    employees ||--o{ payroll_run_lines : paid_in
+    employees ||--o{ employee_advances : receives
+    employees ||--o{ overtime_records : works
+    employees ||--o{ employee_leave_requests : requests
+    employees ||--o{ worker_daily_production : records
+    employees ||--o{ operations_daily_sheets : operates
+    employees ||--o{ production_shift_lines : operates
+    payroll_runs ||--o{ payroll_run_lines : contains
+    employee_leave_types ||--o{ employee_leave_requests : categorizes
+
+    %% Finance & Cash
+    cashbank_accounts ||--o{ cashbank_transactions : tracks
+    cashbank_accounts ||--o{ customer_payments : receives
+    cashbank_accounts ||--o{ supplier_payments : pays
+    cashbank_accounts ||--o{ expenses : paid_from
+    cashbank_accounts ||--o{ petty_cash_transactions : linked
+    cashbank_accounts ||--o{ cheques : linked
+    cheques }|--|| cashbank_accounts : drawn_on
+
+    renewals ||--o{ expenses : triggers
+    installments ||--o{ installment_payments : has
+    installment_payments }|--|| cashbank_accounts : paid_from
+
+    petty_cash_accounts ||--o{ petty_cash_transactions : logs
+    petty_cash_transactions }|--|| cashbank_accounts : counter
+    petty_cash_transactions }|--|| expenses : linked
+
+    %% Custody (same structure as petty)
+    custody_accounts ||--o{ custody_accounts : transfers
+    custody_accounts }|--|| employees : responsible
+
+    %% Expenses
+    expenses }|--|| cashbank_accounts : paid_from
+    expenses }|--|| petty_cash_accounts : petty_fund
+    expenses }|--|| employees : paid_by
+
+    %% E-Invoice
+    e_invoices }|--|| sales_invoices : for
+    einvoice_settings }|--|| company_settings : configures
+    einvoice_queue }|--|| e_invoices : processes
+
+    %% Government
+    gov_entities ||--o{ gov_integrations : configures
+    gov_entities ||--o{ gov_report_templates : defines
+    gov_entities ||--o{ gov_submissions : submits
+    gov_report_templates ||--o{ gov_submissions : templates
+
+    %% Import Tracking
+    import_shipments ||--o{ import_shipment_costs : has
+    import_shipments ||--o{ import_shipment_allocations : allocates
+    import_shipment_allocations }|--|| inventory_items : for
+
+    %% Barter
+    local_supplier_exchanges }|--|| suppliers : local_supplier
+    local_supplier_exchanges }|--|| products : cartons
+    local_supplier_exchanges }|--|| inventory_items : bags
+
+    %% Audit
+    audit_logs }|--|| users : by
+    document_status_history }|--|| users : by
+    document_voids }|--|| users : by
+    daily_closings }|--|| users : prepared_by
+
+    %% Multi-Warehouse
+    multi_warehouse ||--o{ stock_transfers : from
+    multi_warehouse ||--o{ stock_transfers : to
+    stock_transfers }|--|| inventory_items : transfers
+
+    %% Document Flow
+    docflow_documents }|--|| users : created_by
+
+    %% Attachments
+    attachments }|--|| users : uploaded_by
+```
+
+---
+
+## ASCII Relationship Summary
+
+```
+COMPANY SETTINGS (1) ──────► all financial defaults, factory profile
+
+USERS ◄──────────────────────► ROLES ◄──────────────────────► PERMISSIONS
+    │                              │                              │
+    ├── audit_logs                 ├── user_roles                 └── role_permissions
+    ├── login_attempts
+    ├── password_change_attempts
+    └── created_by (journals, docs, etc.)
+
+CHART OF ACCOUNTS
+    accounts (code PK)
+        ├── journal_entry_lines (FK)
+        ├── expenses (FK)
+        ├── petty_cash_transactions (FK)
+        └── inventory_items (implied via GL)
+
+PRODUCTS (cups/cartons) ◄──────────────────────────────────────────┐
+    │                                                              │
+    ├── product_prices (per-customer)                              │
+    ├── product_price_history (audit)                              │
+    ├── product_families (grouping)                                │
+    ├── bom (consumes inventory_items)                             │
+    ├── inventory_items (linked finished goods)                    │
+    ├── sales_invoice_lines (sold)                                 │
+    ├── production_lines (produced)                                │
+    ├── operations_daily_sheets (produced)                         │
+    ├── production_shift_lines (produced)                          │
+    ├── worker_daily_production (breakdown)                        │
+    ├── local_supplier_exchanges (barter)                          │
+    └── e_invoices (ZATCA XML)                                     │
+                                                                   │
+INVENTORY ITEMS (raw/pack) ◄───────────────────────────────────────┘
+    ├── inventory_movements (all stock changes)
+    ├── purchase_lines (received)
+    ├── bom (component)
+    ├── stock_transfers (moved)
+    ├── shift_inventory_snapshots (counted)
+    ├── inventory_adjustments (corrected)
+    └── import_shipment_allocations (landed cost)
+
+CUSTOMERS ◄────────────────────────────────────────────────────────┐
+    ├── customer_aliases (matching)                                │
+    ├── sales_invoices (billed)                                    │
+    ├── customer_payments (receipts)                               │
+    ├── credit_notes (returns)                                     │
+    └── product_prices (specific)                                  │
+                                                                  │
+SALES INVOICES ◄───────────────────────────────────────────────────┘
+    ├── sales_invoice_lines (items)
+    ├── customer_payments (allocated)
+    ├── credit_notes (referenced)
+    └── e_invoices (ZATCA generated)
+
+SUPPLIERS ◄────────────────────────────────────────────────────────┐
+    ├── supplier_price_history                                     │
+    ├── purchases (POs)                                            │
+    ├── supplier_payments (paid)                                   │
+    ├── import_shipments (China imports)                           │
+    └── local_supplier_exchanges (barter)                          │
+                                                                  │
+PURCHASES ◄────────────────────────────────────────────────────────┘
+    ├── purchase_lines (items)
+    └── supplier_payments (allocated)
+
+PRODUCTION ────────────────────────────────────────────────────────►
+    ├── production_orders (planned)
+    │   └── production_lines (detail)
+    ├── operations_daily_sheets (daily floor)
+    │   └── production_shift_lines (per-worker)
+    ├── worker_daily_production (per-worker summary)
+    ├── shift_inventory_snapshots (stock counts)
+    └── machines (equipment)
+
+HR & PAYROLL ◄─────────────────────────────────────────────────────┐
+    ├── employees (master)                                         │
+    ├── payroll_runs (periods)                                     │
+    ├── payroll_run_lines (per-emp)                                │
+    ├── employee_advances (salary advances)                        │
+    ├── overtime_records (OT tracking)                             │
+    ├── employee_leave_types (master)                              │
+    ├── employee_leave_requests (workflow)                         │
+    └── operations_daily_sheets / production_shift_lines (worker)  │
+                                                                  │
+FINANCE ◄──────────────────────────────────────────────────────────┘
+    ├── cashbank_accounts (bank/cash)
+    │   └── cashbank_transactions (flow)
+    ├── cheques (register)
+    ├── renewals (doc expiry)
+    ├── installments (loans)
+    │   └── installment_payments (schedule)
+    ├── petty_cash_accounts (funds)
+    │   └── petty_cash_transactions (log)
+    ├── custody_accounts (same)
+    └── expenses (records)
+
+E-INVOICE (ZATCA)
+    ├── e_invoices (generated XML)
+    ├── einvoice_settings (config)
+    └── einvoice_queue (processing)
+
+GOVERNMENT (Oman Compliance)
+    ├── gov_entities (MOL, MoCI, ROP, etc.)
+    ├── gov_integrations (API config)
+    ├── gov_report_templates (reports)
+    └── gov_submissions (tracking)
+
+IMPORT TRACKING (China)
+    ├── import_shipments (logistics)
+    ├── import_shipment_costs (breakdown)
+    └── import_shipment_allocations (landed cost)
+
+BARTER EXCHANGE
+    └── local_supplier_exchanges (bags ↔ cartons)
+
+AUDIT & COMPLIANCE
+    ├── audit_logs (full trail)
+    ├── document_status_history (status changes)
+    ├── document_voids (void records)
+    └── daily_closings (daily snapshots)
+
+MULTI-WAREHOUSE
+    ├── multi_warehouse (locations)
+    └── stock_transfers (moves)
+
+ATTACHMENTS
+    └── attachments (files on any entity)
+```
+
+---
+
+## Cardinality Reference
+
+| Relationship | Cardinality | Enforcement |
+|--------------|-------------|-------------|
+| company_settings → app_settings | 1 : 1+ | FK in app_settings (logical) |
+| users → user_roles | 1 : N | FK user_id |
+| roles → user_roles | 1 : N | FK role_code |
+| roles → role_permissions | 1 : N | FK role_code |
+| permissions → role_permissions | 1 : N | FK perm_code |
+| accounts → journal_entry_lines | 1 : N | FK account_code |
+| journal_entries → journal_entry_lines | 1 : N | FK entry_id |
+| products → product_prices | 1 : N | FK product_id |
+| products → bom | 1 : N | FK product_id |
+| products → sales_invoice_lines | 1 : N | FK product_id |
+| products → production_lines | 1 : N | FK product_id |
+| inventory_items → inventory_movements | 1 : N | FK item_id |
+| inventory_items → purchase_lines | 1 : N | FK item_id |
+| inventory_items → bom | 1 : N | FK item_id |
+| customers → sales_invoices | 1 : N | FK customer_id |
+| customers → customer_payments | 1 : N | FK customer_id |
+| customers → credit_notes | 1 : N | FK customer_id |
+| sales_invoices → sales_invoice_lines | 1 : N | FK invoice_id |
+| sales_invoices → customer_payments | 1 : N | (via allocation) |
+| sales_invoices → e_invoices | 1 : 1 | FK invoice_id |
+| suppliers → purchases | 1 : N | FK supplier_id |
+| suppliers → import_shipments | 1 : N | FK supplier_id |
+| purchases → purchase_lines | 1 : N | FK purchase_id |
+| purchases → supplier_payments | 1 : N | FK purchase_id |
+| production_orders → production_lines | 1 : N | FK order_id |
+| operations_daily_sheets → production_shift_lines | 1 : N | FK sheet_id |
+| employees → payroll_run_lines | 1 : N | FK employee_id |
+| employees → overtime_records | 1 : N | FK employee_id |
+| employees → employee_leave_requests | 1 : N | FK employee_id |
+| cashbank_accounts → cashbank_transactions | 1 : N | FK cashbank_id |
+| cashbank_accounts → customer_payments | 1 : N | FK cashbank_id |
+| installments → installment_payments | 1 : N | FK installment_id |
+| import_shipments → import_shipment_costs | 1 : N | FK shipment_id |
+| import_shipments → import_shipment_allocations | 1 : N | FK shipment_id |
+| local_supplier_exchanges → suppliers | N : 1 | FK local_supplier_id |
+| local_supplier_exchanges → products | N : 1 | FK product_id |
+| local_supplier_exchanges → inventory_items | N : 1 | FK received_item_id |
