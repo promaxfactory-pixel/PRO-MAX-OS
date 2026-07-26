@@ -1,7 +1,7 @@
 # Database Schema Documentation — PRO MAX OS
 
 **Database:** SQLite (WAL mode, 5s busy timeout)
-**Tables:** 68+ (54 base + 14 migration additions)
+**Tables:** 74+ (54 base + 20 migration additions)
 **Schema Version:** 22
 **Monetary Precision:** All amounts in milli (1/1000 OMR), INTEGER
 
@@ -169,6 +169,28 @@
 | `worker_sheet_templates` | Worker sheet templates | `id` PK, `code`, `name`, `kind`, `active` |
 | `worker_sheets` | Generated sheets | `id` PK, `template_id`, `worker`, `date`, `lang`, `status` |
 | `historical_imports` | Excel import log | `id` PK, `import_type`, `file_name`, `status`, `records_processed`, `records_failed`, `created_by`, `created_at` |
+
+### Approval Workflows
+| Table | Purpose | Key Columns |
+|-------|---------|-------------|
+| `approval_requests` | Approval workflow requests | `id` PK, `request_type`, `entity_type`, `entity_id`, `entity_number`, `requested_by`, `requested_at`, `amount_milli`, `description`, `status`, `approved_by`, `approved_at`, `rejection_reason`, `priority` |
+
+### Budget Planning
+| Table | Purpose | Key Columns |
+|-------|---------|-------------|
+| `budgets` | Budget headers | `id` PK, `budget_no`, `name`, `department`, `year`, `period`, `status`, `total_planned_milli`, `total_actual_milli`, `notes`, `created_by`, `created_at`, `approved_by`, `approved_at` |
+| `budget_lines` | Budget line items | `id` PK, `budget_id` FK, `account_code`, `planned_milli`, `actual_milli`, `notes` |
+
+### Fixed Assets
+| Table | Purpose | Key Columns |
+|-------|---------|-------------|
+| `fixed_assets` | Fixed asset register | `id` PK, `asset_no`, `name`, `category`, `description`, `serial_number`, `purchase_date`, `purchase_cost_milli`, `current_value_milli`, `depreciation_method`, `depreciation_rate_pct`, `useful_life_months`, `accumulated_depreciation_milli`, `location`, `department`, `assigned_to`, `supplier`, `warranty_expiry`, `status`, `active` |
+| `asset_maintenance_logs` | Maintenance history | `id` PK, `asset_id` FK, `date`, `description`, `cost_milli`, `performed_by`, `next_due`, `notes` |
+
+### Notifications
+| Table | Purpose | Key Columns |
+|-------|---------|-------------|
+| `notifications` | System notifications | `id` PK, `user_id`, `notification_type`, `title`, `message`, `entity_type`, `entity_id`, `severity`, `read_status`, `action_url`, `created_at`, `read_at` |
 
 ---
 

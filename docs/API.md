@@ -2,12 +2,12 @@
 
 ## Overview
 
-PRO MAX OS is a Tauri 2 desktop application with a Rust backend and React/TypeScript frontend. The Rust backend exposes 265+ Tauri commands organized by domain module. All commands communicate via Tauri IPC; the frontend uses typed TypeScript wrappers auto-generated from Rust structs.
+PRO MAX OS is a Tauri 2 desktop application with a Rust backend and React/TypeScript frontend. The Rust backend exposes 288+ Tauri commands organized by domain module. All commands communicate via Tauri IPC; the frontend uses typed TypeScript wrappers auto-generated from Rust structs.
 
 ### Database
 
 - **Engine:** SQLite with WAL mode, 5-second busy timeout
-- **Tables:** 68+ (54 in base schema.sql + 14 added via migrations)
+- **Tables:** 74+ (54 in base schema.sql + 20 added via migrations)
 - **Monetary precision:** All values in milli (1/1000 OMR), stored as INTEGER
 - **Encryption:** AES-256-GCM for sensitive fields at rest
 
@@ -555,6 +555,149 @@ Model Context Protocol server for AI integration — exposes all ERP data and op
 ## Encryption (crypto)
 
 AES-256-GCM encryption utilities for sensitive data at rest. All API keys, license keys, and payment credentials are encrypted before storage in SQLite using `crypto.encrypt()` and decrypted with `crypto.decrypt()`.
+
+---
+
+## Approval Workflows (approvals)
+
+| Command | Parameters | Returns | Description |
+|---------|-----------|---------|-------------|
+| `list_approval_requests` | `filter: Option<ApprovalListFilter>` | `Result<Vec<ApprovalRequest>, String>` | List approval requests with optional filters (status, type, entity) |
+| `create_approval_request` | `input: CreateApprovalInput` | `Result<i64, String>` | Create a new approval request for any entity |
+| `decide_approval` | `input: DecideApprovalInput` | `Result<String, String>` | Approve or reject a pending request (with reason) |
+| `get_approval_summary` | (none) | `Result<Value, String>` | Dashboard: pending count, approved/rejected today, pending amount |
+
+### Structs
+
+```rust
+struct ApprovalRequest {
+    id: i64, request_type: String, entity_type: String, entity_id: i64,
+    entity_number: String, requested_by: String, requested_at: String,
+    amount_milli: Option<i64>, description: Option<String>, status: String,
+    approved_by: Option<String>, approved_at: Option<String>,
+    rejection_reason: Option<String>, priority: String,
+}
+
+struct CreateApprovalInput {
+    request_type: String, entity_type: String, entity_id: i64,
+    entity_number: String, requested_by: String,
+    amount_milli: Option<i64>, description: Option<String>,
+    priority: Option<String>,  // "urgent" | "high" | "normal" (default)
+}
+
+struct DecideApprovalInput {
+    id: i64, decision: String, decided_by: String, reason: Option<String>,
+}
+```
+
+---
+
+## Budget Planning (budget)
+
+| Command | Parameters | Returns | Description |
+|---------|-----------|---------|-------------|
+| `list_budgets` | (none) | `Result<Vec<Budget>, String>` | List all budgets |
+| `get_budget` | `id: i64` | `Result<Budget, String>` | Get budget by ID with computed variance |
+| `get_budget_lines` | `budget_id: i64` | `Result<Vec<BudgetLine>, String>` | Get line items for a budget |
+| `create_budget` | `input: CreateBudgetInput` | `Result<i64, String>` | Create budget with line items |
+| `approve_budget` | `id: i64, approved_by: String` | `Result<String, String>` | Approve a draft budget |
+| `update_budget_actuals` | `budget_id: i64` | `Result<String, String>` | Recalculate actuals from journal entries |
+| `get_budget_vs_actual` | `budget_id: i64` | `Result<Value, String>` | Full variance report by account |
+
+### Structs
+
+```rust
+struct Budget {
+    id: i64, budget_no: String, name: String, department: Option<String>,
+    year: i64, period: String, status: String,
+    total_planned_milli: i64, total_actual_milli: i64, variance_milli: i64,
+    notes: Option<String>, created_by: String, created_at: String,
+    approved_by: Option<String>, approved_at: Option<String>,
+}
+
+struct BudgetLine {
+    id: i64, budget_id: i64, account_code: String, account_name: Option<String>,
+    planned_milli: i64, actual_milli: i64, variance_milli: i64, notes: Option<String>,
+}
+
+struct CreateBudgetInput {
+    name: String, department: Option<String>, year: i64, period: String,
+    created_by: String, notes: Option<String>,
+    lines: Vec<BudgetLineInput>,  // { account_code, planned_milli, notes }
+}
+```
+
+---
+
+## Fixed Asset Management (assets)
+
+| Command | Parameters | Returns | Description |
+|---------|-----------|---------|-------------|
+| `list_assets` | (none) | `Result<Vec<Asset>, String>` | List all fixed assets |
+| `get_asset` | `id: i64` | `Result<Asset, String>` | Get asset by ID |
+| `create_asset` | `input: CreateAssetInput` | `Result<i64, String>` | Register a new fixed asset |
+| `list_asset_maintenance` | `asset_id: i64` | `Result<Vec<AssetMaintenanceLog>, String>` | Maintenance history for an asset |
+| `create_asset_maintenance` | `input: CreateMaintenanceInput` | `Result<i64, String>` | Log a maintenance record |
+| `get_asset_register_summary` | (none) | `Result<Value, String>` | Summary: total cost, value, depreciation |
+| `calculate_depreciation` | `asset_id: i64, months: i32` | `Result<Value, String>` | Calculate depreciation for N months |
+
+### Structs
+
+```rust
+struct Asset {
+    id: i64, asset_no: String, name: String, category: String,
+    description: Option<String>, serial_number: Option<String>,
+    purchase_date: String, purchase_cost_milli: i64,
+    current_value_milli: i64, depreciation_method: Option<String>,
+    depreciation_rate_pct: Option<f64>, useful_life_months: Option<i32>,
+    accumulated_depreciation_milli: i64, location: Option<String>,
+    department: Option<String>, assigned_to: Option<String>,
+    supplier: Option<String>, warranty_expiry: Option<String>,
+    last_maintenance: Option<String>, next_maintenance: Option<String>,
+    condition_status: Option<String>, status: String,
+    notes: Option<String>, active: bool, created_at: String,
+}
+
+struct CreateAssetInput {
+    name: String, category: String, purchase_date: String,
+    purchase_cost_milli: i64, description: Option<String>,
+    serial_number: Option<String>, depreciation_method: Option<String>,
+    depreciation_rate_pct: Option<f64>, useful_life_months: Option<i32>,
+    location: Option<String>, department: Option<String>,
+    assigned_to: Option<String>, supplier: Option<String>,
+    warranty_expiry: Option<String>, notes: Option<String>,
+}
+```
+
+---
+
+## Notifications (notifications)
+
+| Command | Parameters | Returns | Description |
+|---------|-----------|---------|-------------|
+| `list_notifications` | `filter: Option<NotificationFilter>` | `Result<Vec<Notification>, String>` | List notifications with optional filters |
+| `create_notification` | `input: CreateNotificationInput` | `Result<i64, String>` | Create a new notification |
+| `mark_notification_read` | `id: i64` | `Result<String, String>` | Mark a single notification as read |
+| `mark_all_notifications_read` | `user_id: Option<i64>` | `Result<String, String>` | Mark all (or user-specific) notifications as read |
+| `get_notification_count` | `user_id: Option<i64>` | `Result<Value, String>` | Get unread count and critical count |
+
+### Structs
+
+```rust
+struct Notification {
+    id: i64, user_id: Option<i64>, notification_type: String,
+    title: String, message: String, entity_type: Option<String>,
+    entity_id: Option<i64>, severity: String, read_status: String,
+    action_url: Option<String>, created_at: String, read_at: Option<String>,
+}
+
+struct CreateNotificationInput {
+    user_id: Option<i64>, notification_type: String, title: String,
+    message: String, entity_type: Option<String>, entity_id: Option<i64>,
+    severity: Option<String>,  // "info" (default) | "warning" | "critical"
+    action_url: Option<String>,
+}
+```
 
 ---
 
