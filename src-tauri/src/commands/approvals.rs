@@ -1,4 +1,5 @@
 use crate::db::DbState;
+use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -51,8 +52,8 @@ pub struct ApprovalListFilter {
 pub fn list_approval_requests(
     state: State<'_, DbState>,
     filter: Option<ApprovalListFilter>,
-) -> Result<Vec<ApprovalRequest>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<Vec<ApprovalRequest>, AppError> {
+    let conn = state.0.lock()?;
     let mut sql = String::from("SELECT id, request_type, entity_type, entity_id, entity_number, requested_by, requested_at, amount_milli, description, status, approved_by, approved_at, rejection_reason, priority FROM approval_requests WHERE 1=1");
     let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
@@ -73,7 +74,7 @@ pub fn list_approval_requests(
     sql.push_str(" ORDER BY CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END, requested_at DESC");
 
     let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
-    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(&sql)?;
     let rows = stmt.query_map(param_refs.as_slice(), |row| {
         Ok(ApprovalRequest {
             id: row.get(0)?,
@@ -91,7 +92,7 @@ pub fn list_approval_requests(
             rejection_reason: row.get(12)?,
             priority: row.get(13)?,
         })
-    }).map_err(|e| e.to_string())?;
+    })?;
     Ok(rows.filter_map(|r| r.ok()).collect::<Vec<_>>())
 }
 
@@ -99,13 +100,13 @@ pub fn list_approval_requests(
 pub fn create_approval_request(
     state: State<'_, DbState>,
     input: CreateApprovalInput,
-) -> Result<i64, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<i64, AppError> {
+    let conn = state.0.lock()?;
     let priority = input.priority.unwrap_or_else(|| "normal".to_string());
     conn.execute(
         "INSERT INTO approval_requests (request_type, entity_type, entity_id, entity_number, requested_by, requested_at, amount_milli, description, status, priority) VALUES (?, ?, ?, ?, ?, datetime('now'), ?, ?, 'pending', ?)",
         rusqlite::params![input.request_type, input.entity_type, input.entity_id, input.entity_number, input.requested_by, input.amount_milli, input.description, priority],
-    ).map_err(|e| e.to_string())?;
+    )?;
     Ok(conn.last_insert_rowid())
 }
 
@@ -113,15 +114,15 @@ pub fn create_approval_request(
 pub fn decide_approval(
     state: State<'_, DbState>,
     input: DecideApprovalInput,
-) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
 
     let current_status: String = conn.query_row(
         "SELECT status FROM approval_requests WHERE id = ?", [input.id], |r| r.get(0)
-    ).map_err(|_| "Approval request not found".to_string())?;
+    ).map_err(|_| AppError::not_found("Approval request not found"))?;
 
     if current_status != "pending" {
-        return Err(format!("Cannot decide on request with status '{}'", current_status));
+        return Err(AppError::business(format!("Cannot decide on request with status '{}'", current_status)));
     }
 
     match input.decision.as_str() {
@@ -129,15 +130,15 @@ pub fn decide_approval(
             conn.execute(
                 "UPDATE approval_requests SET status = 'approved', approved_by = ?, approved_at = datetime('now') WHERE id = ?",
                 rusqlite::params![input.decided_by, input.id],
-            ).map_err(|e| e.to_string())?;
+            )?;
         }
         "reject" => {
             conn.execute(
                 "UPDATE approval_requests SET status = 'rejected', approved_by = ?, approved_at = datetime('now'), rejection_reason = ? WHERE id = ?",
                 rusqlite::params![input.decided_by, input.reason, input.id],
-            ).map_err(|e| e.to_string())?;
+            )?;
         }
-        _ => return Err("Decision must be 'approve' or 'reject'".to_string()),
+        _ => return Err(AppError::validation("Decision must be 'approve' or 'reject'")),
     }
 
     crate::commands::rbac::log_audit(&conn, None, Some(&input.decided_by), "decide", "approval_requests", Some(input.id), None, Some(&input.decision), input.reason.as_deref()).ok();
@@ -145,8 +146,8 @@ pub fn decide_approval(
 }
 
 #[tauri::command]
-pub fn get_approval_summary(state: State<'_, DbState>) -> Result<serde_json::Value, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_approval_summary(state: State<'_, DbState>) -> Result<serde_json::Value, AppError> {
+    let conn = state.0.lock()?;
     let pending: i64 = conn.query_row("SELECT COUNT(*) FROM approval_requests WHERE status='pending'", [], |r| r.get(0)).unwrap_or(0);
     let approved_today: i64 = conn.query_row("SELECT COUNT(*) FROM approval_requests WHERE status='approved' AND date(approved_at) = date('now')", [], |r| r.get(0)).unwrap_or(0);
     let rejected_today: i64 = conn.query_row("SELECT COUNT(*) FROM approval_requests WHERE status='rejected' AND date(approved_at) = date('now')", [], |r| r.get(0)).unwrap_or(0);

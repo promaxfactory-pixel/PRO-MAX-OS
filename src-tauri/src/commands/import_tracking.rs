@@ -204,10 +204,10 @@ pub fn create_shipment(
             |r| r.get(0),
         )
         .unwrap_or(1);
-    let _ = conn.execute(
+    conn.execute(
         "INSERT INTO doc_sequences(doc_type, year, last_number) VALUES('IMP',?,?) ON CONFLICT(doc_type, year) DO UPDATE SET last_number=excluded.last_number",
         rusqlite::params![year, seq],
-    );
+    ).map_err(|e| format!("Failed to increment import shipment sequence: {}", e))?;
     let shipment_no = format!("IMP-{}-{:04}", year, seq);
 
     conn.execute(

@@ -1,5 +1,6 @@
 use crate::commands::rbac;
 use crate::db::DbState;
+use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -92,8 +93,8 @@ fn row_to_user(row: &rusqlite::Row) -> rusqlite::Result<SettingsUser> {
 }
 
 #[tauri::command]
-pub fn get_company_settings(state: State<'_, DbState>) -> Result<CompanySettings, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_company_settings(state: State<'_, DbState>) -> Result<CompanySettings, AppError> {
+    let conn = state.0.lock()?;
 
     let result = conn.query_row(
         "SELECT id, name, factory_name, address, phone, email, vat_number, logo_path, stamp_path, signature_path, footer_notes, bank_details, default_vat_pct FROM company_settings LIMIT 1",
@@ -107,20 +108,20 @@ pub fn get_company_settings(state: State<'_, DbState>) -> Result<CompanySettings
             conn.execute(
                 "INSERT INTO company_settings(id, name, factory_name, address, phone, email, vat_number, logo_path, stamp_path, signature_path, footer_notes, bank_details, default_vat_pct) VALUES(1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 5.0)",
                 [],
-            ).map_err(|e| e.to_string())?;
+            )?;
 
             conn.query_row(
                 "SELECT id, name, factory_name, address, phone, email, vat_number, logo_path, stamp_path, signature_path, footer_notes, bank_details, default_vat_pct FROM company_settings WHERE id=1",
                 [],
                 row_to_settings,
-            ).map_err(|e| e.to_string())
+            ).map_err(|e| AppError::not_found(format!("Settings not found after init: {}", e)))
         }
     }
 }
 
 #[tauri::command]
-pub fn update_company_settings(state: State<'_, DbState>, input: UpdateSettingsInput) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn update_company_settings(state: State<'_, DbState>, input: UpdateSettingsInput) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
 
     let existing = conn.query_row(
         "SELECT id FROM company_settings LIMIT 1",
@@ -146,10 +147,10 @@ pub fn update_company_settings(state: State<'_, DbState>, input: UpdateSettingsI
             if let Some(v) = &input.bank_details { sets.push("bank_details=?"); params.push(Box::new(v.clone())); }
             if let Some(v) = input.default_vat_pct { sets.push("default_vat_pct=?"); params.push(Box::new(v)); }
 
-            if sets.is_empty() { return Err("لا توجد تعديلات".to_string()); }
+            if sets.is_empty() { return Err(AppError::validation("لا توجد تعديلات")); }
 
             let sql = format!("UPDATE company_settings SET {} WHERE id=1", sets.join(", "));
-            conn.execute(&sql, rusqlite::params_from_iter(params.iter())).map_err(|e| e.to_string())?;
+            conn.execute(&sql, rusqlite::params_from_iter(params.iter()))?;
         }
         Err(_) => {
             conn.execute(
@@ -160,7 +161,7 @@ pub fn update_company_settings(state: State<'_, DbState>, input: UpdateSettingsI
                     input.footer_notes, input.bank_details,
                     input.default_vat_pct.unwrap_or(5.0),
                 ],
-            ).map_err(|e| e.to_string())?;
+            )?;
         }
     }
 
@@ -168,53 +169,53 @@ pub fn update_company_settings(state: State<'_, DbState>, input: UpdateSettingsI
 }
 
 #[tauri::command]
-pub fn list_users(state: State<'_, DbState>) -> Result<Vec<SettingsUser>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn list_users(state: State<'_, DbState>) -> Result<Vec<SettingsUser>, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn.prepare(
         "SELECT id, username, full_name, role, active, created_at FROM users ORDER BY username"
-    ).map_err(|e| e.to_string())?;
-    let rows = stmt.query_map([], row_to_user).map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    )?;
+    let rows = stmt.query_map([], row_to_user)?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(AppError::Database)
 }
 
 #[tauri::command]
-pub fn create_user(state: State<'_, DbState>, caller_id: i64, input: CreateUserInput) -> Result<i64, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn create_user(state: State<'_, DbState>, caller_id: i64, input: CreateUserInput) -> Result<i64, AppError> {
+    let conn = state.0.lock()?;
 
-    rbac::require_role(&conn, caller_id, &["admin"]).map_err(|e| e.to_string())?;
+    rbac::require_role(&conn, caller_id, &["admin"])?;
 
     if input.username.is_empty() {
-        return Err("اسم المستخدم مطلوب".to_string());
+        return Err(AppError::validation("اسم المستخدم مطلوب"));
     }
     if input.password.len() < 8 {
-        return Err("كلمة المرور يجب أن تكون 8 أحرف على الأقل".to_string());
+        return Err(AppError::validation("كلمة المرور يجب أن تكون 8 أحرف على الأقل"));
     }
 
     let exists: bool = conn.query_row(
         "SELECT COUNT(*) FROM users WHERE username=?",
         [&input.username],
         |r| r.get::<_, i64>(0),
-    ).map_err(|e| e.to_string())? > 0;
+    )? > 0;
 
     if exists {
-        return Err("اسم المستخدم موجود بالفعل".to_string());
+        return Err(AppError::validation("اسم المستخدم موجود بالفعل"));
     }
 
     let hash = crate::crypto::hash_password(&input.password)
-        .map_err(|e| format!("فشل تشفير كلمة المرور: {}", e))?;
+        .map_err(|e| AppError::crypto(format!("فشل تشفير كلمة المرور: {}", e)))?;
 
     conn.execute(
         "INSERT INTO users(username, password_hash, salt, full_name, role) VALUES(?,?,'',?,?)",
         rusqlite::params![input.username, hash, input.full_name, input.role],
-    ).map_err(|e| e.to_string())?;
+    )?;
     let uid = conn.last_insert_rowid();
     let _ = rbac::log_audit(&conn, None, None, "create_user", "users", Some(uid), None, Some(&input.username), None);
     Ok(uid)
 }
 
 #[tauri::command]
-pub fn update_user(state: State<'_, DbState>, id: i64, input: UpdateUserInput) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn update_user(state: State<'_, DbState>, id: i64, input: UpdateUserInput) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
     let mut sets = Vec::new();
     let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
@@ -223,54 +224,53 @@ pub fn update_user(state: State<'_, DbState>, id: i64, input: UpdateUserInput) -
     if let Some(v) = input.active { sets.push("active=?"); params.push(Box::new(v)); }
     if let Some(v) = input.must_change_password { sets.push("must_change_password=?"); params.push(Box::new(v)); }
 
-    if sets.is_empty() { return Err("لا توجد تعديلات".to_string()); }
+    if sets.is_empty() { return Err(AppError::validation("لا توجد تعديلات")); }
 
     params.push(Box::new(id));
     let sql = format!("UPDATE users SET {} WHERE id=?", sets.join(", "));
-    conn.execute(&sql, rusqlite::params_from_iter(params.iter())).map_err(|e| e.to_string())?;
+    conn.execute(&sql, rusqlite::params_from_iter(params.iter()))?;
     let _ = rbac::log_audit(&conn, None, None, "update_user", "users", Some(id), None, Some(&sets.join(", ")), None);
     Ok("تم تحديث المستخدم بنجاح".to_string())
 }
 
 #[tauri::command]
-pub fn reset_user_password(state: State<'_, DbState>, caller_id: i64, id: i64, new_password: String) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn reset_user_password(state: State<'_, DbState>, caller_id: i64, id: i64, new_password: String) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
 
-    rbac::require_role(&conn, caller_id, &["admin"]).map_err(|e| e.to_string())?;
+    rbac::require_role(&conn, caller_id, &["admin"])?;
 
     if new_password.len() < 8 {
-        return Err("كلمة المرور يجب أن تكون 8 أحرف على الأقل".to_string());
+        return Err(AppError::validation("كلمة المرور يجب أن تكون 8 أحرف على الأقل"));
     }
 
     let hash = crate::crypto::hash_password(&new_password)
-        .map_err(|e| format!("فشل تشفير كلمة المرور: {}", e))?;
+        .map_err(|e| AppError::crypto(format!("فشل تشفير كلمة المرور: {}", e)))?;
 
     conn.execute(
         "UPDATE users SET password_hash=?, salt='', must_change_password=1 WHERE id=?",
         rusqlite::params![hash, id],
-    ).map_err(|e| e.to_string())?;
+    )?;
     let _ = rbac::log_audit(&conn, None, None, "reset_password", "users", Some(id), None, None, None);
     Ok("تم إعادة تعيين كلمة المرور بنجاح".to_string())
 }
 
 #[tauri::command]
-pub fn delete_user(state: State<'_, DbState>, caller_id: i64, id: i64) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn delete_user(state: State<'_, DbState>, caller_id: i64, id: i64) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
 
-    rbac::require_role(&conn, caller_id, &["admin"]).map_err(|e| e.to_string())?;
+    rbac::require_role(&conn, caller_id, &["admin"])?;
 
     let username: String = conn.query_row(
         "SELECT username FROM users WHERE id=?",
         [id],
         |r| r.get(0),
-    ).map_err(|e| format!("User not found: {}", e))?;
+    ).map_err(|_| AppError::not_found("User not found"))?;
 
     if username == "admin" {
-        return Err("لا يمكن حذف المستخدم الرئيسي".to_string());
+        return Err(AppError::business("لا يمكن حذف المستخدم الرئيسي"));
     }
 
-    conn.execute("DELETE FROM users WHERE id=?", [id])
-        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM users WHERE id=?", [id])?;
 
     let _ = rbac::log_audit(&conn, Some(0), None, "delete_user", "users", Some(id), None, None, None);
 

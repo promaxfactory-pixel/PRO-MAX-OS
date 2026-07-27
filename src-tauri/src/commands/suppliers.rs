@@ -1,5 +1,6 @@
 use crate::commands::rbac;
 use crate::db::DbState;
+use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -90,37 +91,37 @@ fn row_to_supplier(row: &rusqlite::Row) -> rusqlite::Result<Supplier> {
     })
 }
 
-fn get_supplier_by_conn(conn: &rusqlite::Connection, id: i64) -> Result<Supplier, String> {
-    conn.query_row(
+fn get_supplier_by_conn(conn: &rusqlite::Connection, id: i64) -> Result<Supplier, AppError> {
+    Ok(conn.query_row(
         "SELECT id, code, name, contact, phone, email, address, vat_number, currency, payment_terms, opening_balance_milli, balance_milli, notes, active FROM suppliers WHERE id=?",
         [id],
         row_to_supplier,
-    ).map_err(|e| e.to_string())
+    )?)
 }
 
 #[tauri::command]
-pub fn list_suppliers(state: State<'_, DbState>) -> Result<Vec<Supplier>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn list_suppliers(state: State<'_, DbState>) -> Result<Vec<Supplier>, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn.prepare(
         "SELECT id, code, name, contact, phone, email, address, vat_number, currency, payment_terms, opening_balance_milli, balance_milli, notes, active FROM suppliers WHERE active=1 ORDER BY name"
-    ).map_err(|e| e.to_string())?;
-    let rows = stmt.query_map([], row_to_supplier).map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    )?;
+    let rows = stmt.query_map([], row_to_supplier)?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
 #[tauri::command]
-pub fn get_supplier(state: State<'_, DbState>, id: i64) -> Result<Supplier, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
-    conn.query_row(
+pub fn get_supplier(state: State<'_, DbState>, id: i64) -> Result<Supplier, AppError> {
+    let conn = state.0.lock()?;
+    Ok(conn.query_row(
         "SELECT id, code, name, contact, phone, email, address, vat_number, currency, payment_terms, opening_balance_milli, balance_milli, notes, active FROM suppliers WHERE id=?",
         [id],
         row_to_supplier,
-    ).map_err(|e| e.to_string())
+    )?)
 }
 
 #[tauri::command]
-pub fn create_supplier(state: State<'_, DbState>, input: CreateSupplierInput) -> Result<i64, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn create_supplier(state: State<'_, DbState>, input: CreateSupplierInput) -> Result<i64, AppError> {
+    let conn = state.0.lock()?;
     conn.execute(
         "INSERT INTO suppliers(code, name, contact, phone, email, address, vat_number, currency, payment_terms, notes) VALUES(?,?,?,?,?,?,?,?,?,?)",
         rusqlite::params![
@@ -128,15 +129,15 @@ pub fn create_supplier(state: State<'_, DbState>, input: CreateSupplierInput) ->
             input.address, input.vat_number, input.currency.unwrap_or_else(|| "OMR".into()),
             input.payment_terms, input.notes
         ],
-    ).map_err(|e| e.to_string())?;
+    )?;
     let sid = conn.last_insert_rowid();
     let _ = rbac::log_audit(&conn, None, None, "create_supplier", "suppliers", Some(sid), None, Some(&input.name), None);
     Ok(sid)
 }
 
 #[tauri::command]
-pub fn update_supplier(state: State<'_, DbState>, id: i64, input: UpdateSupplierInput) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn update_supplier(state: State<'_, DbState>, id: i64, input: UpdateSupplierInput) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
     let mut sets = Vec::new();
     let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
@@ -152,19 +153,19 @@ pub fn update_supplier(state: State<'_, DbState>, id: i64, input: UpdateSupplier
     if let Some(v) = &input.notes { sets.push("notes=?"); params.push(Box::new(v.clone())); }
     if let Some(v) = input.active { sets.push("active=?"); params.push(Box::new(v)); }
 
-    if sets.is_empty() { return Err("لا توجد تعديلات".to_string()); }
+    if sets.is_empty() { return Err(AppError::validation("لا توجد تعديلات")); }
 
     params.push(Box::new(id));
     let sql = format!("UPDATE suppliers SET {} WHERE id=?", sets.join(", "));
-    conn.execute(&sql, rusqlite::params_from_iter(params.iter())).map_err(|e| e.to_string())?;
+    conn.execute(&sql, rusqlite::params_from_iter(params.iter()))?;
     let _ = rbac::log_audit(&conn, None, None, "update_supplier", "suppliers", Some(id), None, None, None);
     Ok("تم التحديث بنجاح".to_string())
 }
 
 #[tauri::command]
-pub fn delete_supplier(state: State<'_, DbState>, id: i64) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
-    conn.execute("UPDATE suppliers SET active=0 WHERE id=?", [id]).map_err(|e| e.to_string())?;
+pub fn delete_supplier(state: State<'_, DbState>, id: i64) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
+    conn.execute("UPDATE suppliers SET active=0 WHERE id=?", [id])?;
     let _ = rbac::log_audit(&conn, None, None, "delete_supplier", "suppliers", Some(id), None, None, None);
     Ok("تم الحذف بنجاح".to_string())
 }
@@ -175,8 +176,8 @@ pub fn get_supplier_statement(
     supplier_id: i64,
     from_date: Option<String>,
     to_date: Option<String>,
-) -> Result<SupplierStatementData, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<SupplierStatementData, AppError> {
+    let conn = state.0.lock()?;
     let supplier = get_supplier_by_conn(&conn, supplier_id)?;
     let from = from_date.unwrap_or_else(|| "2000-01-01".into());
     let to = to_date.unwrap_or_else(|| "2099-12-31".into());
@@ -187,7 +188,7 @@ pub fn get_supplier_statement(
     {
         let mut stmt = conn.prepare(
             "SELECT p.date, p.purchase_no, p.total_milli, p.notes FROM purchases p WHERE p.supplier_id=? AND p.date BETWEEN ? AND ? AND p.status != 'Void' ORDER BY p.date ASC"
-        ).map_err(|e| e.to_string())?;
+        )?;
         let rows = stmt.query_map(rusqlite::params![supplier_id, from, to], |row| {
             Ok((
                 row.get::<_, String>(0)?,
@@ -195,9 +196,9 @@ pub fn get_supplier_statement(
                 row.get::<_, i64>(2)?,
                 row.get::<_, Option<String>>(3)?,
             ))
-        }).map_err(|e| e.to_string())?;
+        })?;
         for r in rows {
-            let (date, purchase_no, total, notes) = r.map_err(|e| e.to_string())?;
+            let (date, purchase_no, total, notes) = r?;
             transactions.push(StatementTransaction {
                 date,
                 ref_no: purchase_no,
@@ -214,7 +215,7 @@ pub fn get_supplier_statement(
     {
         let mut stmt = conn.prepare(
             "SELECT sp.date, sp.receipt_no, sp.amount_milli, sp.method, sp.notes FROM supplier_payments sp WHERE sp.supplier_id=? AND sp.date BETWEEN ? AND ? AND sp.status != 'Void' ORDER BY sp.date ASC"
-        ).map_err(|e| e.to_string())?;
+        )?;
         let rows = stmt.query_map(rusqlite::params![supplier_id, from, to], |row| {
             Ok((
                 row.get::<_, String>(0)?,
@@ -223,9 +224,9 @@ pub fn get_supplier_statement(
                 row.get::<_, Option<String>>(3)?,
                 row.get::<_, Option<String>>(4)?,
             ))
-        }).map_err(|e| e.to_string())?;
+        })?;
         for r in rows {
-            let (date, receipt_no, amount, method, notes) = r.map_err(|e| e.to_string())?;
+            let (date, receipt_no, amount, method, notes) = r?;
             let note_str = notes.map(|n| format!("{} - {}", method.clone().unwrap_or_default(), n)).unwrap_or_else(|| method.unwrap_or_default());
             transactions.push(StatementTransaction {
                 date,

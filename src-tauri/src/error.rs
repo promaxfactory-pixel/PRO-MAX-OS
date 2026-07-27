@@ -59,6 +59,14 @@ impl From<std::sync::PoisonError<std::sync::MutexGuard<'_, rusqlite::Connection>
     }
 }
 
+impl From<String> for AppError {
+    fn from(e: String) -> Self { AppError::BusinessLogic(e) }
+}
+
+impl From<&str> for AppError {
+    fn from(e: &str) -> Self { AppError::BusinessLogic(e.to_string()) }
+}
+
 pub type AppResult<T> = Result<T, AppError>;
 
 impl AppError {

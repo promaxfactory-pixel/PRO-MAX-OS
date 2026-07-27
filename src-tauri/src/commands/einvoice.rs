@@ -1076,11 +1076,11 @@ pub fn einvoice_bulk_generate(
             ).map(|c| c > 0).unwrap_or(false);
 
         if !exists {
-            let _ = conn.execute(
+            conn.execute(
                 "INSERT INTO e_invoices (invoice_id, xml_content, status, created_at)
                  VALUES (?1, '<pending/>', 'pending', datetime('now'))",
                 [inv_id],
-            );
+            ).map_err(|e| format!("Failed to create e-invoice record for invoice {}: {}", inv_id, e))?;
         }
         conn.execute(
             "INSERT OR IGNORE INTO einvoice_queue (invoice_id, action, priority) VALUES (?1, 'submit', 0)",

@@ -1,4 +1,5 @@
 use crate::db::DbState;
+use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -55,11 +56,11 @@ pub struct CreateBudgetLineInput {
 }
 
 #[tauri::command]
-pub fn list_budgets(state: State<'_, DbState>) -> Result<Vec<Budget>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn list_budgets(state: State<'_, DbState>) -> Result<Vec<Budget>, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn.prepare(
         "SELECT id, budget_no, name, department, year, period, status, total_planned_milli, total_actual_milli, total_planned_milli - total_actual_milli, notes, created_by, created_at, approved_by, approved_at FROM budgets ORDER BY year DESC, budget_no DESC"
-    ).map_err(|e| e.to_string())?;
+    )?;
     let rows = stmt.query_map([], |row| {
         Ok(Budget {
             id: row.get(0)?,
@@ -78,13 +79,13 @@ pub fn list_budgets(state: State<'_, DbState>) -> Result<Vec<Budget>, String> {
             approved_by: row.get(13)?,
             approved_at: row.get(14)?,
         })
-    }).map_err(|e| e.to_string())?;
+    })?;
     Ok(rows.filter_map(|r| r.ok()).collect::<Vec<_>>())
 }
 
 #[tauri::command]
-pub fn get_budget(state: State<'_, DbState>, id: i64) -> Result<Budget, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_budget(state: State<'_, DbState>, id: i64) -> Result<Budget, AppError> {
+    let conn = state.0.lock()?;
     conn.query_row(
         "SELECT id, budget_no, name, department, year, period, status, total_planned_milli, total_actual_milli, total_planned_milli - total_actual_milli, notes, created_by, created_at, approved_by, approved_at FROM budgets WHERE id = ?",
         [id],
@@ -105,15 +106,15 @@ pub fn get_budget(state: State<'_, DbState>, id: i64) -> Result<Budget, String> 
             approved_by: row.get(13)?,
             approved_at: row.get(14)?,
         }),
-    ).map_err(|e| format!("Budget not found: {}", e))
+    ).map_err(|_| AppError::not_found("Budget not found"))
 }
 
 #[tauri::command]
-pub fn get_budget_lines(state: State<'_, DbState>, budget_id: i64) -> Result<Vec<BudgetLine>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_budget_lines(state: State<'_, DbState>, budget_id: i64) -> Result<Vec<BudgetLine>, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn.prepare(
         "SELECT id, budget_id, category, account_code, description, planned_milli, actual_milli, planned_milli - actual_milli, notes FROM budget_lines WHERE budget_id = ? ORDER BY category"
-    ).map_err(|e| e.to_string())?;
+    )?;
     let rows = stmt.query_map([budget_id], |row| {
         Ok(BudgetLine {
             id: row.get(0)?,
@@ -126,13 +127,13 @@ pub fn get_budget_lines(state: State<'_, DbState>, budget_id: i64) -> Result<Vec
             variance_milli: row.get(7)?,
             notes: row.get(8)?,
         })
-    }).map_err(|e| e.to_string())?;
+    })?;
     Ok(rows.filter_map(|r| r.ok()).collect::<Vec<_>>())
 }
 
 #[tauri::command]
-pub fn create_budget(state: State<'_, DbState>, input: CreateBudgetInput) -> Result<i64, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn create_budget(state: State<'_, DbState>, input: CreateBudgetInput) -> Result<i64, AppError> {
+    let conn = state.0.lock()?;
 
     let seq: i64 = conn.query_row("SELECT COALESCE(MAX(CAST(SUBSTR(budget_no, 5) AS INTEGER)), 0) + 1 FROM budgets", [], |r| r.get(0)).unwrap_or(1);
     let budget_no = format!("BUD-{}", seq);
@@ -141,7 +142,7 @@ pub fn create_budget(state: State<'_, DbState>, input: CreateBudgetInput) -> Res
     conn.execute(
         "INSERT INTO budgets (budget_no, name, department, year, period, status, total_planned_milli, total_actual_milli, notes, created_by, created_at) VALUES (?, ?, ?, ?, ?, 'Draft', ?, 0, ?, ?, datetime('now'))",
         rusqlite::params![budget_no, input.name, input.department, input.year, input.period, total_planned, input.notes, input.created_by],
-    ).map_err(|e| e.to_string())?;
+    )?;
     let budget_id = conn.last_insert_rowid();
 
     if let Some(lines) = &input.lines {
@@ -149,7 +150,7 @@ pub fn create_budget(state: State<'_, DbState>, input: CreateBudgetInput) -> Res
             conn.execute(
                 "INSERT INTO budget_lines (budget_id, category, account_code, description, planned_milli, actual_milli, notes) VALUES (?, ?, ?, ?, ?, 0, ?)",
                 rusqlite::params![budget_id, line.category, line.account_code, line.description, line.planned_milli, line.notes],
-            ).map_err(|e| e.to_string())?;
+            )?;
         }
     }
 
@@ -157,22 +158,22 @@ pub fn create_budget(state: State<'_, DbState>, input: CreateBudgetInput) -> Res
 }
 
 #[tauri::command]
-pub fn approve_budget(state: State<'_, DbState>, id: i64, approved_by: String) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn approve_budget(state: State<'_, DbState>, id: i64, approved_by: String) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
     conn.execute(
         "UPDATE budgets SET status = 'Approved', approved_by = ?, approved_at = datetime('now') WHERE id = ? AND status = 'Draft'",
         rusqlite::params![approved_by, id],
-    ).map_err(|e| e.to_string())?;
+    )?;
     Ok("Budget approved".to_string())
 }
 
 #[tauri::command]
-pub fn update_budget_actuals(state: State<'_, DbState>, budget_id: i64) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn update_budget_actuals(state: State<'_, DbState>, budget_id: i64) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
 
     let lines: Vec<(i64, i64)> = {
-        let mut stmt = conn.prepare("SELECT id, planned_milli FROM budget_lines WHERE budget_id = ?").map_err(|e| e.to_string())?;
-        let rows = stmt.query_map([budget_id], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))).map_err(|e| e.to_string())?;
+        let mut stmt = conn.prepare("SELECT id, planned_milli FROM budget_lines WHERE budget_id = ?")?;
+        let rows = stmt.query_map([budget_id], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)))?;
         rows.filter_map(|r| r.ok()).collect()
     };
 
@@ -187,12 +188,12 @@ pub fn update_budget_actuals(state: State<'_, DbState>, budget_id: i64) -> Resul
         total_actual += actual;
     }
 
-    conn.execute("UPDATE budgets SET total_actual_milli = ? WHERE id = ?", rusqlite::params![total_actual, budget_id]).map_err(|e| e.to_string())?;
+    conn.execute("UPDATE budgets SET total_actual_milli = ? WHERE id = ?", rusqlite::params![total_actual, budget_id])?;
     Ok(format!("Updated actuals: {} milli", total_actual))
 }
 
 #[tauri::command]
-pub fn get_budget_vs_actual(state: State<'_, DbState>, budget_id: i64) -> Result<serde_json::Value, String> {
+pub fn get_budget_vs_actual(state: State<'_, DbState>, budget_id: i64) -> Result<serde_json::Value, AppError> {
     let budget = get_budget(state.clone(), budget_id)?;
     let lines = get_budget_lines(state.clone(), budget_id)?;
 

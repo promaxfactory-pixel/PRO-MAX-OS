@@ -1,6 +1,7 @@
 use crate::commands::rbac;
 use crate::crypto;
 use crate::db::DbState;
+use crate::error::AppError;
 use crate::validation::Validator;
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -27,13 +28,10 @@ pub struct LoginResult {
     pub token: String,
 }
 
-/// Verify password against hash — supports both argon2 (new) and sha256 (legacy)
 fn verify_password_stored(password: &str, hash: &str, salt: &str) -> bool {
-    // Try argon2 first (new format starts with $argon2)
     if hash.starts_with("$argon2") {
         crypto::verify_password(password, hash).unwrap_or(false)
     } else {
-        // Legacy SHA-256 hash
         use sha2::{Digest, Sha256};
         let mut current = format!("{}{}", password, salt);
         for _ in 0..10000 {
@@ -45,7 +43,6 @@ fn verify_password_stored(password: &str, hash: &str, salt: &str) -> bool {
 
 fn hash_password_stored(password: &str) -> (String, String) {
     let argon_hash = crypto::hash_password(password).unwrap_or_else(|_| {
-        // Fallback: should never happen
         use sha2::{Digest, Sha256};
         let mut current = format!("{:x}", Sha256::digest(password.as_bytes()));
         for _ in 0..9999 {
@@ -53,43 +50,36 @@ fn hash_password_stored(password: &str) -> (String, String) {
         }
         current
     });
-    // Store argon2 hash in password_hash, empty salt (argon2 is self-contained)
     (argon_hash, String::new())
 }
 
-fn is_rate_limited(conn: &rusqlite::Connection, username: &str) -> Result<bool, String> {
+fn is_rate_limited(conn: &rusqlite::Connection, username: &str) -> Result<bool, AppError> {
     let cutoff = chrono::Utc::now().timestamp() as f64 - (LOCKOUT_MINUTES * 60) as f64;
-    let recent_failures: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM login_attempts WHERE username=? AND ok=0 AND ts>=?",
-            rusqlite::params![username, cutoff],
-            |r| r.get(0),
-        )
-        .map_err(|e| e.to_string())?;
+    let recent_failures: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM login_attempts WHERE username=? AND ok=0 AND ts>=?",
+        rusqlite::params![username, cutoff],
+        |r| r.get(0),
+    )?;
     Ok(recent_failures >= MAX_LOGIN_ATTEMPTS)
 }
 
-fn is_password_change_rate_limited(conn: &rusqlite::Connection, user_id: i64) -> Result<bool, String> {
+fn is_password_change_rate_limited(conn: &rusqlite::Connection, user_id: i64) -> Result<bool, AppError> {
     let cutoff = chrono::Utc::now().timestamp() as f64 - (PASSWORD_CHANGE_LOCKOUT_MINUTES * 60) as f64;
-    let recent_failures: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM password_change_attempts WHERE user_id=? AND ok=0 AND ts>=?",
-            rusqlite::params![user_id, cutoff],
-            |r| r.get(0),
-        )
-        .map_err(|e| e.to_string())?;
+    let recent_failures: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM password_change_attempts WHERE user_id=? AND ok=0 AND ts>=?",
+        rusqlite::params![user_id, cutoff],
+        |r| r.get(0),
+    )?;
     Ok(recent_failures >= MAX_PASSWORD_CHANGE_ATTEMPTS)
 }
 
-fn is_token_validate_rate_limited(conn: &rusqlite::Connection) -> Result<bool, String> {
+fn is_token_validate_rate_limited(conn: &rusqlite::Connection) -> Result<bool, AppError> {
     let cutoff = chrono::Utc::now().timestamp() as f64 - 60.0;
-    let recent: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM login_attempts WHERE username='_validate_token_' AND ts>=?",
-            rusqlite::params![cutoff],
-            |r| r.get(0),
-        )
-        .map_err(|e| e.to_string())?;
+    let recent: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM login_attempts WHERE username='_validate_token_' AND ts>=?",
+        rusqlite::params![cutoff],
+        |r| r.get(0),
+    )?;
     Ok(recent >= 60)
 }
 
@@ -98,18 +88,15 @@ pub fn login(
     state: State<'_, DbState>,
     username: String,
     password: String,
-) -> Result<LoginResult, String> {
-    Validator::required("username", &username).map_err(|e| e)?;
-    Validator::required("password", &password).map_err(|e| e)?;
-    Validator::max_length("username", &username, 50).map_err(|e| e)?;
+) -> Result<LoginResult, AppError> {
+    Validator::required("username", &username)?;
+    Validator::required("password", &password)?;
+    Validator::max_length("username", &username, 50)?;
 
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    let conn = state.0.lock()?;
 
     if is_rate_limited(&conn, &username)? {
-        return Err(
-            "تم حظر تسجيل الدخول مؤقتاً بسبب محاولات كثيرة. حاول مرة أخرى بعد 15 دقيقة"
-                .to_string(),
-        );
+        return Err(AppError::auth("تم حظر تسجيل الدخول مؤقتاً بسبب محاولات كثيرة. حاول مرة أخرى بعد 15 دقيقة"));
     }
 
     let row = conn
@@ -130,31 +117,26 @@ pub fn login(
                 ))
             },
         )
-        .map_err(|_| "اسم المستخدم أو كلمة المرور غير صحيحة".to_string())?;
+        .map_err(|_| AppError::auth("اسم المستخدم أو كلمة المرور غير صحيحة"))?;
 
     if !verify_password_stored(&password, &row.7, &row.8) {
-        if let Err(e) = conn.execute(
+        let _ = conn.execute(
             "INSERT INTO login_attempts(username, ts, ok) VALUES(?, ?, 0)",
             rusqlite::params![&username, chrono::Utc::now().timestamp() as f64],
-        ) {
-            eprintln!("ERROR: Failed to record failed login attempt: {}", e);
-        }
-        return Err("اسم المستخدم أو كلمة المرور غير صحيحة".to_string());
+        );
+        return Err(AppError::auth("اسم المستخدم أو كلمة المرور غير صحيحة"));
     }
 
     if row.4 == 0 {
-        return Err("هذا المستخدم معطل".to_string());
+        return Err(AppError::auth("هذا المستخدم معطل"));
     }
 
-    // Migrate legacy SHA-256 hash to argon2
     if !row.7.starts_with("$argon2") {
         if let Ok(new_hash) = crypto::hash_password(&password) {
-            if let Err(e) = conn.execute(
+            let _ = conn.execute(
                 "UPDATE users SET password_hash = ?, salt = '' WHERE id = ?",
                 rusqlite::params![new_hash, row.0],
-            ) {
-                eprintln!("ERROR: Failed to migrate password hash to argon2: {}", e);
-            }
+            );
         }
     }
 
@@ -171,19 +153,17 @@ pub fn login(
 
     let token = crypto::create_tauri_token(row.0, &username_clone, &row.3);
 
-    if let Err(e) = conn.execute(
+    let _ = conn.execute(
         "INSERT INTO login_attempts(username, ts, ok) VALUES(?, ?, 1)",
         rusqlite::params![&username, chrono::Utc::now().timestamp() as f64],
-    ) {
-        eprintln!("ERROR: Failed to record successful login attempt: {}", e);
-    }
+    );
 
     Ok(LoginResult { user, token })
 }
 
 #[tauri::command]
-pub fn get_current_user(state: State<'_, DbState>, user_id: i64) -> Result<User, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_current_user(state: State<'_, DbState>, user_id: i64) -> Result<User, AppError> {
+    let conn = state.0.lock()?;
     conn.query_row(
         "SELECT id, username, full_name, role, active, must_change_password, created_at FROM users WHERE id = ?",
         [user_id],
@@ -199,7 +179,7 @@ pub fn get_current_user(state: State<'_, DbState>, user_id: i64) -> Result<User,
             })
         },
     )
-    .map_err(|e| e.to_string())
+    .map_err(|_| AppError::not_found("المستخدم غير موجود"))
 }
 
 #[tauri::command]
@@ -208,17 +188,17 @@ pub fn change_password(
     user_id: i64,
     old_password: String,
     new_password: String,
-) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
 
-    rbac::require_role(&conn, user_id, &["admin", "manager", "user"]).map_err(|e| e.to_string())?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "user"])?;
 
     if is_password_change_rate_limited(&conn, user_id)? {
-        return Err("تم حظر تغيير كلمة المرور مؤقتاً بسبب محاولات كثيرة. حاول مرة أخرى بعد 30 دقيقة".to_string());
+        return Err(AppError::auth("تم حظر تغيير كلمة المرور مؤقتاً بسبب محاولات كثيرة. حاول مرة أخرى بعد 30 دقيقة"));
     }
 
-    Validator::min_length("new_password", &new_password, 8).map_err(|e| e)?;
-    Validator::max_length("new_password", &new_password, 128).map_err(|e| e)?;
+    Validator::min_length("new_password", &new_password, 8)?;
+    Validator::max_length("new_password", &new_password, 128)?;
 
     let current: (String, String) = conn
         .query_row(
@@ -226,50 +206,42 @@ pub fn change_password(
             [user_id],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
-        .map_err(|_| "المستخدم غير موجود".to_string())?;
+        .map_err(|_| AppError::not_found("المستخدم غير موجود"))?;
 
     if !verify_password_stored(&old_password, &current.0, &current.1) {
-        if let Err(e) = conn.execute(
+        let _ = conn.execute(
             "INSERT INTO password_change_attempts(user_id, ts, ok) VALUES(?, ?, 0)",
             rusqlite::params![user_id, chrono::Utc::now().timestamp() as f64],
-        ) {
-            eprintln!("ERROR: Failed to record failed password change attempt: {}", e);
-        }
-        return Err("كلمة المرور القديمة غير صحيحة".to_string());
+        );
+        return Err(AppError::auth("كلمة المرور القديمة غير صحيحة"));
     }
 
     let (new_hash, _) = hash_password_stored(&new_password);
     conn.execute(
         "UPDATE users SET password_hash = ?, salt = '', must_change_password = 0 WHERE id = ?",
         rusqlite::params![new_hash, user_id],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
 
-    if let Err(e) = rbac::log_audit(&conn, Some(user_id), None, "change_password", "users", Some(user_id), None, None, None) {
-        eprintln!("ERROR: Failed to log password change audit: {}", e);
-    }
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "change_password", "users", Some(user_id), None, None, None);
 
     Ok("تم تغيير كلمة المرور بنجاح".to_string())
 }
 
 #[tauri::command]
-pub fn validate_token(state: State<'_, DbState>, token: String) -> Result<User, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn validate_token(state: State<'_, DbState>, token: String) -> Result<User, AppError> {
+    let conn = state.0.lock()?;
 
     if is_token_validate_rate_limited(&conn)? {
-        return Err("طلبات التحقق من التوكن كثيرة جداً. حاول مرة أخرى بعد دقيقة".to_string());
+        return Err(AppError::auth("طلبات التحقق من التوكن كثيرة جداً. حاول مرة أخرى بعد دقيقة"));
     }
 
-    if let Err(e) = conn.execute(
+    let _ = conn.execute(
         "INSERT INTO login_attempts(username, ts, ok) VALUES('_validate_token_', ?, 1)",
         rusqlite::params![chrono::Utc::now().timestamp() as f64],
-    ) {
-        eprintln!("ERROR: Failed to record token validation attempt: {}", e);
-    }
+    );
 
     let (user_id, _username, _role) = crypto::validate_tauri_token(&token)?;
 
-    // Verify user still active and role hasn't changed
     conn.query_row(
         "SELECT id, username, full_name, role, active, must_change_password, created_at FROM users WHERE id = ? AND active = 1",
         [user_id],
@@ -285,5 +257,5 @@ pub fn validate_token(state: State<'_, DbState>, token: String) -> Result<User, 
             })
         },
     )
-    .map_err(|_| "Token invalid: user not found or inactive".to_string())
+    .map_err(|_| AppError::auth("Token invalid: user not found or inactive"))
 }

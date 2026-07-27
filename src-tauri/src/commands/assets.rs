@@ -1,4 +1,5 @@
 use crate::db::DbState;
+use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -76,11 +77,11 @@ pub struct CreateMaintenanceInput {
 }
 
 #[tauri::command]
-pub fn list_assets(state: State<'_, DbState>) -> Result<Vec<Asset>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn list_assets(state: State<'_, DbState>) -> Result<Vec<Asset>, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn.prepare(
         "SELECT id, asset_no, name, category, description, serial_number, purchase_date, purchase_cost_milli, current_value_milli, depreciation_method, depreciation_rate_pct, useful_life_months, accumulated_depreciation_milli, location, department, assigned_to, supplier, warranty_expiry, last_maintenance, next_maintenance, condition_status, status, notes, active, created_at FROM fixed_assets WHERE active=1 ORDER BY asset_no"
-    ).map_err(|e| e.to_string())?;
+    )?;
     let rows = stmt.query_map([], |row| {
         Ok(Asset {
             id: row.get(0)?, asset_no: row.get(1)?, name: row.get(2)?, category: row.get(3)?,
@@ -93,13 +94,13 @@ pub fn list_assets(state: State<'_, DbState>) -> Result<Vec<Asset>, String> {
             next_maintenance: row.get(19)?, condition_status: row.get(20)?, status: row.get(21)?,
             notes: row.get(22)?, active: row.get(23)?, created_at: row.get(24)?,
         })
-    }).map_err(|e| e.to_string())?;
+    })?;
     Ok(rows.filter_map(|r| r.ok()).collect::<Vec<_>>())
 }
 
 #[tauri::command]
-pub fn get_asset(state: State<'_, DbState>, id: i64) -> Result<Asset, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_asset(state: State<'_, DbState>, id: i64) -> Result<Asset, AppError> {
+    let conn = state.0.lock()?;
     conn.query_row(
         "SELECT id, asset_no, name, category, description, serial_number, purchase_date, purchase_cost_milli, current_value_milli, depreciation_method, depreciation_rate_pct, useful_life_months, accumulated_depreciation_milli, location, department, assigned_to, supplier, warranty_expiry, last_maintenance, next_maintenance, condition_status, status, notes, active, created_at FROM fixed_assets WHERE id = ?",
         [id],
@@ -114,12 +115,12 @@ pub fn get_asset(state: State<'_, DbState>, id: i64) -> Result<Asset, String> {
             next_maintenance: row.get(19)?, condition_status: row.get(20)?, status: row.get(21)?,
             notes: row.get(22)?, active: row.get(23)?, created_at: row.get(24)?,
         }),
-    ).map_err(|e| format!("Asset not found: {}", e))
+    ).map_err(|_| AppError::not_found("Asset not found"))
 }
 
 #[tauri::command]
-pub fn create_asset(state: State<'_, DbState>, input: CreateAssetInput) -> Result<i64, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn create_asset(state: State<'_, DbState>, input: CreateAssetInput) -> Result<i64, AppError> {
+    let conn = state.0.lock()?;
     let seq: i64 = conn.query_row("SELECT COALESCE(MAX(CAST(SUBSTR(asset_no, 5) AS INTEGER)), 0) + 1 FROM fixed_assets", [], |r| r.get(0)).unwrap_or(1);
     let asset_no = format!("AST-{}", seq);
     let dep_method = input.depreciation_method.unwrap_or_else(|| "straight_line".to_string());
@@ -129,33 +130,33 @@ pub fn create_asset(state: State<'_, DbState>, input: CreateAssetInput) -> Resul
     conn.execute(
         "INSERT INTO fixed_assets (asset_no, name, category, description, serial_number, purchase_date, purchase_cost_milli, current_value_milli, depreciation_method, depreciation_rate_pct, useful_life_months, accumulated_depreciation_milli, location, department, assigned_to, supplier, warranty_expiry, condition_status, status, notes, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, 'good', 'active', ?, 1, datetime('now'))",
         rusqlite::params![asset_no, input.name, input.category, input.description, input.serial_number, input.purchase_date, input.purchase_cost_milli, input.purchase_cost_milli, dep_method, dep_rate, useful_life, input.location, input.department, input.assigned_to, input.supplier, input.warranty_expiry, input.notes],
-    ).map_err(|e| e.to_string())?;
+    )?;
     Ok(conn.last_insert_rowid())
 }
 
 #[tauri::command]
-pub fn list_asset_maintenance(state: State<'_, DbState>, asset_id: i64) -> Result<Vec<AssetMaintenanceLog>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn list_asset_maintenance(state: State<'_, DbState>, asset_id: i64) -> Result<Vec<AssetMaintenanceLog>, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn.prepare(
         "SELECT id, asset_id, maintenance_type, date, description, cost_milli, performed_by, next_due, notes FROM asset_maintenance_logs WHERE asset_id = ? ORDER BY date DESC"
-    ).map_err(|e| e.to_string())?;
+    )?;
     let rows = stmt.query_map([asset_id], |row| {
         Ok(AssetMaintenanceLog {
             id: row.get(0)?, asset_id: row.get(1)?, maintenance_type: row.get(2)?,
             date: row.get(3)?, description: row.get(4)?, cost_milli: row.get(5)?,
             performed_by: row.get(6)?, next_due: row.get(7)?, notes: row.get(8)?,
         })
-    }).map_err(|e| e.to_string())?;
+    })?;
     Ok(rows.filter_map(|r| r.ok()).collect::<Vec<_>>())
 }
 
 #[tauri::command]
-pub fn create_asset_maintenance(state: State<'_, DbState>, input: CreateMaintenanceInput) -> Result<i64, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn create_asset_maintenance(state: State<'_, DbState>, input: CreateMaintenanceInput) -> Result<i64, AppError> {
+    let conn = state.0.lock()?;
     conn.execute(
         "INSERT INTO asset_maintenance_logs (asset_id, maintenance_type, date, description, cost_milli, performed_by, next_due, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         rusqlite::params![input.asset_id, input.maintenance_type, input.date, input.description, input.cost_milli, input.performed_by, input.next_due, input.notes],
-    ).map_err(|e| e.to_string())?;
+    )?;
     conn.execute("UPDATE fixed_assets SET last_maintenance = ? WHERE id = ?", rusqlite::params![input.date, input.asset_id]).ok();
     if let Some(ref next) = input.next_due {
         conn.execute("UPDATE fixed_assets SET next_maintenance = ? WHERE id = ?", rusqlite::params![next, input.asset_id]).ok();
@@ -164,8 +165,8 @@ pub fn create_asset_maintenance(state: State<'_, DbState>, input: CreateMaintena
 }
 
 #[tauri::command]
-pub fn get_asset_register_summary(state: State<'_, DbState>) -> Result<serde_json::Value, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_asset_register_summary(state: State<'_, DbState>) -> Result<serde_json::Value, AppError> {
+    let conn = state.0.lock()?;
     let total_assets: i64 = conn.query_row("SELECT COUNT(*) FROM fixed_assets WHERE active=1", [], |r| r.get(0)).unwrap_or(0);
     let total_cost: i64 = conn.query_row("SELECT COALESCE(SUM(purchase_cost_milli), 0) FROM fixed_assets WHERE active=1", [], |r| r.get(0)).unwrap_or(0);
     let total_current: i64 = conn.query_row("SELECT COALESCE(SUM(current_value_milli), 0) FROM fixed_assets WHERE active=1", [], |r| r.get(0)).unwrap_or(0);
@@ -184,7 +185,7 @@ pub fn get_asset_register_summary(state: State<'_, DbState>) -> Result<serde_jso
 }
 
 #[tauri::command]
-pub fn calculate_depreciation(state: State<'_, DbState>, asset_id: i64, months: i32) -> Result<serde_json::Value, String> {
+pub fn calculate_depreciation(state: State<'_, DbState>, asset_id: i64, months: i32) -> Result<serde_json::Value, AppError> {
     let asset = get_asset(state, asset_id)?;
     let monthly_rate = asset.depreciation_rate_pct / 100.0 / 12.0;
     let mut value = asset.purchase_cost_milli as f64;

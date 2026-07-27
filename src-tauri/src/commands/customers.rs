@@ -1,5 +1,6 @@
 use crate::commands::rbac;
 use crate::db::DbState;
+use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -74,37 +75,36 @@ fn row_to_customer(row: &rusqlite::Row) -> rusqlite::Result<Customer> {
 }
 
 #[tauri::command]
-pub fn list_customers(state: State<'_, DbState>) -> Result<Vec<Customer>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn list_customers(state: State<'_, DbState>) -> Result<Vec<Customer>, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn.prepare(
         "SELECT id, code, name, ctype, contact, phone, email, address, vat_number, credit_limit_milli, payment_terms, opening_balance_milli, balance_milli, notes, active FROM customers WHERE active=1 ORDER BY name"
-    ).map_err(|e| e.to_string())?;
-    
-    let rows = stmt.query_map([], row_to_customer).map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    )?;
+    let rows = stmt.query_map([], row_to_customer)?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(AppError::from)
 }
 
 #[tauri::command]
-pub fn get_customer(state: State<'_, DbState>, id: i64) -> Result<Customer, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_customer(state: State<'_, DbState>, id: i64) -> Result<Customer, AppError> {
+    let conn = state.0.lock()?;
     conn.query_row(
         "SELECT id, code, name, ctype, contact, phone, email, address, vat_number, credit_limit_milli, payment_terms, opening_balance_milli, balance_milli, notes, active FROM customers WHERE id=?",
         [id],
         row_to_customer,
-    ).map_err(|e| e.to_string())
+    ).map_err(|_| AppError::not_found("Customer not found"))
 }
 
-fn get_customer_by_conn(conn: &rusqlite::Connection, id: i64) -> Result<Customer, String> {
+fn get_customer_by_conn(conn: &rusqlite::Connection, id: i64) -> Result<Customer, AppError> {
     conn.query_row(
         "SELECT id, code, name, ctype, contact, phone, email, address, vat_number, credit_limit_milli, payment_terms, opening_balance_milli, balance_milli, notes, active FROM customers WHERE id=?",
         [id],
         row_to_customer,
-    ).map_err(|e| e.to_string())
+    ).map_err(|_| AppError::not_found("Customer not found"))
 }
 
 #[tauri::command]
-pub fn create_customer(state: State<'_, DbState>, input: CreateCustomerInput) -> Result<i64, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn create_customer(state: State<'_, DbState>, input: CreateCustomerInput) -> Result<i64, AppError> {
+    let conn = state.0.lock()?;
     conn.execute(
         "INSERT INTO customers(code, name, ctype, contact, phone, email, address, vat_number, credit_limit_milli, payment_terms, notes) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
         rusqlite::params![
@@ -112,18 +112,18 @@ pub fn create_customer(state: State<'_, DbState>, input: CreateCustomerInput) ->
             input.contact, input.phone, input.email, input.address, input.vat_number,
             input.credit_limit_milli.unwrap_or(0), input.payment_terms, input.notes
         ],
-    ).map_err(|e| e.to_string())?;
+    )?;
     let cid = conn.last_insert_rowid();
     let _ = rbac::log_audit(&conn, None, None, "create_customer", "customers", Some(cid), None, Some(&input.name), None);
     Ok(cid)
 }
 
 #[tauri::command]
-pub fn update_customer(state: State<'_, DbState>, id: i64, input: UpdateCustomerInput) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn update_customer(state: State<'_, DbState>, id: i64, input: UpdateCustomerInput) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
     let mut sets = Vec::new();
     let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
-    
+
     if let Some(v) = &input.name { sets.push("name=?"); params.push(Box::new(v.clone())); }
     if let Some(v) = &input.code { sets.push("code=?"); params.push(Box::new(v.clone())); }
     if let Some(v) = &input.ctype { sets.push("ctype=?"); params.push(Box::new(v.clone())); }
@@ -136,20 +136,20 @@ pub fn update_customer(state: State<'_, DbState>, id: i64, input: UpdateCustomer
     if let Some(v) = &input.payment_terms { sets.push("payment_terms=?"); params.push(Box::new(v.clone())); }
     if let Some(v) = &input.notes { sets.push("notes=?"); params.push(Box::new(v.clone())); }
     if let Some(v) = input.active { sets.push("active=?"); params.push(Box::new(v)); }
-    
-    if sets.is_empty() { return Err("لا توجد تعديلات".to_string()); }
-    
+
+    if sets.is_empty() { return Err(AppError::validation("لا توجد تعديلات")); }
+
     params.push(Box::new(id));
     let sql = format!("UPDATE customers SET {} WHERE id=?", sets.join(", "));
-    conn.execute(&sql, rusqlite::params_from_iter(params.iter())).map_err(|e| e.to_string())?;
+    conn.execute(&sql, rusqlite::params_from_iter(params.iter()))?;
     let _ = rbac::log_audit(&conn, None, None, "update_customer", "customers", Some(id), None, None, None);
     Ok("تم التحديث بنجاح".to_string())
 }
 
 #[tauri::command]
-pub fn delete_customer(state: State<'_, DbState>, id: i64) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
-    conn.execute("UPDATE customers SET active=0 WHERE id=?", [id]).map_err(|e| e.to_string())?;
+pub fn delete_customer(state: State<'_, DbState>, id: i64) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
+    conn.execute("UPDATE customers SET active=0 WHERE id=?", [id])?;
     let _ = rbac::log_audit(&conn, None, None, "delete_customer", "customers", Some(id), None, None, None);
     Ok("تم الحذف بنجاح".to_string())
 }
@@ -181,19 +181,18 @@ pub fn get_customer_statement(
     customer_id: i64,
     from_date: Option<String>,
     to_date: Option<String>,
-) -> Result<CustomerStatementData, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<CustomerStatementData, AppError> {
+    let conn = state.0.lock()?;
     let customer = get_customer_by_conn(&conn, customer_id)?;
     let from = from_date.unwrap_or_else(|| "2000-01-01".into());
     let to = to_date.unwrap_or_else(|| "2099-12-31".into());
-    
+
     let mut transactions: Vec<StatementTransaction> = Vec::new();
-    
-    // Sales invoices
+
     {
         let mut stmt = conn.prepare(
             "SELECT si.date, si.inv_no, si.total_milli, si.discount_milli, si.notes FROM sales_invoices si WHERE si.customer_id=? AND si.date BETWEEN ? AND ? AND si.status != 'Void' ORDER BY si.date ASC"
-        ).map_err(|e| e.to_string())?;
+        )?;
         let rows = stmt.query_map(rusqlite::params![customer_id, from, to], |row| {
             Ok((
                 row.get::<_, String>(0)?,
@@ -202,9 +201,9 @@ pub fn get_customer_statement(
                 row.get::<_, i64>(3)?,
                 row.get::<_, Option<String>>(4)?,
             ))
-        }).map_err(|e| e.to_string())?;
+        })?;
         for r in rows {
-            let (date, inv_no, total, discount, notes) = r.map_err(|e| e.to_string())?;
+            let (date, inv_no, total, discount, notes) = r?;
             let amount = total - discount;
             transactions.push(StatementTransaction {
                 date,
@@ -217,12 +216,11 @@ pub fn get_customer_statement(
             });
         }
     }
-    
-    // Customer payments
+
     {
         let mut stmt = conn.prepare(
             "SELECT cp.date, cp.receipt_no, cp.amount_milli, cp.method, cp.notes FROM customer_payments cp WHERE cp.customer_id=? AND cp.date BETWEEN ? AND ? AND cp.status != 'Void' ORDER BY cp.date ASC"
-        ).map_err(|e| e.to_string())?;
+        )?;
         let rows = stmt.query_map(rusqlite::params![customer_id, from, to], |row| {
             Ok((
                 row.get::<_, String>(0)?,
@@ -231,9 +229,9 @@ pub fn get_customer_statement(
                 row.get::<_, Option<String>>(3)?,
                 row.get::<_, Option<String>>(4)?,
             ))
-        }).map_err(|e| e.to_string())?;
+        })?;
         for r in rows {
-            let (date, receipt_no, amount, method, notes) = r.map_err(|e| e.to_string())?;
+            let (date, receipt_no, amount, method, notes) = r?;
             let note_str = notes.map(|n| format!("{} - {}", method.clone().unwrap_or_default(), n)).unwrap_or_else(|| method.unwrap_or_default());
             transactions.push(StatementTransaction {
                 date,
@@ -246,12 +244,11 @@ pub fn get_customer_statement(
             });
         }
     }
-    
-    // Credit notes
+
     {
         let mut stmt = conn.prepare(
             "SELECT cn.date, cn.cn_no, cn.total_milli, cn.reason FROM credit_notes cn WHERE cn.customer_id=? AND cn.date BETWEEN ? AND ? AND cn.status != 'Void' ORDER BY cn.date ASC"
-        ).map_err(|e| e.to_string())?;
+        )?;
         let rows = stmt.query_map(rusqlite::params![customer_id, from, to], |row| {
             Ok((
                 row.get::<_, String>(0)?,
@@ -259,9 +256,9 @@ pub fn get_customer_statement(
                 row.get::<_, i64>(2)?,
                 row.get::<_, Option<String>>(3)?,
             ))
-        }).map_err(|e| e.to_string())?;
+        })?;
         for r in rows {
-            let (date, cn_no, total, reason) = r.map_err(|e| e.to_string())?;
+            let (date, cn_no, total, reason) = r?;
             transactions.push(StatementTransaction {
                 date,
                 ref_no: cn_no,
@@ -273,23 +270,21 @@ pub fn get_customer_statement(
             });
         }
     }
-    
-    // Sort by date
+
     transactions.sort_by(|a, b| a.date.cmp(&b.date));
-    
-    // Calculate running balance
+
     let opening = customer.opening_balance_milli;
     let mut balance = opening;
     let mut total_debit: i64 = 0;
     let mut total_credit: i64 = 0;
-    
+
     for txn in &mut transactions {
         balance += txn.debit_milli - txn.credit_milli;
         txn.balance_milli = balance;
         total_debit += txn.debit_milli;
         total_credit += txn.credit_milli;
     }
-    
+
     Ok(CustomerStatementData {
         customer,
         opening_balance_milli: opening,

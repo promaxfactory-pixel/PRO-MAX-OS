@@ -1,5 +1,6 @@
 use crate::commands::rbac;
 use crate::db::DbState;
+use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -66,11 +67,11 @@ pub struct CreateProductInput {
 }
 
 #[tauri::command]
-pub fn list_products(state: State<'_, DbState>) -> Result<Vec<Product>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn list_products(state: State<'_, DbState>) -> Result<Vec<Product>, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn.prepare(
         "SELECT id, code, name_ar, name_en, size, cup_type, cups_per_carton, carton_type, default_price_milli, default_cost_milli, vat_pct, barcode, notes, active, brand_name, cup_size_ml, cup_diameter_mm, paper_weight_gsm, lid_type, print_colors, carton_length_cm, carton_width_cm, carton_height_cm, color, material_type, product_type, family_id, min_stock, weight_kg FROM products WHERE active=1 ORDER BY name_ar",
-    ).map_err(|e| e.to_string())?;
+    )?;
     let rows = stmt.query_map([], |row| {
         Ok(Product {
             id: row.get(0)?,
@@ -103,8 +104,8 @@ pub fn list_products(state: State<'_, DbState>) -> Result<Vec<Product>, String> 
             min_stock: row.get(27)?,
             weight_kg: row.get(28)?,
         })
-    }).map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    })?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(AppError::from)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -117,11 +118,11 @@ pub struct ProductSelectItem {
 }
 
 #[tauri::command]
-pub fn list_products_for_select(state: State<'_, DbState>) -> Result<Vec<ProductSelectItem>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn list_products_for_select(state: State<'_, DbState>) -> Result<Vec<ProductSelectItem>, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn.prepare(
         "SELECT id, name_ar, code, cups_per_carton, default_price_milli FROM products WHERE active=1 ORDER BY name_ar",
-    ).map_err(|e| e.to_string())?;
+    )?;
     let rows = stmt.query_map([], |row| {
         Ok(ProductSelectItem {
             id: row.get(0)?,
@@ -130,13 +131,13 @@ pub fn list_products_for_select(state: State<'_, DbState>) -> Result<Vec<Product
             cups_per_carton: row.get(3)?,
             default_price_milli: row.get(4)?,
         })
-    }).map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    })?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(AppError::from)
 }
 
 #[tauri::command]
-pub fn get_product(state: State<'_, DbState>, id: i64) -> Result<Product, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_product(state: State<'_, DbState>, id: i64) -> Result<Product, AppError> {
+    let conn = state.0.lock()?;
     conn.query_row(
         "SELECT id, code, name_ar, name_en, size, cup_type, cups_per_carton, carton_type, default_price_milli, default_cost_milli, vat_pct, barcode, notes, active, brand_name, cup_size_ml, cup_diameter_mm, paper_weight_gsm, lid_type, print_colors, carton_length_cm, carton_width_cm, carton_height_cm, color, material_type, product_type, family_id, min_stock, weight_kg FROM products WHERE id=?",
         [id],
@@ -173,12 +174,12 @@ pub fn get_product(state: State<'_, DbState>, id: i64) -> Result<Product, String
                 weight_kg: row.get(28)?,
             })
         },
-    ).map_err(|e| e.to_string())
+    ).map_err(|_| AppError::not_found("Product not found"))
 }
 
 #[tauri::command]
-pub fn create_product(state: State<'_, DbState>, input: CreateProductInput) -> Result<i64, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn create_product(state: State<'_, DbState>, input: CreateProductInput) -> Result<i64, AppError> {
+    let conn = state.0.lock()?;
     conn.execute(
         "INSERT INTO products(code, name_ar, name_en, size, cup_type, cups_per_carton, default_price_milli, default_cost_milli, barcode, notes, brand_name, cup_size_ml, cup_diameter_mm, paper_weight_gsm, lid_type, print_colors, carton_length_cm, carton_width_cm, carton_height_cm, color, material_type, product_type, family_id, min_stock, weight_kg) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         rusqlite::params![
@@ -208,15 +209,15 @@ pub fn create_product(state: State<'_, DbState>, input: CreateProductInput) -> R
             input.min_stock,
             input.weight_kg,
         ],
-    ).map_err(|e| e.to_string())?;
+    )?;
     let id = conn.last_insert_rowid();
     let _ = rbac::log_audit(&conn, None, None, "create_product", "products", Some(id), None, Some(&input.name_ar.as_deref().unwrap_or("")), None);
     Ok(id)
 }
 
 #[tauri::command]
-pub fn update_product(state: State<'_, DbState>, id: i64, input: CreateProductInput) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn update_product(state: State<'_, DbState>, id: i64, input: CreateProductInput) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
     conn.execute(
         "UPDATE products SET code=?, name_ar=?, name_en=?, size=?, cup_type=?, cups_per_carton=?, default_price_milli=?, default_cost_milli=?, barcode=?, notes=?, brand_name=?, cup_size_ml=?, cup_diameter_mm=?, paper_weight_gsm=?, lid_type=?, print_colors=?, carton_length_cm=?, carton_width_cm=?, carton_height_cm=?, color=?, material_type=?, product_type=?, family_id=?, min_stock=?, weight_kg=? WHERE id=?",
         rusqlite::params![
@@ -247,15 +248,15 @@ pub fn update_product(state: State<'_, DbState>, id: i64, input: CreateProductIn
             input.weight_kg,
             id,
         ],
-    ).map_err(|e| e.to_string())?;
+    )?;
     let _ = rbac::log_audit(&conn, None, None, "update_product", "products", Some(id), None, None, None);
     Ok("تم التحديث".to_string())
 }
 
 #[tauri::command]
-pub fn delete_product(state: State<'_, DbState>, id: i64) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
-    conn.execute("UPDATE products SET active=0 WHERE id=?", [id]).map_err(|e| e.to_string())?;
+pub fn delete_product(state: State<'_, DbState>, id: i64) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
+    conn.execute("UPDATE products SET active=0 WHERE id=?", [id])?;
     let _ = rbac::log_audit(&conn, None, None, "delete_product", "products", Some(id), None, None, None);
     Ok("تم الحذف".to_string())
 }

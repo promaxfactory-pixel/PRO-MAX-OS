@@ -146,12 +146,11 @@ pub fn create_invoice(state: State<'_, DbState>, input: CreateInvoiceInput) -> R
         [&year],
         |r| r.get(0),
     ).unwrap_or(1);
-    if let Err(e) = tx.execute(
+    tx.execute(
         "INSERT INTO doc_sequences(doc_type, year, last_number) VALUES('INV',?,?) ON CONFLICT(doc_type, year) DO UPDATE SET last_number=excluded.last_number",
         rusqlite::params![year, seq],
-    ) {
-        eprintln!("ERROR: Failed to increment invoice sequence: {}", e);
-    }
+    )
+    .map_err(|e| format!("Failed to increment invoice sequence: {}", e))?;
     let inv_no = format!("INV-{}-{:04}", year, seq);
     
     let mut net: i64 = 0;
@@ -342,10 +341,10 @@ pub fn duplicate_invoice(state: State<'_, DbState>, id: i64) -> Result<i64, Stri
         [&year],
         |r| r.get(0),
     ).unwrap_or(1);
-    let _ = conn.execute(
+    conn.execute(
         "INSERT INTO doc_sequences(doc_type, year, last_number) VALUES('INV',?,?) ON CONFLICT(doc_type, year) DO UPDATE SET last_number=excluded.last_number",
         rusqlite::params![year, seq],
-    );
+    ).map_err(|e| format!("Failed to increment invoice sequence: {}", e))?;
     let inv_no = format!("INV-{}-{:04}", year, seq);
     
     let mut net: i64 = 0;

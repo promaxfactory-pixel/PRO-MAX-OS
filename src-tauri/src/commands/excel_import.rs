@@ -293,8 +293,8 @@ fn find_column(map: &HashMap<String, usize>, candidates: &[&str]) -> Option<usiz
     None
 }
 
-fn ensure_import_history_table(conn: &rusqlite::Connection) {
-    let _ = conn.execute_batch(
+fn ensure_import_history_table(conn: &rusqlite::Connection) -> Result<(), String> {
+    conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS import_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             import_type TEXT NOT NULL,
@@ -306,7 +306,7 @@ fn ensure_import_history_table(conn: &rusqlite::Connection) {
             created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
             created_by TEXT NOT NULL DEFAULT 'system'
         );",
-    );
+    ).map_err(|e| format!("Failed to create import_history table: {}", e))
 }
 
 fn insert_import_history(
@@ -374,16 +374,16 @@ fn detect_import_type_and_suggestions(
     for h in headers {
         let n = normalize_header(h);
         if JOURNAL_HEADERS_EN.iter().any(|jh| normalize_header(jh) == n) || JOURNAL_HEADERS_AR.iter().any(|jh| normalize_header(jh) == n) {
-            *scores.get_mut("journal").unwrap() += 1;
+            if let Some(v) = scores.get_mut("journal") { *v += 1; }
         }
         if CUSTOMER_HEADERS_EN.iter().any(|ch| normalize_header(ch) == n) || CUSTOMER_HEADERS_AR.iter().any(|ch| normalize_header(ch) == n) {
-            *scores.get_mut("customers").unwrap() += 1;
+            if let Some(v) = scores.get_mut("customers") { *v += 1; }
         }
         if PRODUCT_HEADERS_EN.iter().any(|ph| normalize_header(ph) == n) || PRODUCT_HEADERS_AR.iter().any(|ph| normalize_header(ph) == n) {
-            *scores.get_mut("products").unwrap() += 1;
+            if let Some(v) = scores.get_mut("products") { *v += 1; }
         }
         if INVENTORY_HEADERS_EN.iter().any(|ih| normalize_header(ih) == n) || INVENTORY_HEADERS_AR.iter().any(|ih| normalize_header(ih) == n) {
-            *scores.get_mut("inventory").unwrap() += 1;
+            if let Some(v) = scores.get_mut("inventory") { *v += 1; }
         }
     }
 
@@ -391,10 +391,10 @@ fn detect_import_type_and_suggestions(
     let has_debit = hmap.contains_key("debit") || hmap.contains_key("المدين");
     let has_credit = hmap.contains_key("credit") || hmap.contains_key("الدائن");
     if has_debit && has_credit {
-        *scores.get_mut("journal").unwrap() += 5;
+        if let Some(v) = scores.get_mut("journal") { *v += 5; }
     }
 
-    let best = scores.iter().max_by_key(|(_, v)| *v).unwrap();
+    let best = scores.iter().max_by_key(|(_, v)| *v).unwrap_or((&"unknown", &0));
     let detected = if *best.1 >= 2 {
         best.0.to_string()
     } else {
@@ -534,7 +534,7 @@ pub fn excel_import_journal(
     }
 
     let conn = state.0.lock().map_err(|e| format!("DB lock: {}", e))?;
-    ensure_import_history_table(&conn);
+    ensure_import_history_table(&conn)?;
 
     for (date, indices) in &entry_groups {
         let mut total_debit = 0.0f64;
@@ -724,7 +724,7 @@ pub fn excel_import_customers(
     let code_col = find_column(&hmap, &["code", "customer code", "الرمز", "رمز العميل", "customer_code"]);
 
     let conn = state.0.lock().map_err(|e| format!("DB lock: {}", e))?;
-    ensure_import_history_table(&conn);
+    ensure_import_history_table(&conn)?;
 
     // Load existing customer names for duplicate check
     let mut existing_names: std::collections::HashSet<String> = std::collections::HashSet::new();
@@ -863,7 +863,7 @@ pub fn excel_import_products(
     let barcode_col = find_column(&hmap, &["barcode", "الباركود", "bar code", "upc"]);
 
     let conn = state.0.lock().map_err(|e| format!("DB lock: {}", e))?;
-    ensure_import_history_table(&conn);
+    ensure_import_history_table(&conn)?;
 
     let mut existing_codes: std::collections::HashSet<String> = std::collections::HashSet::new();
     if let Ok(mut stmt) = conn.prepare("SELECT code FROM products") {
@@ -1016,7 +1016,7 @@ pub fn excel_import_inventory(
     let max_col = find_column(&hmap, &["max stock", "max", "الحد الأقصى", "maximum", "max_stock"]);
 
     let conn = state.0.lock().map_err(|e| format!("DB lock: {}", e))?;
-    ensure_import_history_table(&conn);
+    ensure_import_history_table(&conn)?;
 
     let mut existing_codes: std::collections::HashSet<String> = std::collections::HashSet::new();
     if let Ok(mut stmt) = conn.prepare("SELECT code FROM inventory_items") {
@@ -1197,15 +1197,15 @@ pub fn excel_analyze_data(
             // Type detection
             if let Some(f) = cell_to_f64(&cell) {
                 if f > 0.0 && f == (f as i64) as f64 && f < 100_000.0 {
-                    *type_votes.get_mut("id").unwrap() += 1;
+                    if let Some(v) = type_votes.get_mut("id") { *v += 1; }
                 }
                 if f >= 0.0 {
-                    *type_votes.get_mut("currency").unwrap() += 1;
+                    if let Some(v) = type_votes.get_mut("currency") { *v += 1; }
                 }
-                *type_votes.get_mut("number").unwrap() += 1;
+                if let Some(v) = type_votes.get_mut("number") { *v += 1; }
             } else if let Some(_) = cell_to_i64(&cell) {
-                *type_votes.get_mut("number").unwrap() += 1;
-                *type_votes.get_mut("id").unwrap() += 1;
+                if let Some(v) = type_votes.get_mut("number") { *v += 1; }
+                if let Some(v) = type_votes.get_mut("id") { *v += 1; }
             } else {
                 let lower = s.to_lowercase();
                 // Date detection
@@ -1213,15 +1213,11 @@ pub fn excel_analyze_data(
                     let parts: Vec<&str> = lower.split(&['/', '-', '.'][..]).collect();
                     if parts.len() == 3 {
                         if parts.iter().all(|p| p.parse::<u32>().is_ok()) {
-                            *type_votes.get_mut("date").unwrap() += 3;
+                            if let Some(v) = type_votes.get_mut("date") { *v += 3; }
                         }
                     }
                 }
-                if lower.contains('@') {
-                    *type_votes.get_mut("text").unwrap() += 1;
-                } else {
-                    *type_votes.get_mut("text").unwrap() += 1;
-                }
+                if let Some(v) = type_votes.get_mut("text") { *v += 1; }
             }
         }
 
@@ -1261,7 +1257,7 @@ pub fn excel_analyze_data(
 
     // Validate against import type expectations
     let conn = state.0.lock().map_err(|e| format!("DB lock: {}", e))?;
-    ensure_import_history_table(&conn);
+    ensure_import_history_table(&conn)?;
     drop(conn);
 
     match input.import_type.as_str() {
@@ -1445,7 +1441,7 @@ pub fn excel_get_import_history(
     state: State<'_, DbState>,
 ) -> Result<Vec<ImportHistory>, String> {
     let conn = state.0.lock().map_err(|e| format!("DB lock: {}", e))?;
-    ensure_import_history_table(&conn);
+    ensure_import_history_table(&conn)?;
 
     let mut stmt = conn
         .prepare(

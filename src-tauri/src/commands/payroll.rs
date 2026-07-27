@@ -87,10 +87,10 @@ pub fn create_payroll_run(
             |r| r.get(0),
         )
         .unwrap_or(1);
-    let _ = tx.execute(
+    tx.execute(
         "INSERT INTO doc_sequences(doc_type, year, last_number) VALUES('PR',?,?) ON CONFLICT(doc_type, year) DO UPDATE SET last_number=excluded.last_number",
         rusqlite::params![year, seq],
-    );
+    ).map_err(|e| format!("Failed to increment payroll sequence: {}", e))?;
     let run_no = format!("PR-{}-{:04}", year, seq);
 
     tx.execute(

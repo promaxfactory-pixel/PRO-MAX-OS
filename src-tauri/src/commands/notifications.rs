@@ -1,4 +1,5 @@
 use crate::db::DbState;
+use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -39,8 +40,8 @@ pub struct NotificationFilter {
 }
 
 #[tauri::command]
-pub fn list_notifications(state: State<'_, DbState>, filter: Option<NotificationFilter>) -> Result<Vec<Notification>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn list_notifications(state: State<'_, DbState>, filter: Option<NotificationFilter>) -> Result<Vec<Notification>, AppError> {
+    let conn = state.0.lock()?;
     let mut sql = String::from("SELECT id, user_id, notification_type, title, message, entity_type, entity_id, severity, read_status, action_url, created_at, read_at FROM notifications WHERE 1=1");
     let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
@@ -66,7 +67,7 @@ pub fn list_notifications(state: State<'_, DbState>, filter: Option<Notification
     sql.push_str(" ORDER BY created_at DESC");
 
     let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
-    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(&sql)?;
     let rows = stmt.query_map(param_refs.as_slice(), |row| {
         Ok(Notification {
             id: row.get(0)?, user_id: row.get(1)?, notification_type: row.get(2)?,
@@ -74,42 +75,42 @@ pub fn list_notifications(state: State<'_, DbState>, filter: Option<Notification
             entity_id: row.get(6)?, severity: row.get(7)?, read_status: row.get(8)?,
             action_url: row.get(9)?, created_at: row.get(10)?, read_at: row.get(11)?,
         })
-    }).map_err(|e| e.to_string())?;
+    })?;
     Ok(rows.filter_map(|r| r.ok()).collect::<Vec<_>>())
 }
 
 #[tauri::command]
-pub fn create_notification(state: State<'_, DbState>, input: CreateNotificationInput) -> Result<i64, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn create_notification(state: State<'_, DbState>, input: CreateNotificationInput) -> Result<i64, AppError> {
+    let conn = state.0.lock()?;
     let severity = input.severity.unwrap_or_else(|| "info".to_string());
     conn.execute(
         "INSERT INTO notifications (user_id, notification_type, title, message, entity_type, entity_id, severity, read_status, action_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'unread', ?, datetime('now'))",
         rusqlite::params![input.user_id, input.notification_type, input.title, input.message, input.entity_type, input.entity_id, severity, input.action_url],
-    ).map_err(|e| e.to_string())?;
+    )?;
     Ok(conn.last_insert_rowid())
 }
 
 #[tauri::command]
-pub fn mark_notification_read(state: State<'_, DbState>, id: i64) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
-    conn.execute("UPDATE notifications SET read_status = 'read', read_at = datetime('now') WHERE id = ? AND read_status = 'unread'", [id]).map_err(|e| e.to_string())?;
+pub fn mark_notification_read(state: State<'_, DbState>, id: i64) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
+    conn.execute("UPDATE notifications SET read_status = 'read', read_at = datetime('now') WHERE id = ? AND read_status = 'unread'", [id])?;
     Ok("Notification marked as read".to_string())
 }
 
 #[tauri::command]
-pub fn mark_all_notifications_read(state: State<'_, DbState>, user_id: Option<i64>) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn mark_all_notifications_read(state: State<'_, DbState>, user_id: Option<i64>) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
     if let Some(uid) = user_id {
-        conn.execute("UPDATE notifications SET read_status = 'read', read_at = datetime('now') WHERE (user_id = ? OR user_id IS NULL) AND read_status = 'unread'", [uid]).map_err(|e| e.to_string())?;
+        conn.execute("UPDATE notifications SET read_status = 'read', read_at = datetime('now') WHERE (user_id = ? OR user_id IS NULL) AND read_status = 'unread'", [uid])?;
     } else {
-        conn.execute("UPDATE notifications SET read_status = 'read', read_at = datetime('now') WHERE read_status = 'unread'", []).map_err(|e| e.to_string())?;
+        conn.execute("UPDATE notifications SET read_status = 'read', read_at = datetime('now') WHERE read_status = 'unread'", [])?;
     }
     Ok("All notifications marked as read".to_string())
 }
 
 #[tauri::command]
-pub fn get_notification_count(state: State<'_, DbState>, user_id: Option<i64>) -> Result<serde_json::Value, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_notification_count(state: State<'_, DbState>, user_id: Option<i64>) -> Result<serde_json::Value, AppError> {
+    let conn = state.0.lock()?;
     let total: i64 = if let Some(uid) = user_id {
         conn.query_row("SELECT COUNT(*) FROM notifications WHERE (user_id = ? OR user_id IS NULL) AND read_status = 'unread'", [uid], |r| r.get(0)).unwrap_or(0)
     } else {
