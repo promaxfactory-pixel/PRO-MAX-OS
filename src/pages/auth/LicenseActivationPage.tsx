@@ -8,10 +8,9 @@ export default function LicenseActivationPage() {
   const { activateLicense, isLoading, message, isLicensed, license } = useLicenseStore();
   const navigate = useNavigate();
 
-  const handleActivate = async () => {
-    if (!licenseKey.trim()) return;
-    await activateLicense(licenseKey.trim());
-  };
+   const handleActivate = async () => {
+     await activateLicense(licenseKey.trim());
+   };
 
   return (
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4" dir="rtl">
@@ -48,7 +47,7 @@ export default function LicenseActivationPage() {
 
                 <button
                   onClick={handleActivate}
-                  disabled={isLoading || !licenseKey.trim()}
+                  disabled={isLoading}
                   className="w-full py-3 bg-gradient-to-r from-gold-500 to-amber-600 text-black font-bold rounded-xl hover:from-gold-400 hover:to-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 >
                   {isLoading ? "جاري التفعيل..." : "تفعيل البرنامج"}
@@ -74,9 +73,9 @@ export default function LicenseActivationPage() {
                 <div className="flex items-start gap-3">
                   <Info className="w-5 h-5 text-gold-400 mt-0.5 flex-shrink-0" />
                   <div className="text-xs text-gray-500 space-y-1">
-                    <p>لم تحصل على مفتاح التفعيل بعد؟</p>
-                    <p>يرجى التواصل مع الدعم الفني:</p>
-                    <p className="text-gold-400">license@promax-os.com</p>
+                    <p>في أول مرة تستخدم البرنامج هنا، سيتم إنشاء ترخيص PRO تلقائياً</p>
+                    <p>يربط الترخيص بجهازك ولا يحتاج مفتاح خارجي</p>
+                    <p>للدعم الفني: license@promax-os.com</p>
                   </div>
                 </div>
               </div>
