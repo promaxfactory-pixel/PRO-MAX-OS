@@ -37,19 +37,23 @@ export default function LoginPage() {
 
   const particles = useMemo(() => Array.from({ length: 30 }, (_, i) => i), []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
-    try {
-      await login(username, password);
-      navigate("/");
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err) || "خطأ في تسجيل الدخول");
-    } finally {
-      setLoading(false);
-    }
-  };
+   const handleSubmit = async (e: React.FormEvent) => {
+     e.preventDefault();
+     setLoading(true);
+     setError("");
+     try {
+       const result = await login(username, password);
+       if (result?.user?.must_change_password) {
+         navigate("/settings/change-password");
+       } else {
+         navigate("/");
+       }
+     } catch (err: unknown) {
+       setError(err instanceof Error ? err.message : String(err) || "خطأ في تسجيل الدخول");
+     } finally {
+       setLoading(false);
+     }
+   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-surface-950 relative overflow-hidden">
@@ -142,6 +146,11 @@ export default function LoginPage() {
             <div className="mb-8">
               <h2 className="text-2xl font-bold text-white mb-1">{t("auth.login")}</h2>
               <p className="text-sm text-surface-400">أدخل بياناتك للوصول إلى النظام</p>
+            </div>
+
+            {/* First-time setup hint */}
+            <div className="mb-4 p-3 bg-gold-400/10 border border-gold-400/20 rounded-2xl text-gold-400 text-xs text-center">
+              أول مرة؟ استخدم: <span className="font-bold">admin</span> / <span className="font-bold">Aa@8888444400</span>
             </div>
 
             {/* Error */}

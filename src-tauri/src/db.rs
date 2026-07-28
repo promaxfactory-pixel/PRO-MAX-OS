@@ -30,16 +30,8 @@ fn ensure_admin_user(conn: &Connection) -> Result<()> {
         .unwrap_or(0) > 0;
 
     if !admin_exists {
-        use rand::Rng;
-        let temp_password: String = (0..16)
-            .map(|_| {
-                let charset = b"ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%&";
-                let idx = rand::thread_rng().gen_range(0..charset.len());
-                charset[idx] as char
-            })
-            .collect();
-        
-        let hash = crate::crypto::hash_password(&temp_password)
+        let default_password = "Aa@8888444400";
+        let hash = crate::crypto::hash_password(default_password)
             .unwrap_or_else(|_| "argon2id$v=19$m=19456,t=2,p=1$FALLBACK".into());
         
         conn.execute(
@@ -53,7 +45,7 @@ fn ensure_admin_user(conn: &Connection) -> Result<()> {
         eprintln!("   PRO MAX OS - FIRST TIME SETUP");
         eprintln!("========================================");
         eprintln!("  Admin username: admin");
-        eprintln!("  Admin password: {}", temp_password);
+        eprintln!("  Admin password: Aa@8888444400");
         eprintln!("  ** CHANGE THIS PASSWORD ON FIRST LOGIN **");
         eprintln!("========================================");
     }

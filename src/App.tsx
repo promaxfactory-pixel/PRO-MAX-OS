@@ -73,6 +73,7 @@ const GovernmentDashboardPage = lazy(() => import("./pages/government/Government
 const AlertCenterPage = lazy(() => import("./pages/alerts/AlertCenterPage"));
 const SettingsPage = lazy(() => import("./pages/settings/SettingsPage"));
 const UsersPage = lazy(() => import("./pages/settings/UsersPage"));
+const ChangePasswordPage = lazy(() => import("./pages/settings/ChangePasswordPage"));
 const HistoricalImportPage = lazy(() => import("./pages/tools/HistoricalImportPage"));
 const AiAssistantPage = lazy(() => import("./pages/tools/AiAssistantPage"));
 const EnhancedOcrPage = lazy(() => import("./pages/tools/EnhancedOcrPage"));
@@ -200,6 +201,7 @@ export default function App() {
           {/* Settings */}
           <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
           <Route path="/settings/users" element={<ProtectedRoute><UsersPage /></ProtectedRoute>} />
+          <Route path="/settings/change-password" element={<ProtectedRoute><ChangePasswordPage /></ProtectedRoute>} />
           <Route path="/renewals" element={<ProtectedRoute><RenewalsPage /></ProtectedRoute>} />
 
           {/* Government Integration */}
