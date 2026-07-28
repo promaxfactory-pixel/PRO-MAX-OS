@@ -222,51 +222,30 @@ pub fn list_operating_advances(
          actual_return_date, total_spent_milli, total_returned_milli, balance_milli,
          notes, created_by, created_at, updated_at
          FROM operating_advances WHERE 1=1";
-    let p_status = status_filter.as_deref();
-    let p_emp = employee_id;
-    let p_from = from_date.as_deref();
-    let p_to = to_date.as_deref();
-    let has_s = p_status.is_some();
-    let has_e = p_emp.is_some();
-    let has_f = p_from.is_some();
-    let has_t = p_to.is_some();
+    let s = status_filter.as_deref();
+    let e = employee_id;
+    let f = from_date.as_deref();
+    let t = to_date.as_deref();
     let mut full_sql = sql.to_string();
-    if has_s { full_sql.push_str(" AND status = ?1"); }
-    if has_e { full_sql.push_str(&format!(" AND employee_id = ?{}", if has_s { 2 } else { 1 })); }
-    if has_f { let n = [has_s as i32, has_e as i32].iter().sum::<i32>() + 1; full_sql.push_str(&format!(" AND date >= ?{}", n)); }
-    if has_t { let n = [has_s as i32, has_e as i32, has_f as i32].iter().sum::<i32>() + 1; full_sql.push_str(&format!(" AND date <= ?{}", n)); }
+    if s.is_some() { full_sql.push_str(" AND status = ?1"); }
+    if e.is_some() { full_sql.push_str(&format!(" AND employee_id = ?{}", if s.is_some() { 2 } else { 1 })); }
+    if f.is_some() { full_sql.push_str(&format!(" AND date >= ?{}", [s.is_some() as i32, e.is_some() as i32].iter().sum::<i32>() + 1)); }
+    if t.is_some() { full_sql.push_str(&format!(" AND date <= ?{}", [s.is_some() as i32, e.is_some() as i32, f.is_some() as i32].iter().sum::<i32>() + 1)); }
     full_sql.push_str(" ORDER BY date DESC, id DESC");
     let mut stmt = conn.prepare(&full_sql)?;
-    let rows = if let (Some(s), Some(e), Some(f), Some(t)) = (p_status, p_emp, p_from, p_to) {
-        stmt.query_map(params![s, e, f, t], row_to_advance)?
-    } else if let (Some(s), Some(e), Some(f)) = (p_status, p_emp, p_from) {
-        stmt.query_map(params![s, e, f], row_to_advance)?
-    } else if let (Some(s), Some(e)) = (p_status, p_emp) {
-        stmt.query_map(params![s, e], row_to_advance)?
-    } else if let (Some(s), Some(f), Some(t)) = (p_status, p_from, p_to) {
-        stmt.query_map(params![s, f, t], row_to_advance)?
-    } else if let (Some(s), Some(f)) = (p_status, p_from) {
-        stmt.query_map(params![s, f], row_to_advance)?
-    } else if let (Some(s), Some(t)) = (p_status, p_to) {
-        stmt.query_map(params![s, t], row_to_advance)?
-    } else if let (Some(s), Some(e)) = (p_status, p_emp) {
-        stmt.query_map(params![s, e], row_to_advance)?
-    } else if let Some(s) = p_status {
-        stmt.query_map(params![s], row_to_advance)?
-    } else if let (Some(e), Some(f), Some(t)) = (p_emp, p_from, p_to) {
-        stmt.query_map(params![e, f, t], row_to_advance)?
-    } else if let (Some(e), Some(f)) = (p_emp, p_from) {
-        stmt.query_map(params![e, f], row_to_advance)?
-    } else if let Some(e) = p_emp {
-        stmt.query_map(params![e], row_to_advance)?
-    } else if let (Some(f), Some(t)) = (p_from, p_to) {
-        stmt.query_map(params![f, t], row_to_advance)?
-    } else if let Some(f) = p_from {
-        stmt.query_map(params![f], row_to_advance)?
-    } else if let Some(t) = p_to {
-        stmt.query_map(params![t], row_to_advance)?
-    } else {
-        stmt.query_map([], row_to_advance)?
+    let rows = match (s, e, f, t) {
+        (Some(s), Some(e), Some(f), Some(t)) => stmt.query_map(params![s, e, f, t], row_to_advance)?,
+        (Some(s), Some(e), Some(f), None) => stmt.query_map(params![s, e, f], row_to_advance)?,
+        (Some(s), Some(e), None, None) => stmt.query_map(params![s, e], row_to_advance)?,
+        (Some(s), None, None, None) => stmt.query_map(params![s], row_to_advance)?,
+        (None, Some(e), Some(f), Some(t)) => stmt.query_map(params![e, f, t], row_to_advance)?,
+        (None, Some(e), Some(f), None) => stmt.query_map(params![e, f], row_to_advance)?,
+        (None, Some(e), None, None) => stmt.query_map(params![e], row_to_advance)?,
+        (None, None, Some(f), Some(t)) => stmt.query_map(params![f, t], row_to_advance)?,
+        (None, None, Some(f), None) => stmt.query_map(params![f], row_to_advance)?,
+        (None, None, None, Some(t)) => stmt.query_map(params![t], row_to_advance)?,
+        (None, None, None, None) => stmt.query_map([], row_to_advance)?,
+        _ => stmt.query_map([], row_to_advance)?,
     };
     let mut list = Vec::new();
     for r in rows {
