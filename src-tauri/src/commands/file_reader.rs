@@ -1,4 +1,5 @@
-﻿use calamine::{open_workbook, Data, Reader};
+﻿use crate::error::AppError;
+use calamine::{open_workbook, Data, Reader};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
@@ -48,7 +49,7 @@ fn data_to_string(val: &Data) -> String {
     }
 }
 
-fn read_text_file(path: &str) -> Result<FileContent, String> {
+fn read_text_file(path: &str) -> Result<FileContent, AppError> {
     let content = fs::read_to_string(path).map_err(|e| format!("Failed to read file: {}", e))?;
     let file_name = Path::new(path)
         .file_name()
@@ -64,7 +65,7 @@ fn read_text_file(path: &str) -> Result<FileContent, String> {
     })
 }
 
-fn read_json_file(path: &str) -> Result<FileContent, String> {
+fn read_json_file(path: &str) -> Result<FileContent, AppError> {
     let raw = fs::read_to_string(path).map_err(|e| format!("Failed to read file: {}", e))?;
     let file_name = Path::new(path)
         .file_name()
@@ -85,7 +86,7 @@ fn read_json_file(path: &str) -> Result<FileContent, String> {
     })
 }
 
-fn read_xml_file(path: &str) -> Result<FileContent, String> {
+fn read_xml_file(path: &str) -> Result<FileContent, AppError> {
     let raw = fs::read_to_string(path).map_err(|e| format!("Failed to read file: {}", e))?;
     let file_name = Path::new(path)
         .file_name()
@@ -123,7 +124,7 @@ fn parse_csv_line(line: &str) -> Vec<String> {
     fields
 }
 
-fn read_csv_file(path: &str) -> Result<FileContent, String> {
+fn read_csv_file(path: &str) -> Result<FileContent, AppError> {
     let raw = fs::read_to_string(path).map_err(|e| format!("Failed to read file: {}", e))?;
     let file_name = Path::new(path)
         .file_name()
@@ -189,7 +190,7 @@ fn extract_text_from_bytes(bytes: &[u8]) -> String {
 }
 
 #[tauri::command]
-pub fn file_read_text(path: String) -> Result<FileContent, String> {
+pub fn file_read_text(path: String) -> Result<FileContent, AppError> {
     let ext = get_extension(&path);
 
     match ext.as_str() {
@@ -225,7 +226,7 @@ pub fn file_read_text(path: String) -> Result<FileContent, String> {
 }
 
 #[tauri::command]
-pub fn file_read_spreadsheet(path: String) -> Result<SpreadsheetContent, String> {
+pub fn file_read_spreadsheet(path: String) -> Result<SpreadsheetContent, AppError> {
     let file_name = Path::new(&path)
         .file_name()
         .unwrap_or_default()
@@ -271,7 +272,7 @@ pub fn file_read_spreadsheet(path: String) -> Result<SpreadsheetContent, String>
 }
 
 #[tauri::command]
-pub fn file_read_docx(path: String) -> Result<FileContent, String> {
+pub fn file_read_docx(path: String) -> Result<FileContent, AppError> {
     let data = fs::read(&path).map_err(|e| format!("Failed to read file: {}", e))?;
     let file_name = Path::new(&path)
         .file_name()
@@ -290,7 +291,7 @@ pub fn file_read_docx(path: String) -> Result<FileContent, String> {
 }
 
 #[tauri::command]
-pub fn file_read_any(path: String) -> Result<FileContent, String> {
+pub fn file_read_any(path: String) -> Result<FileContent, AppError> {
     let ext = get_extension(&path);
 
     match ext.as_str() {
@@ -332,7 +333,7 @@ pub fn file_read_any(path: String) -> Result<FileContent, String> {
 }
 
 #[tauri::command]
-pub fn file_get_info(path: String) -> Result<FileInfo, String> {
+pub fn file_get_info(path: String) -> Result<FileInfo, AppError> {
     let metadata = fs::metadata(&path).map_err(|e| format!("Failed to get file info: {}", e))?;
 
     let file_name = Path::new(&path)

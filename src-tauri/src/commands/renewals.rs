@@ -1,4 +1,5 @@
 use crate::db::DbState;
+use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -31,13 +32,12 @@ pub struct CreateRenewalInput {
 }
 
 #[tauri::command]
-pub fn list_renewals(state: State<'_, DbState>) -> Result<Vec<Renewal>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn list_renewals(state: State<'_, DbState>) -> Result<Vec<Renewal>, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn
         .prepare(
             "SELECT id, name, category, authority, issue_date, expiry_date, cost_milli, responsible, alert_days, status, notes FROM renewals ORDER BY id DESC",
-        )
-        .map_err(|e| e.to_string())?;
+        )?;
     let rows = stmt
         .query_map([], |row| {
             Ok(Renewal {
@@ -53,17 +53,16 @@ pub fn list_renewals(state: State<'_, DbState>) -> Result<Vec<Renewal>, String> 
                 status: row.get(9)?,
                 notes: row.get(10)?,
             })
-        })
-        .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        })?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
 #[tauri::command]
 pub fn create_renewal(
     state: State<'_, DbState>,
     input: CreateRenewalInput,
-) -> Result<i64, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<i64, AppError> {
+    let conn = state.0.lock()?;
 
     conn.execute(
         "INSERT INTO renewals(name, category, authority, issue_date, expiry_date, cost_milli, responsible, alert_days, status, notes) VALUES(?,?,?,?,?,?,?,?,'Active',?)",
@@ -78,7 +77,6 @@ pub fn create_renewal(
             input.alert_days.unwrap_or(30),
             input.notes,
         ],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
     Ok(conn.last_insert_rowid())
 }

@@ -1,5 +1,6 @@
 use crate::commands::rbac;
 use crate::db::DbState;
+use crate::error::AppError;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -50,13 +51,12 @@ pub struct UpdateMachineInput {
 }
 
 #[tauri::command]
-pub fn list_machines(state: State<'_, DbState>) -> Result<Vec<Machine>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn list_machines(state: State<'_, DbState>) -> Result<Vec<Machine>, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn
         .prepare(
             "SELECT id, code, name, mtype, supported_products, purchase_date, supplier, cost_milli, capacity_cpm, status, notes, active FROM machines WHERE active=1 ORDER BY name",
-        )
-        .map_err(|e| e.to_string())?;
+        )?;
     let rows = stmt
         .query_map([], |row| {
             Ok(Machine {
@@ -73,15 +73,14 @@ pub fn list_machines(state: State<'_, DbState>) -> Result<Vec<Machine>, String> 
                 notes: row.get(10)?,
                 active: row.get(11)?,
             })
-        })
-        .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        })?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
 #[tauri::command]
-pub fn get_machine(state: State<'_, DbState>, id: i64) -> Result<Machine, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
-    conn.query_row(
+pub fn get_machine(state: State<'_, DbState>, id: i64) -> Result<Machine, AppError> {
+    let conn = state.0.lock()?;
+    Ok(conn.query_row(
         "SELECT id, code, name, mtype, supported_products, purchase_date, supplier, cost_milli, capacity_cpm, status, notes, active FROM machines WHERE id=?",
         [id],
         |row| {
@@ -100,16 +99,15 @@ pub fn get_machine(state: State<'_, DbState>, id: i64) -> Result<Machine, String
                 active: row.get(11)?,
             })
         },
-    )
-    .map_err(|e| e.to_string())
+    )?)
 }
 
 #[tauri::command]
 pub fn create_machine(
     state: State<'_, DbState>,
     input: CreateMachineInput,
-) -> Result<i64, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<i64, AppError> {
+    let conn = state.0.lock()?;
 
     conn.execute(
         "INSERT INTO machines(code, name, mtype, supported_products, purchase_date, supplier, cost_milli, capacity_cpm, status, notes, active) VALUES(?,?,?,?,?,?,?,?,?,?,1)",
@@ -125,8 +123,7 @@ pub fn create_machine(
             input.status.unwrap_or_else(|| "active".to_string()),
             input.notes,
         ],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
     let id = conn.last_insert_rowid();
     let _ = rbac::log_audit(&conn, None, None, "create_machine", "machines", Some(id), None, Some(&input.name), None);
     Ok(id)
@@ -137,8 +134,8 @@ pub fn update_machine(
     state: State<'_, DbState>,
     id: i64,
     input: UpdateMachineInput,
-) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
     let mut sets = Vec::new();
     let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
@@ -188,13 +185,12 @@ pub fn update_machine(
     }
 
     if sets.is_empty() {
-        return Err("No changes provided".to_string());
+        return Err(AppError::validation("No changes provided"));
     }
 
     params.push(Box::new(id));
     let sql = format!("UPDATE machines SET {} WHERE id=?", sets.join(", "));
-    conn.execute(&sql, rusqlite::params_from_iter(params.iter()))
-        .map_err(|e| e.to_string())?;
+    conn.execute(&sql, rusqlite::params_from_iter(params.iter()))?;
     let _ = rbac::log_audit(&conn, None, None, "update_machine", "machines", Some(id), None, None, None);
     Ok("Updated successfully".to_string())
 }
@@ -214,13 +210,12 @@ pub fn record_temperature(
     state: State<'_, DbState>,
     machine_id: i64,
     temperature: f64,
-) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
     conn.execute(
         "INSERT INTO machine_temp_logs (machine_id, temperature) VALUES (?1, ?2)",
         params![machine_id, temperature],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
     Ok("تم تسجيل درجة الحرارة".to_string())
 }
 
@@ -229,8 +224,8 @@ pub fn get_machine_temperatures(
     state: State<'_, DbState>,
     machine_id: i64,
     hours: Option<i64>,
-) -> Result<Vec<TemperatureLog>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<Vec<TemperatureLog>, AppError> {
+    let conn = state.0.lock()?;
     let h = hours.unwrap_or(1);
     let cutoff = chrono::Utc::now() - chrono::Duration::hours(h);
     let cutoff_str = cutoff.format("%Y-%m-%d %H:%M:%S").to_string();
@@ -242,8 +237,7 @@ pub fn get_machine_temperatures(
              LEFT JOIN machines m ON m.id = mtl.machine_id
              WHERE mtl.machine_id = ?1 AND mtl.ts >= ?2
              ORDER BY mtl.ts DESC",
-        )
-        .map_err(|e| e.to_string())?;
+        )?;
 
     let rows = stmt
         .query_map(params![machine_id, cutoff_str], |row| {
@@ -255,12 +249,11 @@ pub fn get_machine_temperatures(
                 ts: row.get(4)?,
                 recorded_by: row.get(5)?,
             })
-        })
-        .map_err(|e| e.to_string())?;
+        })?;
 
     let mut result = Vec::new();
     for row in rows {
-        result.push(row.map_err(|e| e.to_string())?);
+        result.push(row?);
     }
     Ok(result)
 }
@@ -275,8 +268,8 @@ pub struct LiveMachineTemp {
 }
 
 #[tauri::command]
-pub fn get_live_machine_temps(state: State<'_, DbState>) -> Result<Vec<LiveMachineTemp>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_live_machine_temps(state: State<'_, DbState>) -> Result<Vec<LiveMachineTemp>, AppError> {
+    let conn = state.0.lock()?;
     let cutoff = chrono::Utc::now() - chrono::Duration::minutes(5);
     let cutoff_str = cutoff.format("%Y-%m-%d %H:%M:%S").to_string();
 
@@ -294,8 +287,7 @@ pub fn get_live_machine_temps(state: State<'_, DbState>) -> Result<Vec<LiveMachi
              )
              WHERE m.active = 1
              ORDER BY m.name",
-        )
-        .map_err(|e| e.to_string())?;
+        )?;
 
     let rows = stmt
         .query_map(params![cutoff_str], |row| {
@@ -306,12 +298,11 @@ pub fn get_live_machine_temps(state: State<'_, DbState>) -> Result<Vec<LiveMachi
                 ts: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
                 status: row.get::<_, Option<String>>(4)?.unwrap_or_else(|| "offline".to_string()),
             })
-        })
-        .map_err(|e| e.to_string())?;
+        })?;
 
     let mut result = Vec::new();
     for row in rows {
-        result.push(row.map_err(|e| e.to_string())?);
+        result.push(row?);
     }
     Ok(result)
 }

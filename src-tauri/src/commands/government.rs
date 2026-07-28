@@ -1,4 +1,5 @@
 use crate::db::DbState;
+use crate::error::AppError;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -52,9 +53,9 @@ pub struct GovDashboard {
 }
 
 #[tauri::command]
-pub fn gov_get_dashboard(state: State<'_, DbState>) -> Result<GovDashboard, String> {
+pub fn gov_get_dashboard(state: State<'_, DbState>) -> Result<GovDashboard, AppError> {
     crate::commands::licensing::require_feature(crate::commands::licensing::FEAT_GOVERNMENT)?;
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    let conn = state.0.lock()?;
 
     let entities_count: i64 = conn
         .query_row("SELECT COUNT(*) FROM gov_entities", [], |row| row.get(0))
@@ -74,7 +75,7 @@ pub fn gov_get_dashboard(state: State<'_, DbState>) -> Result<GovDashboard, Stri
 
     let mut stmt = conn
         .prepare("SELECT id, code, name_ar, name_en, category, website, api_endpoint, active, notes FROM gov_entities ORDER BY name_ar")
-        .map_err(|e| e.to_string())?;
+        ?;
     let entities: Vec<GovEntity> = stmt
         .query_map([], |row| {
             Ok(GovEntity {
@@ -89,7 +90,7 @@ pub fn gov_get_dashboard(state: State<'_, DbState>) -> Result<GovDashboard, Stri
                 notes: row.get(8)?,
             })
         })
-        .map_err(|e| e.to_string())?
+        ?
         .filter_map(|r| r.ok())
         .collect();
 
@@ -100,7 +101,7 @@ pub fn gov_get_dashboard(state: State<'_, DbState>) -> Result<GovDashboard, Stri
              FROM gov_submissions s JOIN gov_entities e ON s.entity_id = e.id
              ORDER BY s.created_at DESC LIMIT 10",
         )
-        .map_err(|e| e.to_string())?;
+        ?;
     let recent_submissions: Vec<GovSubmission> = sub_stmt
         .query_map([], |row| {
             Ok(GovSubmission {
@@ -115,7 +116,7 @@ pub fn gov_get_dashboard(state: State<'_, DbState>) -> Result<GovDashboard, Stri
                 created_at: row.get(8)?,
             })
         })
-        .map_err(|e| e.to_string())?
+        ?
         .filter_map(|r| r.ok())
         .collect();
 
@@ -131,13 +132,13 @@ pub fn gov_get_dashboard(state: State<'_, DbState>) -> Result<GovDashboard, Stri
 }
 
 #[tauri::command]
-pub fn gov_list_entities(state: State<'_, DbState>, category: Option<String>) -> Result<Vec<GovEntity>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn gov_list_entities(state: State<'_, DbState>, category: Option<String>) -> Result<Vec<GovEntity>, AppError> {
+    let conn = state.0.lock()?;
     match category {
         Some(ref cat) => {
             let mut stmt = conn
                 .prepare("SELECT id, code, name_ar, name_en, category, website, api_endpoint, active, notes FROM gov_entities WHERE category=?1 ORDER BY name_ar")
-                .map_err(|e| e.to_string())?;
+                ?;
             let rows = stmt
                 .query_map(params![cat], |row| {
                     Ok(GovEntity {
@@ -152,7 +153,7 @@ pub fn gov_list_entities(state: State<'_, DbState>, category: Option<String>) ->
                         notes: row.get(8)?,
                     })
                 })
-                .map_err(|e| e.to_string())?
+                ?
                 .filter_map(|r| r.ok())
                 .collect();
             Ok(rows)
@@ -160,7 +161,7 @@ pub fn gov_list_entities(state: State<'_, DbState>, category: Option<String>) ->
         None => {
             let mut stmt = conn
                 .prepare("SELECT id, code, name_ar, name_en, category, website, api_endpoint, active, notes FROM gov_entities ORDER BY name_ar")
-                .map_err(|e| e.to_string())?;
+                ?;
             let rows = stmt
                 .query_map([], |row| {
                     Ok(GovEntity {
@@ -175,7 +176,7 @@ pub fn gov_list_entities(state: State<'_, DbState>, category: Option<String>) ->
                         notes: row.get(8)?,
                     })
                 })
-                .map_err(|e| e.to_string())?
+                ?
                 .filter_map(|r| r.ok())
                 .collect();
             Ok(rows)
@@ -184,8 +185,8 @@ pub fn gov_list_entities(state: State<'_, DbState>, category: Option<String>) ->
 }
 
 #[tauri::command]
-pub fn gov_list_submissions(state: State<'_, DbState>, entity_id: Option<i64>) -> Result<Vec<GovSubmission>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn gov_list_submissions(state: State<'_, DbState>, entity_id: Option<i64>) -> Result<Vec<GovSubmission>, AppError> {
+    let conn = state.0.lock()?;
     let _ = match entity_id {
         Some(eid) => {
             let mut stmt = conn
@@ -195,7 +196,7 @@ pub fn gov_list_submissions(state: State<'_, DbState>, entity_id: Option<i64>) -
                      FROM gov_submissions s JOIN gov_entities e ON s.entity_id = e.id
                      WHERE s.entity_id=?1 ORDER BY s.created_at DESC LIMIT 50",
                 )
-                .map_err(|e| e.to_string())?;
+                ?;
             let rows = stmt
                 .query_map(params![eid], |row| {
                     Ok(GovSubmission {
@@ -210,7 +211,7 @@ pub fn gov_list_submissions(state: State<'_, DbState>, entity_id: Option<i64>) -
                         created_at: row.get(8)?,
                     })
                 })
-                .map_err(|e| e.to_string())?
+                ?
                 .filter_map(|r| r.ok())
                 .collect();
             return Ok(rows);
@@ -223,7 +224,7 @@ pub fn gov_list_submissions(state: State<'_, DbState>, entity_id: Option<i64>) -
                      FROM gov_submissions s JOIN gov_entities e ON s.entity_id = e.id
                      ORDER BY s.created_at DESC LIMIT 50",
                 )
-                .map_err(|e| e.to_string())?;
+                ?;
             let rows = stmt
                 .query_map([], |row| {
                     Ok(GovSubmission {
@@ -238,7 +239,7 @@ pub fn gov_list_submissions(state: State<'_, DbState>, entity_id: Option<i64>) -
                         created_at: row.get(8)?,
                     })
                 })
-                .map_err(|e| e.to_string())?
+                ?
                 .filter_map(|r| r.ok())
                 .collect();
             return Ok(rows);
@@ -247,8 +248,8 @@ pub fn gov_list_submissions(state: State<'_, DbState>, entity_id: Option<i64>) -
 }
 
 #[tauri::command]
-pub fn gov_get_employee_doc_status(state: State<'_, DbState>) -> Result<Value, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn gov_get_employee_doc_status(state: State<'_, DbState>) -> Result<Value, AppError> {
+    let conn = state.0.lock()?;
     let now = chrono::Local::now().format("%Y-%m-%d").to_string();
 
     let expiring_passports: i64 = conn
@@ -309,8 +310,8 @@ pub struct GovSubmissionRecord {
 pub fn gov_submit_report(
     state: State<'_, DbState>,
     input: GovSubmissionRecord,
-) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
 
     let entity_id: i64 = conn
         .query_row(
@@ -318,7 +319,7 @@ pub fn gov_submit_report(
             params![input.entity_code],
             |row| row.get(0),
         )
-        .map_err(|_| format!("Government entity '{}' not found", input.entity_code))?;
+        .map_err(|_| AppError::not_found(format!("Government entity '{}' not found", input.entity_code)))?;
 
     let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
 
@@ -327,7 +328,7 @@ pub fn gov_submit_report(
          VALUES(?1, 'submitted', ?2, ?3, 'system')",
         params![entity_id, input.payload_json, now],
     )
-    .map_err(|e| e.to_string())?;
+    ?;
 
     Ok(format!("Report submitted to entity #{} successfully at {}", entity_id, now))
 }

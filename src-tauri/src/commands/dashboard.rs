@@ -1,4 +1,5 @@
 use crate::db::DbState;
+use crate::error::AppError;
 use serde::Serialize;
 use tauri::State;
 
@@ -68,8 +69,8 @@ pub struct DailyBrief {
 }
 
 #[tauri::command]
-pub fn get_dashboard_stats(state: State<'_, DbState>) -> Result<DashboardStats, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_dashboard_stats(state: State<'_, DbState>) -> Result<DashboardStats, AppError> {
+    let conn = state.0.lock()?;
     
     let total_customers: i64 = conn.query_row("SELECT COUNT(*) FROM customers", [], |r| r.get(0)).unwrap_or(0);
     let total_products: i64 = conn.query_row("SELECT COUNT(*) FROM products WHERE active=1", [], |r| r.get(0)).unwrap_or(0);
@@ -96,10 +97,10 @@ pub fn get_dashboard_stats(state: State<'_, DbState>) -> Result<DashboardStats, 
     let sales_trend = {
         let mut stmt = conn.prepare(
             "SELECT date, COALESCE(SUM(total_milli),0) as total FROM sales_invoices WHERE status='Posted' AND date >= date('now','-30 days') GROUP BY date ORDER BY date"
-        ).map_err(|e| e.to_string())?;
+        )?;
         let rows = stmt.query_map([], |row| {
             Ok(TrendPoint { date: row.get(0)?, amount: row.get(1)? })
-        }).map_err(|e| e.to_string())?;
+        })?;
         rows.filter_map(|r| r.ok()).collect()
     };
 
@@ -109,10 +110,10 @@ pub fn get_dashboard_stats(state: State<'_, DbState>) -> Result<DashboardStats, 
             "SELECT po.date, COALESCE(SUM(pl.cartons_good),0) as good, COALESCE(SUM(pl.cartons_waste),0) as waste 
              FROM production_orders po LEFT JOIN production_lines pl ON pl.order_id=po.id 
              WHERE po.date >= date('now','-30 days') GROUP BY po.date ORDER BY po.date"
-        ).map_err(|e| e.to_string())?;
+        )?;
         let rows = stmt.query_map([], |row| {
             Ok(ProductionTrendPoint { date: row.get(0)?, good: row.get(1)?, waste: row.get(2)? })
-        }).map_err(|e| e.to_string())?;
+        })?;
         rows.filter_map(|r| r.ok()).collect()
     };
 
@@ -122,10 +123,10 @@ pub fn get_dashboard_stats(state: State<'_, DbState>) -> Result<DashboardStats, 
             "SELECT strftime('%Y-%m', po.date) as month, COALESCE(SUM(pl.cartons_good),0) as cartons, COALESCE(SUM(pl.cups_good),0) as cups
              FROM production_orders po LEFT JOIN production_lines pl ON pl.order_id=po.id
              WHERE po.date >= date('now','-6 months') GROUP BY month ORDER BY month"
-        ).map_err(|e| e.to_string())?;
+        )?;
         let rows = stmt.query_map([], |row| {
             Ok(MonthlyProductionPoint { month: row.get(0)?, cartons: row.get(1)?, cups: row.get(2)? })
-        }).map_err(|e| e.to_string())?;
+        })?;
         rows.filter_map(|r| r.ok()).collect()
     };
 
@@ -133,10 +134,10 @@ pub fn get_dashboard_stats(state: State<'_, DbState>) -> Result<DashboardStats, 
     let top_customers = {
         let mut stmt = conn.prepare(
             "SELECT c.name, COALESCE(SUM(si.total_milli),0) as total FROM sales_invoices si JOIN customers c ON si.customer_id=c.id WHERE si.status='Posted' GROUP BY si.customer_id ORDER BY total DESC LIMIT 5"
-        ).map_err(|e| e.to_string())?;
+        )?;
         let rows = stmt.query_map([], |row| {
             Ok(TopCustomerPoint { name: row.get(0)?, total: row.get(1)? })
-        }).map_err(|e| e.to_string())?;
+        })?;
         rows.filter_map(|r| r.ok()).collect()
     };
 
@@ -144,10 +145,10 @@ pub fn get_dashboard_stats(state: State<'_, DbState>) -> Result<DashboardStats, 
     let expenses_by_category = {
         let mut stmt = conn.prepare(
             "SELECT COALESCE(category,'أخرى') as cat, SUM(amount_milli) as total FROM expenses WHERE date >= date('now','start of month') GROUP BY cat ORDER BY total DESC"
-        ).map_err(|e| e.to_string())?;
+        )?;
         let rows = stmt.query_map([], |row| {
             Ok(CategoryAmountPoint { category: row.get(0)?, amount: row.get(1)? })
-        }).map_err(|e| e.to_string())?;
+        })?;
         rows.filter_map(|r| r.ok()).collect()
     };
 
@@ -155,8 +156,8 @@ pub fn get_dashboard_stats(state: State<'_, DbState>) -> Result<DashboardStats, 
 }
 
 #[tauri::command]
-pub fn get_daily_brief(state: State<'_, DbState>) -> Result<DailyBrief, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_daily_brief(state: State<'_, DbState>) -> Result<DailyBrief, AppError> {
+    let conn = state.0.lock()?;
     let unpaid_count: i64 = conn.query_row("SELECT COUNT(*) FROM sales_invoices WHERE status IN ('Posted','Issued','Partially Paid') AND total_milli > paid_milli", [], |r| r.get(0)).unwrap_or(0);
     let unpaid_total: i64 = conn.query_row("SELECT COALESCE(SUM(total_milli - paid_milli),0) FROM sales_invoices WHERE status IN ('Posted','Issued','Partially Paid') AND total_milli > paid_milli", [], |r| r.get(0)).unwrap_or(0);
     let overdue_total: i64 = conn.query_row(

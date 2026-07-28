@@ -1,9 +1,9 @@
 use crate::commands::rbac;
+use crate::db::DbState;
+use crate::error::AppError;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use tauri::State;
-
-use crate::db::DbState;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MaintenanceSheet {
@@ -43,14 +43,13 @@ pub struct CreateMaintenanceSheetInput {
 }
 
 #[tauri::command]
-pub fn list_maintenance_sheets(state: State<'_, DbState>) -> Result<Vec<MaintenanceSheet>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn list_maintenance_sheets(state: State<'_, DbState>) -> Result<Vec<MaintenanceSheet>, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn
         .prepare(
             "SELECT id, sheet_no, date, shift, maintenance_supervisor, machine_id, area, fault_title, fault_description, severity, machine_stopped, downtime_minutes, repair_status, total_repair_cost_milli, root_cause, status, notes, created_by, created_at, approved_by
              FROM maintenance_daily_sheets ORDER BY id DESC",
-        )
-        .map_err(|e| e.to_string())?;
+        )?;
 
     let rows = stmt
         .query_map([], |row| {
@@ -76,12 +75,11 @@ pub fn list_maintenance_sheets(state: State<'_, DbState>) -> Result<Vec<Maintena
                 created_at: row.get(18)?,
                 approved_by: row.get(19)?,
             })
-        })
-        .map_err(|e| e.to_string())?;
+        })?;
 
     let mut sheets = Vec::new();
     for row in rows {
-        sheets.push(row.map_err(|e| e.to_string())?);
+        sheets.push(row?);
     }
     Ok(sheets)
 }
@@ -90,9 +88,9 @@ pub fn list_maintenance_sheets(state: State<'_, DbState>) -> Result<Vec<Maintena
 pub fn get_maintenance_sheet(
     state: State<'_, DbState>,
     id: i64,
-) -> Result<MaintenanceSheet, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
-    conn.query_row(
+) -> Result<MaintenanceSheet, AppError> {
+    let conn = state.0.lock()?;
+    Ok(conn.query_row(
         "SELECT id, sheet_no, date, shift, maintenance_supervisor, machine_id, area, fault_title, fault_description, severity, machine_stopped, downtime_minutes, repair_status, total_repair_cost_milli, root_cause, status, notes, created_by, created_at, approved_by
          FROM maintenance_daily_sheets WHERE id = ?1",
         params![id],
@@ -120,24 +118,22 @@ pub fn get_maintenance_sheet(
                 approved_by: row.get(19)?,
             })
         },
-    )
-    .map_err(|e| e.to_string())
+    )?)
 }
 
 #[tauri::command]
 pub fn create_maintenance_sheet(
     state: State<'_, DbState>,
     input: CreateMaintenanceSheetInput,
-) -> Result<MaintenanceSheet, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<MaintenanceSheet, AppError> {
+    let conn = state.0.lock()?;
 
     let seq: i64 = conn
         .query_row(
             "SELECT COALESCE(MAX(id), 0) + 1 FROM maintenance_daily_sheets",
             [],
             |row| row.get(0),
-        )
-        .map_err(|e| e.to_string())?;
+        )?;
     let sheet_no = format!("MNT-{:04}", seq);
 
     conn.execute(
@@ -155,13 +151,12 @@ pub fn create_maintenance_sheet(
             input.severity,
             input.notes,
         ],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
 
     let sheet_id = conn.last_insert_rowid();
     let _ = rbac::log_audit(&conn, None, None, "create_maintenance_sheet", "maintenance_daily_sheets", Some(sheet_id), None, None, None);
 
-    conn.query_row(
+    Ok(conn.query_row(
         "SELECT id, sheet_no, date, shift, maintenance_supervisor, machine_id, area, fault_title, fault_description, severity, machine_stopped, downtime_minutes, repair_status, total_repair_cost_milli, root_cause, status, notes, created_by, created_at, approved_by FROM maintenance_daily_sheets WHERE id=?1",
         params![sheet_id],
         |row| {
@@ -175,5 +170,5 @@ pub fn create_maintenance_sheet(
                 created_by: row.get(17)?, created_at: row.get(18)?, approved_by: row.get(19)?,
             })
         },
-    ).map_err(|e| e.to_string())
+    )?)
 }

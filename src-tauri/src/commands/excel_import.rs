@@ -1,4 +1,5 @@
 ﻿use crate::db::DbState;
+use crate::error::AppError;
 use calamine::{open_workbook_auto, Data, Reader};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -208,18 +209,18 @@ fn normalize_header(h: &str) -> String {
 fn read_sheet(
     file_path: &str,
     sheet_name: &str,
-) -> Result<(Vec<String>, Vec<Vec<Data>>), String> {
+) -> Result<(Vec<String>, Vec<Vec<Data>>), AppError> {
     let path = Path::new(file_path);
     if !path.exists() {
-        return Err(format!("File not found: {}", file_path));
+        return Err(AppError::not_found(format!("File not found: {}", file_path)));
     }
     let mut workbook = open_workbook_auto(path).map_err(|e| format!("Failed to open workbook: {}", e))?;
     let names = workbook.sheet_names().to_vec();
     if !names.contains(&sheet_name.to_string()) {
-        return Err(format!(
+        return Err(AppError::not_found(format!(
             "Sheet '{}' not found. Available: {:?}",
             sheet_name, names
-        ));
+        )));
     }
     let range = workbook
         .worksheet_range(sheet_name)
@@ -227,7 +228,7 @@ fn read_sheet(
     let mut rows_iter = range.rows();
     let headers = match rows_iter.next() {
         Some(row) => row.iter().map(|c| cell_to_string(c)).collect(),
-        None => return Err("Sheet is empty".to_string()),
+        None => return Err(AppError::validation("Sheet is empty")),
     };
     let data: Vec<Vec<Data>> = rows_iter.map(|r| r.to_vec()).collect();
     Ok((headers, data))
@@ -236,10 +237,10 @@ fn read_sheet(
 fn read_all_rows(
     file_path: &str,
     sheet_name: &str,
-) -> Result<(Vec<String>, Vec<Vec<Data>>), String> {
+) -> Result<(Vec<String>, Vec<Vec<Data>>), AppError> {
     let path = Path::new(file_path);
     if !path.exists() {
-        return Err(format!("File not found: {}", file_path));
+        return Err(AppError::not_found(format!("File not found: {}", file_path)));
     }
     let mut workbook = open_workbook_auto(path).map_err(|e| format!("Failed to open workbook: {}", e))?;
     let range = workbook
@@ -248,23 +249,23 @@ fn read_all_rows(
     let mut rows_iter = range.rows();
     let headers = match rows_iter.next() {
         Some(row) => row.iter().map(|c| cell_to_string(c)).collect(),
-        None => return Err("Sheet is empty".to_string()),
+        None => return Err(AppError::validation("Sheet is empty")),
     };
     let data: Vec<Vec<Data>> = rows_iter.map(|r| r.to_vec()).collect();
     Ok((headers, data))
 }
 
-fn first_sheet(file_path: &str) -> Result<String, String> {
+fn first_sheet(file_path: &str) -> Result<String, AppError> {
     let path = Path::new(file_path);
     if !path.exists() {
-        return Err(format!("File not found: {}", file_path));
+        return Err(AppError::not_found(format!("File not found: {}", file_path)));
     }
     let workbook = open_workbook_auto(path).map_err(|e| format!("Failed to open workbook: {}", e))?;
     let names = workbook.sheet_names();
     names
         .first()
         .cloned()
-        .ok_or_else(|| "Workbook has no sheets".to_string())
+        .ok_or_else(|| AppError::validation("Workbook has no sheets"))
 }
 
 /// Count non-empty cells in a row
@@ -293,7 +294,7 @@ fn find_column(map: &HashMap<String, usize>, candidates: &[&str]) -> Option<usiz
     None
 }
 
-fn ensure_import_history_table(conn: &rusqlite::Connection) -> Result<(), String> {
+fn ensure_import_history_table(conn: &rusqlite::Connection) -> Result<(), AppError> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS import_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -306,7 +307,7 @@ fn ensure_import_history_table(conn: &rusqlite::Connection) -> Result<(), String
             created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
             created_by TEXT NOT NULL DEFAULT 'system'
         );",
-    ).map_err(|e| format!("Failed to create import_history table: {}", e))
+    ).map_err(|e| AppError::migration(format!("Failed to create import_history table: {}", e)))
 }
 
 fn insert_import_history(
@@ -317,7 +318,7 @@ fn insert_import_history(
     imported: usize,
     skipped: usize,
     status: &str,
-) -> Result<i64, String> {
+) -> Result<i64, AppError> {
     conn.execute(
         "INSERT INTO import_history (import_type, file_name, total_rows, imported, skipped, status)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
@@ -332,7 +333,7 @@ fn insert_import_history(
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
-pub fn excel_read_preview(file_path: String, sheet_name: Option<String>) -> Result<ExcelPreview, String> {
+pub fn excel_read_preview(file_path: String, sheet_name: Option<String>) -> Result<ExcelPreview, AppError> {
     let sheet = match sheet_name {
         Some(s) => s,
         None => first_sheet(&file_path)?,
@@ -442,10 +443,10 @@ fn detect_import_type_and_suggestions(
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
-pub fn excel_list_sheets(file_path: String) -> Result<Vec<String>, String> {
+pub fn excel_list_sheets(file_path: String) -> Result<Vec<String>, AppError> {
     let path = Path::new(&file_path);
     if !path.exists() {
-        return Err(format!("File not found: {}", file_path));
+        return Err(AppError::not_found(format!("File not found: {}", file_path)));
     }
     let workbook = open_workbook_auto(path).map_err(|e| format!("Failed to open workbook: {}", e))?;
     Ok(workbook.sheet_names().to_vec())
@@ -459,7 +460,7 @@ pub fn excel_list_sheets(file_path: String) -> Result<Vec<String>, String> {
 pub fn excel_import_journal(
     state: State<'_, DbState>,
     input: ExcelImportInput,
-) -> Result<ExcelImportResult, String> {
+) -> Result<ExcelImportResult, AppError> {
     let (headers, data) = read_all_rows(&input.file_path, &input.sheet_name)?;
     let start_idx = if input.skip_first_row { 1 } else { 0 };
     let data_rows = &data[start_idx..];
@@ -533,7 +534,7 @@ pub fn excel_import_journal(
         ));
     }
 
-    let conn = state.0.lock().map_err(|e| format!("DB lock: {}", e))?;
+    let conn = state.0.lock()?;
     ensure_import_history_table(&conn)?;
 
     for (date, indices) in &entry_groups {
@@ -698,7 +699,7 @@ pub fn excel_import_journal(
 pub fn excel_import_customers(
     state: State<'_, DbState>,
     input: ExcelImportInput,
-) -> Result<ExcelImportResult, String> {
+) -> Result<ExcelImportResult, AppError> {
     let (headers, data) = read_all_rows(&input.file_path, &input.sheet_name)?;
     let data_rows = if input.skip_first_row { &data[0..] } else { &data[..] };
     let mut hmap = header_index_map(&headers);
@@ -723,7 +724,7 @@ pub fn excel_import_customers(
     let country_col = find_column(&hmap, &["country", "الدولة", "البلد"]);
     let code_col = find_column(&hmap, &["code", "customer code", "الرمز", "رمز العميل", "customer_code"]);
 
-    let conn = state.0.lock().map_err(|e| format!("DB lock: {}", e))?;
+    let conn = state.0.lock()?;
     ensure_import_history_table(&conn)?;
 
     // Load existing customer names for duplicate check
@@ -837,7 +838,7 @@ pub fn excel_import_customers(
 pub fn excel_import_products(
     state: State<'_, DbState>,
     input: ExcelImportInput,
-) -> Result<ExcelImportResult, String> {
+) -> Result<ExcelImportResult, AppError> {
     let (headers, data) = read_all_rows(&input.file_path, &input.sheet_name)?;
     let data_rows = if input.skip_first_row { &data[0..] } else { &data[..] };
     let mut hmap = header_index_map(&headers);
@@ -862,7 +863,7 @@ pub fn excel_import_products(
     let size_col = find_column(&hmap, &["size", "المقاس", "المقاس/اللون", "dimension"]);
     let barcode_col = find_column(&hmap, &["barcode", "الباركود", "bar code", "upc"]);
 
-    let conn = state.0.lock().map_err(|e| format!("DB lock: {}", e))?;
+    let conn = state.0.lock()?;
     ensure_import_history_table(&conn)?;
 
     let mut existing_codes: std::collections::HashSet<String> = std::collections::HashSet::new();
@@ -989,7 +990,7 @@ pub fn excel_import_products(
 pub fn excel_import_inventory(
     state: State<'_, DbState>,
     input: ExcelImportInput,
-) -> Result<ExcelImportResult, String> {
+) -> Result<ExcelImportResult, AppError> {
     let (headers, data) = read_all_rows(&input.file_path, &input.sheet_name)?;
     let data_rows = if input.skip_first_row { &data[0..] } else { &data[..] };
     let mut hmap = header_index_map(&headers);
@@ -1015,7 +1016,7 @@ pub fn excel_import_inventory(
     let min_col = find_column(&hmap, &["min stock", "min", "الحد الأدنى", "minimum", "min_stock"]);
     let max_col = find_column(&hmap, &["max stock", "max", "الحد الأقصى", "maximum", "max_stock"]);
 
-    let conn = state.0.lock().map_err(|e| format!("DB lock: {}", e))?;
+    let conn = state.0.lock()?;
     ensure_import_history_table(&conn)?;
 
     let mut existing_codes: std::collections::HashSet<String> = std::collections::HashSet::new();
@@ -1149,7 +1150,7 @@ pub fn excel_import_inventory(
 pub fn excel_analyze_data(
     state: State<'_, DbState>,
     input: ExcelAnalyzeInput,
-) -> Result<ExcelAnalysis, String> {
+) -> Result<ExcelAnalysis, AppError> {
     let (headers, data) = read_all_rows(&input.file_path, &input.sheet_name)?;
     let total_rows = data.len();
     let total_columns = headers.len();
@@ -1256,7 +1257,7 @@ pub fn excel_analyze_data(
     }
 
     // Validate against import type expectations
-    let conn = state.0.lock().map_err(|e| format!("DB lock: {}", e))?;
+    let conn = state.0.lock()?;
     ensure_import_history_table(&conn)?;
     drop(conn);
 
@@ -1439,8 +1440,8 @@ pub fn excel_analyze_data(
 #[tauri::command]
 pub fn excel_get_import_history(
     state: State<'_, DbState>,
-) -> Result<Vec<ImportHistory>, String> {
-    let conn = state.0.lock().map_err(|e| format!("DB lock: {}", e))?;
+) -> Result<Vec<ImportHistory>, AppError> {
+    let conn = state.0.lock()?;
     ensure_import_history_table(&conn)?;
 
     let mut stmt = conn

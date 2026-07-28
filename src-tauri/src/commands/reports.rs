@@ -1,4 +1,5 @@
 use crate::db::DbState;
+use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 use rusqlite::params;
@@ -40,28 +41,28 @@ pub struct VatReturnData {
 }
 
 #[tauri::command]
-pub fn low_stock_report(state: State<'_, DbState>) -> Result<Vec<LowStockItem>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn low_stock_report(state: State<'_, DbState>) -> Result<Vec<LowStockItem>, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn.prepare(
         "SELECT id, COALESCE(name_ar, name_en, ''), qty_on_hand, reorder_level, reorder_level - qty_on_hand
          FROM inventory_items WHERE reorder_level > 0 AND qty_on_hand <= reorder_level
          ORDER BY (qty_on_hand - reorder_level) ASC"
-    ).map_err(|e| e.to_string())?;
+    )?;
     let items = stmt.query_map([], |r| {
         Ok(LowStockItem {
             id: r.get(0)?, name: r.get(1)?,
             qty_on_hand: r.get(2)?, reorder_level: r.get(3)?,
             shortage: r.get(4)?,
         })
-    }).map_err(|e| e.to_string())?
+    })?
     .filter_map(|r| r.ok())
     .collect();
     Ok(items)
 }
 
 #[tauri::command]
-pub fn customers_aging(state: State<'_, DbState>) -> Result<Vec<CustomerAgingItem>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn customers_aging(state: State<'_, DbState>) -> Result<Vec<CustomerAgingItem>, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn.prepare(
         "SELECT c.id, c.name, COALESCE(SUM(si.total_milli - si.paid_milli), 0),
                 CAST(julianday('now') - julianday(MAX(si.date)) AS INTEGER)
@@ -71,21 +72,21 @@ pub fn customers_aging(state: State<'_, DbState>) -> Result<Vec<CustomerAgingIte
          GROUP BY c.id
          HAVING COALESCE(SUM(si.total_milli - si.paid_milli), 0) > 0
          ORDER BY SUM(si.total_milli - si.paid_milli) DESC"
-    ).map_err(|e| e.to_string())?;
+    )?;
     let items = stmt.query_map([], |r| {
         Ok(CustomerAgingItem {
             customer_id: r.get(0)?, customer_name: r.get(1)?,
             total_due: r.get(2)?, overdue_days: r.get::<_, i64>(3).unwrap_or(0),
         })
-    }).map_err(|e| e.to_string())?
+    })?
     .filter_map(|r| r.ok())
     .collect();
     Ok(items)
 }
 
 #[tauri::command]
-pub fn sales_report(state: State<'_, DbState>, date_from: String, date_to: String) -> Result<Vec<SalesReportItem>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn sales_report(state: State<'_, DbState>, date_from: String, date_to: String) -> Result<Vec<SalesReportItem>, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn.prepare(
         "SELECT COALESCE(p.name_ar, p.name_en, ''), SUM(sil.cartons), SUM(sil.line_net_milli)
          FROM sales_invoice_lines sil
@@ -94,21 +95,21 @@ pub fn sales_report(state: State<'_, DbState>, date_from: String, date_to: Strin
          WHERE si.date >= ?1 AND si.date <= ?2 AND si.status IN ('Posted', 'Issued')
          GROUP BY sil.product_id
          ORDER BY SUM(sil.line_net_milli) DESC"
-    ).map_err(|e| e.to_string())?;
+    )?;
     let items = stmt.query_map(params![date_from, date_to], |r| {
         Ok(SalesReportItem {
             product_name: r.get(0)?, qty_sold: r.get(1)?,
             revenue_milli: r.get(2)?,
         })
-    }).map_err(|e| e.to_string())?
+    })?
     .filter_map(|r| r.ok())
     .collect();
     Ok(items)
 }
 
 #[tauri::command]
-pub fn production_report(state: State<'_, DbState>, date_from: String, date_to: String) -> Result<Vec<ProductReportLine>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn production_report(state: State<'_, DbState>, date_from: String, date_to: String) -> Result<Vec<ProductReportLine>, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn.prepare(
         "SELECT COALESCE(p.name_ar, p.name_en, ''), psl.customer_brand,
                 SUM(psl.cartons_produced), SUM(psl.cartons_produced * psl.cups_per_carton), SUM(psl.waste_cartons)
@@ -118,22 +119,22 @@ pub fn production_report(state: State<'_, DbState>, date_from: String, date_to: 
          WHERE ods.date >= ?1 AND ods.date <= ?2
          GROUP BY psl.product_id, psl.customer_brand
          ORDER BY SUM(psl.cartons_produced) DESC"
-    ).map_err(|e| e.to_string())?;
+    )?;
     let items = stmt.query_map(params![date_from, date_to], |r| {
         Ok(ProductReportLine {
             product_name: r.get(0)?, customer_brand: r.get(1)?,
             total_cartons: r.get(2)?, total_cups: r.get(3)?,
             waste_cartons: r.get(4)?,
         })
-    }).map_err(|e| e.to_string())?
+    })?
     .filter_map(|r| r.ok())
     .collect();
     Ok(items)
 }
 
 #[tauri::command]
-pub fn vat_return(state: State<'_, DbState>, year: i32, month: i32) -> Result<VatReturnData, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn vat_return(state: State<'_, DbState>, year: i32, month: i32) -> Result<VatReturnData, AppError> {
+    let conn = state.0.lock()?;
     let prefix = format!("{}-{:02}", year, month);
     let sales_vat: i64 = conn.query_row(
         "SELECT COALESCE(SUM(vat_milli), 0) FROM sales_invoices WHERE date LIKE ?1 AND status IN ('Posted', 'Issued')",
@@ -152,13 +153,13 @@ pub fn vat_return(state: State<'_, DbState>, year: i32, month: i32) -> Result<Va
 }
 
 #[tauri::command]
-pub fn daily_factory_closing(state: State<'_, DbState>, date: String) -> Result<ComprehensiveDailyReport, String> {
+pub fn daily_factory_closing(state: State<'_, DbState>, date: String) -> Result<ComprehensiveDailyReport, AppError> {
     get_comprehensive_daily_report(state, date)
 }
 
 #[tauri::command]
-pub fn owner_summary(state: State<'_, DbState>, date_from: String, date_to: String) -> Result<serde_json::Value, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn owner_summary(state: State<'_, DbState>, date_from: String, date_to: String) -> Result<serde_json::Value, AppError> {
+    let conn = state.0.lock()?;
     let revenue: i64 = conn.query_row(
         "SELECT COALESCE(SUM(total_milli), 0) FROM sales_invoices WHERE date >= ?1 AND date <= ?2 AND status IN ('Posted', 'Issued')",
         params![date_from, date_to], |r| r.get(0),
@@ -182,8 +183,8 @@ pub fn owner_summary(state: State<'_, DbState>, date_from: String, date_to: Stri
 }
 
 #[tauri::command]
-pub fn inventory_margin_report(state: State<'_, DbState>) -> Result<serde_json::Value, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn inventory_margin_report(state: State<'_, DbState>) -> Result<serde_json::Value, AppError> {
+    let conn = state.0.lock()?;
     let total_value: i64 = conn.query_row(
         "SELECT COALESCE(SUM(CAST(qty_on_hand * avg_cost_milli AS INTEGER)), 0) FROM inventory_items",
         [], |r| r.get(0),
@@ -200,37 +201,37 @@ pub fn inventory_margin_report(state: State<'_, DbState>) -> Result<serde_json::
 }
 
 #[tauri::command]
-pub fn sales_by_customer_report(state: State<'_, DbState>, date_from: String, date_to: String) -> Result<serde_json::Value, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn sales_by_customer_report(state: State<'_, DbState>, date_from: String, date_to: String) -> Result<serde_json::Value, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn.prepare(
         "SELECT c.name, COUNT(si.id), COALESCE(SUM(si.total_milli), 0)
          FROM sales_invoices si
          JOIN customers c ON c.id = si.customer_id
          WHERE si.date >= ?1 AND si.date <= ?2 AND si.status IN ('Posted', 'Issued')
          GROUP BY si.customer_id ORDER BY SUM(si.total_milli) DESC"
-    ).map_err(|e| e.to_string())?;
+    )?;
     let data: Vec<serde_json::Value> = stmt.query_map(params![date_from, date_to], |r| {
         Ok(serde_json::json!({
             "customer_name": r.get::<_, String>(0)?,
             "invoice_count": r.get::<_, i64>(1)?,
             "total_milli": r.get::<_, i64>(2)?,
         }))
-    }).map_err(|e| e.to_string())?
+    })?
     .filter_map(|r| r.ok())
     .collect();
     Ok(serde_json::json!({ "date_from": date_from, "date_to": date_to, "customers": data }))
 }
 
 #[tauri::command]
-pub fn unpaid_invoices_report(state: State<'_, DbState>) -> Result<serde_json::Value, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn unpaid_invoices_report(state: State<'_, DbState>) -> Result<serde_json::Value, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn.prepare(
         "SELECT si.id, si.inv_no, c.name, si.date, si.total_milli, si.paid_milli, si.total_milli - si.paid_milli
          FROM sales_invoices si
          JOIN customers c ON c.id = si.customer_id
          WHERE si.total_milli > si.paid_milli AND si.status IN ('Posted', 'Issued')
          ORDER BY si.date ASC"
-    ).map_err(|e| e.to_string())?;
+    )?;
     let data: Vec<serde_json::Value> = stmt.query_map([], |r| {
         Ok(serde_json::json!({
             "id": r.get::<_, i64>(0)?,
@@ -240,7 +241,7 @@ pub fn unpaid_invoices_report(state: State<'_, DbState>) -> Result<serde_json::V
             "total_milli": r.get::<_, i64>(4)?,
             "due_milli": r.get::<_, i64>(6)?,
         }))
-    }).map_err(|e| e.to_string())?
+    })?
     .filter_map(|r| r.ok())
     .collect();
     Ok(serde_json::json!({ "invoices": data, "total_due": data.iter().map(|d| d["due_milli"].as_i64().unwrap_or(0)).sum::<i64>() }))
@@ -351,8 +352,8 @@ pub struct LowStockReport {
 }
 
 #[tauri::command]
-pub fn get_daily_production_report(state: State<'_, DbState>, date: String) -> Result<DailyProductionReport, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_daily_production_report(state: State<'_, DbState>, date: String) -> Result<DailyProductionReport, AppError> {
+    let conn = state.0.lock()?;
 
     let total_cartons: f64 = conn.query_row(
         "SELECT COALESCE(SUM(psl.cartons_produced), 0)
@@ -414,7 +415,7 @@ pub fn get_daily_production_report(state: State<'_, DbState>, date: String) -> R
          WHERE ods.date = ?1
          GROUP BY psl.product_id, psl.customer_brand
          ORDER BY SUM(psl.cartons_produced) DESC"
-    ).map_err(|e| e.to_string())?;
+    )?;
 
     let by_product = stmt.query_map(params![date], |r| {
         Ok(ProductReportLine {
@@ -422,7 +423,7 @@ pub fn get_daily_production_report(state: State<'_, DbState>, date: String) -> R
             total_cartons: r.get(2)?, total_cups: r.get(3)?,
             waste_cartons: r.get(4)?,
         })
-    }).map_err(|e| e.to_string())?
+    })?
     .filter_map(|r| r.ok())
     .collect();
 
@@ -433,8 +434,8 @@ pub fn get_daily_production_report(state: State<'_, DbState>, date: String) -> R
 }
 
 #[tauri::command]
-pub fn get_monthly_production_report(state: State<'_, DbState>, year: i32, month: i32) -> Result<MonthlyProductionReport, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_monthly_production_report(state: State<'_, DbState>, year: i32, month: i32) -> Result<MonthlyProductionReport, AppError> {
+    let conn = state.0.lock()?;
     let month_str = format!("{:02}", month);
     let prefix = format!("{}-{}", year, month_str);
 
@@ -478,13 +479,13 @@ pub fn get_monthly_production_report(state: State<'_, DbState>, year: i32, month
          LEFT JOIN production_shift_lines psl ON psl.sheet_id = ods.id
          WHERE ods.date LIKE ?1
          GROUP BY ods.date ORDER BY ods.date"
-    ).map_err(|e| e.to_string())?;
+    )?;
 
     let daily_breakdown: Vec<DailyBriefReport> = stmt.query_map(params![format!("{}%", prefix)], |r| {
         Ok(DailyBriefReport {
             date: r.get(0)?, cartons: r.get(1)?, cups: r.get(2)?,
         })
-    }).map_err(|e| e.to_string())?
+    })?
     .filter_map(|r| r.ok())
     .collect();
 
@@ -497,8 +498,8 @@ pub fn get_monthly_production_report(state: State<'_, DbState>, year: i32, month
 }
 
 #[tauri::command]
-pub fn get_comprehensive_daily_report(state: State<'_, DbState>, date: String) -> Result<ComprehensiveDailyReport, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_comprehensive_daily_report(state: State<'_, DbState>, date: String) -> Result<ComprehensiveDailyReport, AppError> {
+    let conn = state.0.lock()?;
 
     // Production totals
     let production_cartons: f64 = conn.query_row(
@@ -542,7 +543,7 @@ pub fn get_comprehensive_daily_report(state: State<'_, DbState>, date: String) -
          LEFT JOIN products p ON p.id = psl.product_id
          WHERE ods.date = ?1
          ORDER BY ods.shift, psl.ts"
-    ).map_err(|e| e.to_string())?;
+    )?;
 
     let production_lines = pl_stmt.query_map(params![date], |r| {
         Ok(ShiftLineReport {
@@ -550,7 +551,7 @@ pub fn get_comprehensive_daily_report(state: State<'_, DbState>, date: String) -
             cartons: r.get(2)?, cups: r.get(3)?,
             customer_brand: r.get(4)?,
         })
-    }).map_err(|e| e.to_string())?
+    })?
     .filter_map(|r| r.ok())
     .collect();
 
@@ -578,14 +579,14 @@ pub fn get_comprehensive_daily_report(state: State<'_, DbState>, date: String) -
          WHERE si.date = ?1 AND si.status IN ('Posted', 'Issued')
          GROUP BY sil.product_id
          ORDER BY SUM(sil.line_net_milli) DESC LIMIT 5"
-    ).map_err(|e| e.to_string())?;
+    )?;
 
     let top_products = top_stmt.query_map(params![date], |r| {
         Ok(SalesProductReport {
             product_name: r.get(0)?, qty_cartons: r.get(1)?,
             revenue_milli: r.get(2)?,
         })
-    }).map_err(|e| e.to_string())?
+    })?
     .filter_map(|r| r.ok())
     .collect();
 
@@ -594,14 +595,14 @@ pub fn get_comprehensive_daily_report(state: State<'_, DbState>, date: String) -
         "SELECT COALESCE(name_ar, name_en, ''), qty_on_hand, reorder_level
          FROM inventory_items WHERE reorder_level > 0 AND qty_on_hand <= reorder_level
          ORDER BY (qty_on_hand - reorder_level) ASC LIMIT 10"
-    ).map_err(|e| e.to_string())?;
+    )?;
 
     let low_stock_items = ls_stmt.query_map([], |r| {
         Ok(LowStockReport {
             name: r.get(0)?, qty_on_hand: r.get(1)?,
             reorder_level: r.get(2)?,
         })
-    }).map_err(|e| e.to_string())?
+    })?
     .filter_map(|r| r.ok())
     .collect();
 

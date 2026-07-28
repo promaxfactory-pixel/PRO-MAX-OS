@@ -1,5 +1,6 @@
 use crate::commands::rbac;
 use crate::db::DbState;
+use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -77,14 +78,14 @@ pub struct AddLineInput {
 #[tauri::command]
 pub fn list_production_orders(
     state: State<'_, DbState>,
-) -> Result<Vec<ProductionOrder>, String> {
+) -> Result<Vec<ProductionOrder>, AppError> {
     crate::commands::licensing::require_feature(crate::commands::licensing::FEAT_PRODUCTION)?;
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    let conn = state.0.lock()?;
     let mut stmt = conn
         .prepare(
             "SELECT po.id, po.prod_no, po.date, po.shift, po.machine_id, po.operator, po.supervisor, po.run_minutes, po.downtime_minutes, po.status, po.notes, po.approved_by, po.created_by FROM production_orders po ORDER BY po.id DESC",
         )
-        .map_err(|e| e.to_string())?;
+        ?;
     let rows = stmt
         .query_map([], |row| {
             Ok(ProductionOrder {
@@ -103,17 +104,17 @@ pub fn list_production_orders(
                 created_by: row.get(12)?,
             })
         })
-        .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        ?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
 #[tauri::command]
 pub fn get_production_order(
     state: State<'_, DbState>,
     id: i64,
-) -> Result<ProductionOrder, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
-    conn.query_row(
+) -> Result<ProductionOrder, AppError> {
+    let conn = state.0.lock()?;
+    Ok(conn.query_row(
         "SELECT po.id, po.prod_no, po.date, po.shift, po.machine_id, po.operator, po.supervisor, po.run_minutes, po.downtime_minutes, po.status, po.notes, po.approved_by, po.created_by FROM production_orders po WHERE po.id=?",
         [id],
         |row| {
@@ -133,16 +134,15 @@ pub fn get_production_order(
                 created_by: row.get(12)?,
             })
         },
-    )
-    .map_err(|e| e.to_string())
+    )?)
 }
 
 #[tauri::command]
 pub fn create_production_order(
     state: State<'_, DbState>,
     input: CreateOrderInput,
-) -> Result<i64, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<i64, AppError> {
+    let conn = state.0.lock()?;
     let year = chrono::Utc::now().format("%Y").to_string();
 
     let seq: i64 = conn
@@ -172,7 +172,7 @@ pub fn create_production_order(
             chrono::Utc::now().to_string(),
         ],
     )
-    .map_err(|e| e.to_string())?;
+    ?;
     let order_id = conn.last_insert_rowid();
     let _ = rbac::log_audit(&conn, None, None, "create_production_order", "production_orders", Some(order_id), None, Some(&prod_no), None);
     Ok(order_id)
@@ -183,8 +183,8 @@ pub fn update_production_order(
     state: State<'_, DbState>,
     id: i64,
     input: UpdateOrderInput,
-) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
     let mut sets = Vec::new();
     let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
@@ -226,7 +226,7 @@ pub fn update_production_order(
     }
 
     if sets.is_empty() {
-        return Err("No changes provided".to_string());
+        return Err(AppError::validation("No changes provided"));
     }
 
     params.push(Box::new(id));
@@ -235,7 +235,7 @@ pub fn update_production_order(
         sets.join(", ")
     );
     conn.execute(&sql, rusqlite::params_from_iter(params.iter()))
-        .map_err(|e| e.to_string())?;
+        ?;
     let _ = rbac::log_audit(&conn, None, None, "update_production_order", "production_orders", Some(id), None, None, None);
     Ok("Updated successfully".to_string())
 }
@@ -245,8 +245,8 @@ pub fn approve_production_order(
     state: State<'_, DbState>,
     id: i64,
     approved_by: String,
-) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
     let now = chrono::Utc::now()
         .format("%Y-%m-%d %H:%M:%S")
         .to_string();
@@ -254,7 +254,7 @@ pub fn approve_production_order(
         "UPDATE production_orders SET status='Approved', approved_by=?, approved_at=? WHERE id=? AND status='Draft'",
         rusqlite::params![approved_by, now, id],
     )
-    .map_err(|e| e.to_string())?;
+    ?;
     let _ = rbac::log_audit(&conn, None, None, "approve_production_order", "production_orders", Some(id), None, None, None);
     Ok("Approved".to_string())
 }
@@ -263,13 +263,13 @@ pub fn approve_production_order(
 pub fn get_production_lines(
     state: State<'_, DbState>,
     order_id: i64,
-) -> Result<Vec<ProductionLine>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<Vec<ProductionLine>, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn
         .prepare(
             "SELECT pl.id, pl.order_id, pl.product_id, p.name_ar, pl.cups_per_carton, pl.cartons_good, pl.cups_good, pl.cartons_waste, pl.cups_waste, pl.unit_cost_milli, pl.worker, pl.brand_type, pl.customer_id, pl.batch_no FROM production_lines pl LEFT JOIN products p ON pl.product_id=p.id WHERE pl.order_id=? ORDER BY pl.id",
         )
-        .map_err(|e| e.to_string())?;
+        ?;
     let rows = stmt
         .query_map([order_id], |row| {
             Ok(ProductionLine {
@@ -289,16 +289,16 @@ pub fn get_production_lines(
                 batch_no: row.get(13)?,
             })
         })
-        .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        ?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
 #[tauri::command]
 pub fn add_production_line(
     state: State<'_, DbState>,
     input: AddLineInput,
-) -> Result<i64, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<i64, AppError> {
+    let conn = state.0.lock()?;
     conn.execute(
         "INSERT INTO production_lines(order_id, product_id, cups_per_carton, cartons_good, cartons_waste, worker, brand_type, customer_id, batch_no) VALUES(?,?,?,?,?,?,?,?,?)",
         rusqlite::params![
@@ -313,7 +313,7 @@ pub fn add_production_line(
             input.batch_no,
         ],
     )
-    .map_err(|e| e.to_string())?;
+    ?;
     let line_id = conn.last_insert_rowid();
     let _ = rbac::log_audit(&conn, None, None, "add_production_line", "production_lines", Some(line_id), None, None, None);
     Ok(line_id)

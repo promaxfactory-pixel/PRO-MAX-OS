@@ -1,4 +1,5 @@
 ﻿use crate::db::DbState;
+use crate::error::AppError;
 use calamine::{open_workbook_auto, Data, Reader};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -101,10 +102,10 @@ fn header_index_map(headers: &[String]) -> HashMap<String, usize> {
 }
 
 #[allow(dead_code)]
-fn first_sheet_name(file_path: &str) -> Result<String, String> {
+fn first_sheet_name(file_path: &str) -> Result<String, AppError> {
     let path = Path::new(file_path);
     if !path.exists() {
-        return Err(format!("الملف غير موجود: {}", file_path));
+        return Err(AppError::not_found(format!("الملف غير موجود: {}", file_path)));
     }
     let workbook =
         open_workbook_auto(path).map_err(|e| format!("فشل في فتح المصنف: {}", e))?;
@@ -112,15 +113,15 @@ fn first_sheet_name(file_path: &str) -> Result<String, String> {
         .sheet_names()
         .first()
         .cloned()
-        .ok_or_else(|| "المصنف بدون أوراق عمل".to_string())
+        .ok_or_else(|| AppError::not_found("المصنف بدون أوراق عمل"))
 }
 
 fn read_file_data(
     file_path: &str,
-) -> Result<(Vec<String>, Vec<Vec<Data>>), String> {
+) -> Result<(Vec<String>, Vec<Vec<Data>>), AppError> {
     let path = Path::new(file_path);
     if !path.exists() {
-        return Err(format!("الملف غير موجود: {}", file_path));
+        return Err(AppError::not_found(format!("الملف غير موجود: {}", file_path)));
     }
     let mut workbook =
         open_workbook_auto(path).map_err(|e| format!("فشل في فتح المصنف: {}", e))?;
@@ -128,14 +129,14 @@ fn read_file_data(
         .sheet_names()
         .first()
         .cloned()
-        .ok_or_else(|| "المصنف بدون أوراق عمل".to_string())?;
+        .ok_or_else(|| AppError::validation("المصنف بدون أوراق عمل"))?;
     let range = workbook
         .worksheet_range(&sheet_name)
         .map_err(|e| format!("فشل في قراءة ورقة العمل: {}", e))?;
     let mut rows_iter = range.rows();
     let headers = match rows_iter.next() {
         Some(row) => row.iter().map(|c| cell_to_string(c)).collect(),
-        None => return Err("ورقة العمل فارغة".to_string()),
+        None => return Err(AppError::validation("ورقة العمل فارغة")),
     };
     let data: Vec<Vec<Data>> = rows_iter.map(|r| r.to_vec()).collect();
     Ok((headers, data))
@@ -657,13 +658,13 @@ fn parse_amount_to_f64(s: &str) -> f64 {
 pub fn preview_import(
     file_path: String,
     entity_type: String,
-) -> Result<ImportPreview, String> {
+) -> Result<ImportPreview, AppError> {
     let valid_entity_types = [
         "customers", "suppliers", "products", "inventory",
         "invoices", "purchases", "expenses", "opening_balances", "employees",
     ];
     if !valid_entity_types.contains(&entity_type.as_str()) {
-        return Err(format!("نوع الكيان '{}' غير معروف", entity_type));
+        return Err(AppError::validation(format!("نوع الكيان '{}' غير معروف", entity_type)));
     }
 
     let (headers, raw_data) = read_file_data(&file_path)?;
@@ -691,8 +692,8 @@ pub fn preview_import(
 pub fn execute_import(
     state: State<'_, DbState>,
     input: ImportRequest,
-) -> Result<ImportResult, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<ImportResult, AppError> {
+    let conn = state.0.lock()?;
     let skip_header = input.skip_first_row.unwrap_or(true);
     let data = if skip_header && !input.data.is_empty() {
         &input.data[1..]
@@ -931,12 +932,12 @@ pub fn execute_import(
             {
                 let mut stmt = conn
                     .prepare("SELECT id, name FROM customers WHERE active=1")
-                    .map_err(|e| e.to_string())?;
+                    ?;
                 let rows = stmt
                     .query_map([], |row| Ok((row.get::<_, String>(1)?, row.get::<_, i64>(0)?)))
-                    .map_err(|e| e.to_string())?;
+                    ?;
                 for r in rows {
-                    let (name, id) = r.map_err(|e| e.to_string())?;
+                    let (name, id) = r?;
                     customer_cache.insert(name.to_lowercase(), id);
                 }
             }
@@ -944,12 +945,12 @@ pub fn execute_import(
             {
                 let mut stmt = conn
                     .prepare("SELECT id, COALESCE(name_ar,'') FROM products WHERE active=1")
-                    .map_err(|e| e.to_string())?;
+                    ?;
                 let rows = stmt
                     .query_map([], |row| Ok((row.get::<_, String>(1)?, row.get::<_, i64>(0)?)))
-                    .map_err(|e| e.to_string())?;
+                    ?;
                 for r in rows {
-                    let (name, id) = r.map_err(|e| e.to_string())?;
+                    let (name, id) = r?;
                     product_cache.insert(name.to_lowercase(), id);
                 }
             }
@@ -1046,12 +1047,12 @@ pub fn execute_import(
             {
                 let mut stmt = conn
                     .prepare("SELECT id, name FROM suppliers WHERE active=1")
-                    .map_err(|e| e.to_string())?;
+                    ?;
                 let rows = stmt
                     .query_map([], |row| Ok((row.get::<_, String>(1)?, row.get::<_, i64>(0)?)))
-                    .map_err(|e| e.to_string())?;
+                    ?;
                 for r in rows {
-                    let (name, id) = r.map_err(|e| e.to_string())?;
+                    let (name, id) = r?;
                     supplier_cache.insert(name.to_lowercase(), id);
                 }
             }
@@ -1059,12 +1060,12 @@ pub fn execute_import(
             {
                 let mut stmt = conn
                     .prepare("SELECT id, COALESCE(name_ar,'') FROM inventory_items WHERE active=1")
-                    .map_err(|e| e.to_string())?;
+                    ?;
                 let rows = stmt
                     .query_map([], |row| Ok((row.get::<_, String>(1)?, row.get::<_, i64>(0)?)))
-                    .map_err(|e| e.to_string())?;
+                    ?;
                 for r in rows {
-                    let (name, id) = r.map_err(|e| e.to_string())?;
+                    let (name, id) = r?;
                     item_cache.insert(name.to_lowercase(), id);
                 }
             }
@@ -1339,7 +1340,7 @@ pub fn execute_import(
             }
         }
         _ => {
-            return Err(format!("نوع الكيان '{}' غير مدعوم للتنفيذ", input.entity_type));
+            return Err(AppError::validation(format!("نوع الكيان '{}' غير مدعوم للتنفيذ", input.entity_type)));
         }
     }
 
@@ -1352,7 +1353,7 @@ pub fn execute_import(
 }
 
 #[tauri::command]
-pub fn get_import_templates() -> Result<Vec<ImportTemplate>, String> {
+pub fn get_import_templates() -> Result<Vec<ImportTemplate>, AppError> {
     Ok(vec![
         ImportTemplate {
             entity_type: "customers".into(),
@@ -1510,10 +1511,10 @@ pub fn get_import_templates() -> Result<Vec<ImportTemplate>, String> {
 fn load_existing_names(
     conn: &rusqlite::Connection,
     query: &str,
-) -> Result<std::collections::HashSet<String>, String> {
+) -> Result<std::collections::HashSet<String>, AppError> {
     let mut set = std::collections::HashSet::new();
-    let mut stmt = conn.prepare(query).map_err(|e| e.to_string())?;
-    let rows = stmt.query_map([], |row| row.get::<_, String>(0)).map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(query)?;
+    let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
     for r in rows {
         if let Ok(name) = r {
             set.insert(name.to_lowercase());
@@ -1522,7 +1523,7 @@ fn load_existing_names(
     Ok(set)
 }
 
-fn auto_generate_code(conn: &rusqlite::Connection, prefix: &str) -> Result<String, String> {
+fn auto_generate_code(conn: &rusqlite::Connection, prefix: &str) -> Result<String, AppError> {
     let year = chrono::Utc::now().format("%Y").to_string();
     let doc_type = match prefix {
         "CUST" => "CUST",

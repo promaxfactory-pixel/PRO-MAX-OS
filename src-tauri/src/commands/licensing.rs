@@ -1,3 +1,4 @@
+use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use sha2::{Sha256, Digest};
 use std::path::PathBuf;
@@ -107,11 +108,11 @@ pub fn is_feature_enabled(feature: &str) -> bool {
     features.contains(&feature.to_string()) || features.contains(&"all".to_string())
 }
 
-pub fn require_feature(feature: &str) -> Result<(), String> {
+pub fn require_feature(feature: &str) -> Result<(), AppError> {
     if is_feature_enabled(feature) {
         Ok(())
     } else {
-        Err(format!("هذه الميزة '{}' غير متاحة في الترخيص الحالي. يرجى ترقية الترخيص.", feature))
+        Err(AppError::business(format!("هذه الميزة '{}' غير متاحة في الترخيص الحالي. يرجى ترقية الترخيص.", feature)))
     }
 }
 
@@ -185,7 +186,7 @@ pub fn generate_license(
     base64::Engine::encode(&base64::engine::general_purpose::STANDARD, json.as_bytes())
 }
 
-fn validate_license_data(license: &LicenseData, current_hardware_id: &str) -> Result<(), String> {
+fn validate_license_data(license: &LicenseData, current_hardware_id: &str) -> Result<(), AppError> {
     let expected_sig = {
         let data = format!("{}|{}|{}|{}|{}|{}|{}",
             license.customer_name, license.license_type,
@@ -194,16 +195,16 @@ fn validate_license_data(license: &LicenseData, current_hardware_id: &str) -> Re
         compute_signature(&data)
     };
     if license.signature != expected_sig {
-        return Err("توقيع الترخيص غير صالح".to_string());
+        return Err(AppError::validation("توقيع الترخيص غير صالح"));
     }
     if license.hardware_id != "ANY" && license.hardware_id != current_hardware_id {
-        return Err("هذا الترخيص مربوط بجهاز آخر".to_string());
+        return Err(AppError::validation("هذا الترخيص مربوط بجهاز آخر"));
     }
     if let Some(expires) = &license.expires_at {
         if let Ok(exp_date) = chrono::NaiveDate::parse_from_str(expires, "%Y-%m-%d") {
             let today = chrono::Local::now().date_naive();
             if today > exp_date {
-                return Err("انتهت صلاحية الترخيص".to_string());
+                return Err(AppError::validation("انتهت صلاحية الترخيص"));
             }
         }
     }
@@ -269,7 +270,7 @@ pub fn check_license() -> LicenseStatus {
         }
         Err(msg) => LicenseStatus {
             valid: false,
-            message: msg,
+            message: msg.to_string(),
             license: None,
         },
     }
@@ -297,7 +298,7 @@ pub fn activate_license(license_key: String) -> LicenseStatus {
     if let Err(msg) = validate_license_data(&license, &current_hw_id) {
         return LicenseStatus {
             valid: false,
-            message: msg,
+            message: msg.to_string(),
             license: None,
         };
     }
@@ -366,9 +367,9 @@ pub fn generate_license_key(
     expires_days: Option<i64>,
     max_users: i32,
     features: Vec<String>,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     if !crate::crypto::verify_developer_pin(&pin) {
-        return Err("رقم التعريف غير صحيح".to_string());
+        return Err(AppError::validation("رقم التعريف غير صحيح"));
     }
     let expires_at = expires_days.map(|days| {
         let date = chrono::Local::now().date_naive() + chrono::Duration::days(days);
@@ -393,9 +394,9 @@ pub fn generate_tier_license(
     expires_days: Option<i64>,
     max_users: Option<i32>,
     target_hardware_id: Option<String>,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     if !crate::crypto::verify_developer_pin(&pin) {
-        return Err("رقم التعريف غير صحيح".to_string());
+        return Err(AppError::validation("رقم التعريف غير صحيح"));
     }
     let features = tier_features(&tier);
     let users = max_users.unwrap_or(match tier.as_str() {

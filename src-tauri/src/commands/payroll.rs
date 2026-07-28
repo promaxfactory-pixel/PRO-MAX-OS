@@ -1,5 +1,6 @@
 use crate::commands::rbac;
 use crate::db::DbState;
+use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -45,14 +46,13 @@ pub struct CreateAdvanceInput {
 }
 
 #[tauri::command]
-pub fn list_payroll_runs(state: State<'_, DbState>) -> Result<Vec<PayrollRun>, String> {
+pub fn list_payroll_runs(state: State<'_, DbState>) -> Result<Vec<PayrollRun>, AppError> {
     crate::commands::licensing::require_feature(crate::commands::licensing::FEAT_PAYROLL)?;
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    let conn = state.0.lock()?;
     let mut stmt = conn
         .prepare(
             "SELECT id, run_no, period_start, period_end, status, total_gross_milli, total_deductions_milli, total_net_milli, created_at FROM payroll_runs ORDER BY id DESC",
-        )
-        .map_err(|e| e.to_string())?;
+        )?;
     let rows = stmt
         .query_map([], |row| {
             Ok(PayrollRun {
@@ -66,18 +66,17 @@ pub fn list_payroll_runs(state: State<'_, DbState>) -> Result<Vec<PayrollRun>, S
                 total_net_milli: row.get(7)?,
                 created_at: row.get(8)?,
             })
-        })
-        .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        })?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
 #[tauri::command]
 pub fn create_payroll_run(
     state: State<'_, DbState>,
     input: CreatePayrollRunInput,
-) -> Result<i64, String> {
-    let mut conn = state.0.lock().map_err(|e| e.to_string())?;
-    let tx = conn.transaction().map_err(|e| e.to_string())?;
+) -> Result<i64, AppError> {
+    let mut conn = state.0.lock()?;
+    let tx = conn.transaction()?;
     let year = chrono::Utc::now().format("%Y").to_string();
 
     let seq: i64 = tx
@@ -100,25 +99,23 @@ pub fn create_payroll_run(
             input.period_start,
             input.period_end,
         ],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
     let run_id = tx.last_insert_rowid();
     let _ = rbac::log_audit(&*tx, None, None, "create_payroll_run", "payroll_runs", Some(run_id), None, Some(&run_no), None);
-    tx.commit().map_err(|e| e.to_string())?;
+    tx.commit()?;
     Ok(run_id)
 }
 
 #[tauri::command]
 pub fn list_employee_advances(
     state: State<'_, DbState>,
-) -> Result<Vec<EmployeeAdvance>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<Vec<EmployeeAdvance>, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn
         .prepare(
             "SELECT ea.id, ea.employee_id, e.name, ea.amount_milli, ea.date, ea.reason, ea.status, ea.remaining_milli, ea.deduction_per_payroll_milli
              FROM employee_advances ea LEFT JOIN employees e ON ea.employee_id=e.id ORDER BY ea.id DESC",
-        )
-        .map_err(|e| e.to_string())?;
+        )?;
     let rows = stmt
         .query_map([], |row| {
             Ok(EmployeeAdvance {
@@ -132,17 +129,16 @@ pub fn list_employee_advances(
                 remaining_milli: row.get(7)?,
                 deduction_per_payroll_milli: row.get(8)?,
             })
-        })
-        .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        })?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
 #[tauri::command]
 pub fn create_employee_advance(
     state: State<'_, DbState>,
     input: CreateAdvanceInput,
-) -> Result<i64, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<i64, AppError> {
+    let conn = state.0.lock()?;
     let deduction = input.deduction_per_payroll_milli.unwrap_or(0);
 
     conn.execute(
@@ -155,8 +151,7 @@ pub fn create_employee_advance(
             input.amount_milli,
             deduction,
         ],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
     let adv_id = conn.last_insert_rowid();
     let _ = rbac::log_audit(&conn, None, None, "create_employee_advance", "employee_advances", Some(adv_id), None, None, None);
     Ok(adv_id)

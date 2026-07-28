@@ -1,4 +1,5 @@
 use crate::db::DbState;
+use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -198,8 +199,8 @@ fn check_quality_issues(conn: &rusqlite::Connection) -> Vec<Alert> {
 }
 
 #[tauri::command]
-pub fn get_all_alerts(state: State<'_, DbState>) -> Result<Vec<Alert>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_all_alerts(state: State<'_, DbState>) -> Result<Vec<Alert>, AppError> {
+    let conn = state.0.lock()?;
     let mut all_alerts: Vec<Alert> = Vec::new();
     all_alerts.extend(check_low_stock(&conn));
     all_alerts.extend(check_overdue_invoices(&conn));

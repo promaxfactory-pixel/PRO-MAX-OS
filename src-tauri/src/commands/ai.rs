@@ -1,4 +1,5 @@
 ﻿use crate::db::DbState;
+use crate::error::AppError;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -227,9 +228,9 @@ fn days_ago_str(days: i64) -> String {
 pub fn ai_sales_forecast(
     state: State<'_, DbState>,
     days: i32,
-) -> Result<SalesForecast, String> {
+) -> Result<SalesForecast, AppError> {
     crate::commands::licensing::require_feature(crate::commands::licensing::FEAT_AI)?;
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    let conn = state.0.lock()?;
     let history_days = 180i64;
     let start_date = days_ago_str(history_days);
 
@@ -241,13 +242,13 @@ pub fn ai_sales_forecast(
              GROUP BY date
              ORDER BY date ASC",
         )
-        .map_err(|e| e.to_string())?;
+        ?;
 
     let rows: Vec<(String, f64)> = stmt
         .query_map(params![start_date], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, f64>(1)?))
         })
-        .map_err(|e| e.to_string())?
+        ?
         .filter_map(|r| r.ok())
         .collect();
 
@@ -369,8 +370,8 @@ pub fn ai_sales_forecast(
     })
 }
 #[tauri::command]
-pub fn ai_customer_risk(state: State<'_, DbState>) -> Result<Vec<CustomerRisk>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn ai_customer_risk(state: State<'_, DbState>) -> Result<Vec<CustomerRisk>, AppError> {
+    let conn = state.0.lock()?;
 
     let mut stmt = conn
         .prepare(
@@ -384,7 +385,7 @@ pub fn ai_customer_risk(state: State<'_, DbState>) -> Result<Vec<CustomerRisk>, 
              HAVING inv_count > 0
              ORDER BY overdue_rial DESC",
         )
-        .map_err(|e| e.to_string())?;
+        ?;
 
     let rows: Vec<(i64, String, i64, f64, f64)> = stmt
         .query_map([], |row| {
@@ -396,7 +397,7 @@ pub fn ai_customer_risk(state: State<'_, DbState>) -> Result<Vec<CustomerRisk>, 
                 row.get::<_, f64>(4)?,
             ))
         })
-        .map_err(|e| e.to_string())?
+        ?
         .filter_map(|r| r.ok())
         .collect();
 
@@ -476,8 +477,8 @@ pub fn ai_customer_risk(state: State<'_, DbState>) -> Result<Vec<CustomerRisk>, 
     Ok(results)
 }
 #[tauri::command]
-pub fn ai_production_analysis(state: State<'_, DbState>) -> Result<ProductionAnalysis, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn ai_production_analysis(state: State<'_, DbState>) -> Result<ProductionAnalysis, AppError> {
+    let conn = state.0.lock()?;
 
     let order_count: i64 = conn
         .query_row(
@@ -485,7 +486,7 @@ pub fn ai_production_analysis(state: State<'_, DbState>) -> Result<ProductionAna
             [],
             |row| row.get(0),
         )
-        .map_err(|e| e.to_string())?;
+        ?;
 
     let mut stmt = conn
         .prepare(
@@ -501,7 +502,7 @@ pub fn ai_production_analysis(state: State<'_, DbState>) -> Result<ProductionAna
              GROUP BY m.code
              ORDER BY waste_pct ASC",
         )
-        .map_err(|e| e.to_string())?;
+        ?;
 
     let machine_rows: Vec<(String, f64, f64, f64)> = stmt
         .query_map([], |row| {
@@ -512,7 +513,7 @@ pub fn ai_production_analysis(state: State<'_, DbState>) -> Result<ProductionAna
                 row.get::<_, f64>(3)?,
             ))
         })
-        .map_err(|e| e.to_string())?
+        ?
         .filter_map(|r| r.ok())
         .collect();
 
@@ -626,8 +627,8 @@ pub fn ai_production_analysis(state: State<'_, DbState>) -> Result<ProductionAna
     })
 }
 #[tauri::command]
-pub fn ai_cost_analysis(state: State<'_, DbState>) -> Result<CostAnalysis, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn ai_cost_analysis(state: State<'_, DbState>) -> Result<CostAnalysis, AppError> {
+    let conn = state.0.lock()?;
 
     let total_cogs: f64 = conn
         .query_row(
@@ -637,7 +638,7 @@ pub fn ai_cost_analysis(state: State<'_, DbState>) -> Result<CostAnalysis, Strin
             [],
             |row| row.get(0),
         )
-        .map_err(|e| e.to_string())?;
+        ?;
 
     let total_revenue: f64 = conn
         .query_row(
@@ -646,7 +647,7 @@ pub fn ai_cost_analysis(state: State<'_, DbState>) -> Result<CostAnalysis, Strin
             [],
             |row| row.get(0),
         )
-        .map_err(|e| e.to_string())?;
+        ?;
 
     let total_cartons: f64 = conn
         .query_row(
@@ -654,7 +655,7 @@ pub fn ai_cost_analysis(state: State<'_, DbState>) -> Result<CostAnalysis, Strin
             [],
             |row| row.get(0),
         )
-        .map_err(|e| e.to_string())?;
+        ?;
 
     let gross_margin_pct = if total_revenue > 0.0 {
         ((total_revenue - total_cogs) / total_revenue * 100.0 * 100.0).round() / 100.0
@@ -764,8 +765,8 @@ pub fn ai_cost_analysis(state: State<'_, DbState>) -> Result<CostAnalysis, Strin
     })
 }
 #[tauri::command]
-pub fn ai_dashboard_insights(state: State<'_, DbState>) -> Result<Vec<Insight>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn ai_dashboard_insights(state: State<'_, DbState>) -> Result<Vec<Insight>, AppError> {
+    let conn = state.0.lock()?;
     let mut insights = Vec::new();
 
     let overdue_result = conn.query_row(
@@ -916,12 +917,12 @@ pub fn ai_dashboard_insights(state: State<'_, DbState>) -> Result<Vec<Insight>, 
     Ok(insights)
 }
 #[tauri::command]
-pub fn ai_inventory_optimization(state: State<'_, DbState>) -> Result<InventoryOptimization, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn ai_inventory_optimization(state: State<'_, DbState>) -> Result<InventoryOptimization, AppError> {
+    let conn = state.0.lock()?;
 
     let total_items: i64 = conn
         .query_row("SELECT COUNT(*) FROM inventory_items", [], |row| row.get(0))
-        .map_err(|e| e.to_string())?;
+        ?;
 
     let total_value: f64 = conn
         .query_row(
@@ -929,7 +930,7 @@ pub fn ai_inventory_optimization(state: State<'_, DbState>) -> Result<InventoryO
             [],
             |row| row.get(0),
         )
-        .map_err(|e| e.to_string())?;
+        ?;
 
     let mut low_stmt = conn
         .prepare(
@@ -949,7 +950,7 @@ pub fn ai_inventory_optimization(state: State<'_, DbState>) -> Result<InventoryO
              WHERE ii.qty_on_hand <= ii.reorder_level AND ii.reorder_level > 0
              ORDER BY days_until_stockout ASC",
         )
-        .map_err(|e| e.to_string())?;
+        ?;
 
     let low_stock_items: Vec<LowStockItem> = low_stmt
         .query_map([], |row| {
@@ -961,7 +962,7 @@ pub fn ai_inventory_optimization(state: State<'_, DbState>) -> Result<InventoryO
                 days_until_stockout: row.get::<_, f64>(4)?,
             })
         })
-        .map_err(|e| e.to_string())?
+        ?
         .filter_map(|r| r.ok())
         .collect();
 
@@ -978,7 +979,7 @@ pub fn ai_inventory_optimization(state: State<'_, DbState>) -> Result<InventoryO
              )
              ORDER BY value_rial DESC",
         )
-        .map_err(|e| e.to_string())?;
+        ?;
 
     let dead_stock_items: Vec<DeadStockItem> = dead_stmt
         .query_map([], |row| {
@@ -1002,7 +1003,7 @@ pub fn ai_inventory_optimization(state: State<'_, DbState>) -> Result<InventoryO
                 value_milli: row.get::<_, f64>(4)?,
             })
         })
-        .map_err(|e| e.to_string())?
+        ?
         .filter_map(|r| r.ok())
         .collect();
 
@@ -1063,8 +1064,8 @@ pub fn ai_inventory_optimization(state: State<'_, DbState>) -> Result<InventoryO
 }
 
 #[tauri::command]
-pub fn ai_anomaly_detection(state: State<'_, DbState>) -> Result<Vec<Anomaly>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn ai_anomaly_detection(state: State<'_, DbState>) -> Result<Vec<Anomaly>, AppError> {
+    let conn = state.0.lock()?;
     let mut anomalies = Vec::new();
 
     let invoice_stats: (f64, f64) = conn
@@ -1081,7 +1082,7 @@ pub fn ai_anomaly_detection(state: State<'_, DbState>) -> Result<Vec<Anomaly>, S
             "SELECT id, inv_no, total_milli/1000.0 as amount, date
              FROM sales_invoices WHERE status NOT IN ('Void','Draft') AND total_milli > 0",
         )
-        .map_err(|e| e.to_string())?;
+        ?;
     let invoices: Vec<(i64, String, f64, String)> = stmt
         .query_map([], |row| {
             Ok((
@@ -1091,7 +1092,7 @@ pub fn ai_anomaly_detection(state: State<'_, DbState>) -> Result<Vec<Anomaly>, S
                 row.get::<_, String>(3)?,
             ))
         })
-        .map_err(|e| e.to_string())?
+        ?
         .filter_map(|r| r.ok())
         .collect();
 
@@ -1126,7 +1127,7 @@ pub fn ai_anomaly_detection(state: State<'_, DbState>) -> Result<Vec<Anomaly>, S
              GROUP BY po.id, m.code
              HAVING total > 0",
         )
-        .map_err(|e| e.to_string())?;
+        ?;
     let prod_rows: Vec<(i64, String, f64, f64)> = prod_stmt
         .query_map([], |row| {
             Ok((
@@ -1136,7 +1137,7 @@ pub fn ai_anomaly_detection(state: State<'_, DbState>) -> Result<Vec<Anomaly>, S
                 row.get::<_, f64>(3)?,
             ))
         })
-        .map_err(|e| e.to_string())?
+        ?
         .filter_map(|r| r.ok())
         .collect();
 
@@ -1171,8 +1172,8 @@ pub fn ai_anomaly_detection(state: State<'_, DbState>) -> Result<Vec<Anomaly>, S
 pub fn ai_generate_report(
     state: State<'_, DbState>,
     report_type: String,
-) -> Result<AiReport, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<AiReport, AppError> {
+    let conn = state.0.lock()?;
     let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
 
     let mut sections = Vec::new();
@@ -1199,10 +1200,10 @@ pub fn ai_generate_report(
                  WHERE si.status NOT IN ('Void','Draft')
                  GROUP BY c.name ORDER BY total DESC LIMIT 5",
             )
-            .map_err(|e| e.to_string())?;
+            ?;
         let top_customers: Vec<(String, f64)> = top_stmt
             .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, f64>(1)?)))
-            .map_err(|e| e.to_string())?
+            ?
             .filter_map(|r| r.ok())
             .collect();
 

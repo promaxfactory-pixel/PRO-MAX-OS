@@ -4,6 +4,7 @@ use std::path::Path;
 use tauri::State;
 
 use crate::db::DbState;
+use crate::error::AppError;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OcrResult {
@@ -100,11 +101,11 @@ fn is_image_file(path: &str) -> bool {
     matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "bmp" | "gif" | "tiff" | "tif" | "webp")
 }
 
-fn read_file_as_bytes(path: &str) -> Result<Vec<u8>, String> {
-    fs::read(path).map_err(|e| format!("Failed to read file '{}': {}", path, e))
+fn read_file_as_bytes(path: &str) -> Result<Vec<u8>, AppError> {
+    Ok(fs::read(path).map_err(|e| format!("Failed to read file '{}': {}", path, e))?)
 }
 
-fn extract_text_from_pdf(path: &str) -> Result<String, String> {
+fn extract_text_from_pdf(path: &str) -> Result<String, AppError> {
     let bytes = read_file_as_bytes(path)?;
     let text = pdf_extract::extract_text_from_mem(&bytes)
         .map_err(|e| format!("PDF extraction failed: {}", e))?;
@@ -546,12 +547,12 @@ fn parse_into_extraction_result(data: &OcrInvoiceData) -> ExtractionResult {
 }
 
 #[tauri::command]
-pub fn ocr_extract_from_file(path: String) -> Result<OcrResult, String> {
+pub fn ocr_extract_from_file(path: String) -> Result<OcrResult, AppError> {
     crate::commands::licensing::require_feature(crate::commands::licensing::FEAT_OCR)?;
-    if path.trim().is_empty() { return Err("File path cannot be empty".to_string()); }
+    if path.trim().is_empty() { return Err(AppError::validation("File path cannot be empty")); }
     let path_obj = Path::new(&path);
-    if !path_obj.exists() { return Err(format!("File does not exist: {}", path)); }
-    if !path_obj.is_file() { return Err(format!("Path is not a file: {}", path)); }
+    if !path_obj.exists() { return Err(AppError::not_found(format!("File does not exist: {}", path))); }
+    if !path_obj.is_file() { return Err(AppError::validation(format!("Path is not a file: {}", path))); }
     let file_size = fs::metadata(&path).map_err(|e| format!("Failed to get file metadata: {}", e))?.len() as i64;
     let ext = get_file_extension(&path);
 
@@ -564,7 +565,7 @@ pub fn ocr_extract_from_file(path: String) -> Result<OcrResult, String> {
     };
 
     if raw_text.trim().is_empty() {
-        return Err(format!("No text could be extracted from .{} file", ext));
+        return Err(AppError::business(format!("No text could be extracted from .{} file", ext)));
     }
     let suggested_fields = parse_invoice_data_from_text(&raw_text);
     let confidence = calculate_confidence(&suggested_fields);
@@ -572,7 +573,7 @@ pub fn ocr_extract_from_file(path: String) -> Result<OcrResult, String> {
 }
 
 #[tauri::command]
-pub fn ocr_parse_invoice(path: String) -> Result<ExtractionResult, String> {
+pub fn ocr_parse_invoice(path: String) -> Result<ExtractionResult, AppError> {
     let ext = get_file_extension(&path);
     let raw_text = if ext == "pdf" {
         extract_text_from_pdf(&path).unwrap_or_default()
@@ -582,7 +583,7 @@ pub fn ocr_parse_invoice(path: String) -> Result<ExtractionResult, String> {
         extract_text_from_image(&path).0
     };
     if raw_text.trim().is_empty() {
-        return Err("No text could be extracted".into());
+        return Err(AppError::business("No text could be extracted"));
     }
     let data = parse_invoice_data_from_text(&raw_text);
     Ok(parse_into_extraction_result(&data))
@@ -593,7 +594,7 @@ pub fn ocr_enhance_with_ai(
     _state: State<'_, DbState>,
     _path: String,
     raw_text: String,
-) -> Result<ExtractionResult, String> {
+) -> Result<ExtractionResult, AppError> {
     let data = parse_invoice_data_from_text(&raw_text);
 
     if raw_text.trim().len() < 20 {
@@ -637,15 +638,15 @@ pub fn ocr_enhance_with_ai(
     Ok(parse_into_extraction_result(&data))
 }
 
-fn prompt_ai_for_enhancement(prompt: &str) -> Result<String, String> {
+fn prompt_ai_for_enhancement(prompt: &str) -> Result<String, AppError> {
     let api_key = std::env::var("OPENAI_API_KEY").or_else(|_| std::env::var("ANTHROPIC_API_KEY"));
     let provider = if std::env::var("OPENAI_API_KEY").is_ok() { "openai" } else { "anthropic" };
-    let key = api_key.map_err(|_| "No AI API key configured".to_string())?;
+    let key = api_key.map_err(|_| AppError::validation("No AI API key configured"))?;
 
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
         .build()
-        .map_err(|e| e.to_string())?;
+        ?;
 
     let (url, body) = if provider == "openai" {
         let body = serde_json::json!({
@@ -671,8 +672,8 @@ fn prompt_ai_for_enhancement(prompt: &str) -> Result<String, String> {
         req = req.header("anthropic-version", "2023-06-01");
     }
 
-    let resp = req.json(&body).send().map_err(|e| e.to_string())?;
-    let json: serde_json::Value = resp.json().map_err(|e| e.to_string())?;
+    let resp = req.json(&body).send()?;
+    let json: serde_json::Value = resp.json()?;
 
     let content = if provider == "openai" {
         json["choices"][0]["message"]["content"].as_str().unwrap_or("").to_string()
@@ -692,7 +693,7 @@ fn prompt_ai_for_enhancement(prompt: &str) -> Result<String, String> {
 #[tauri::command]
 pub fn ocr_get_suggestions(
     result: ExtractionResult,
-) -> Result<Vec<Suggestion>, String> {
+) -> Result<Vec<Suggestion>, AppError> {
     let mut suggestions = Vec::new();
     let has_invoice = !result.invoice_number.is_empty();
     let has_vendor = !result.vendor_name.is_empty();
@@ -757,8 +758,8 @@ pub fn ocr_get_suggestions(
 pub fn ocr_create_invoice(
     state: State<'_, DbState>,
     data: serde_json::Value,
-) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
     let vendor = data["vendor_name"].as_str().unwrap_or("Unknown");
     let inv_no = data["invoice_number"].as_str().unwrap_or("");
     let date = data["date"].as_str().unwrap_or("");
@@ -793,13 +794,13 @@ pub fn ocr_create_invoice(
 pub fn ocr_add_supplier(
     state: State<'_, DbState>,
     data: serde_json::Value,
-) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
     let name = data["name"].as_str().unwrap_or("OCR Import");
     conn.execute(
         "INSERT INTO suppliers (name) VALUES (?1)",
         [name],
-    ).map_err(|e| e.to_string())?;
+    )?;
     Ok(format!("Supplier '{}' created", name))
 }
 
@@ -807,8 +808,8 @@ pub fn ocr_add_supplier(
 pub fn ocr_register_expense(
     state: State<'_, DbState>,
     data: serde_json::Value,
-) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
     let total = data["total"].as_f64().unwrap_or(0.0);
     let desc = data["description"].as_str().unwrap_or("OCR Expense");
     let category = data["category"].as_str().unwrap_or("general");
@@ -825,7 +826,7 @@ pub fn ocr_register_expense(
     conn.execute(
         "INSERT INTO expenses (exp_no, date, category, description, amount_milli, method, notes) VALUES (?1, ?2, ?3, ?4, ?5, 'OCR', 'OCR Scanned')",
         rusqlite::params![exp_no, use_date, category, desc, amount_milli],
-    ).map_err(|e| e.to_string())?;
+    )?;
     Ok(format!("Expense {} for {:.3} OMR registered", exp_no, total))
 }
 
@@ -833,16 +834,16 @@ pub fn ocr_register_expense(
 pub fn ocr_update_prices(
     state: State<'_, DbState>,
     data: serde_json::Value,
-) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
-    let items = data["items"].as_array().ok_or("items must be an array")?;
+) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
+    let items = data["items"].as_array().ok_or_else(|| AppError::validation("items must be an array"))?;
     let mut count = 0u32;
     for item in items {
         if let (Some(product_id), Some(price)) = (item["product_id"].as_i64(), item["new_price_milli"].as_i64()) {
             conn.execute(
                 "UPDATE products SET default_price_milli = ?1 WHERE id = ?2",
                 rusqlite::params![price, product_id],
-            ).map_err(|e| e.to_string())?;
+            )?;
             count += 1;
         }
     }
@@ -850,22 +851,22 @@ pub fn ocr_update_prices(
 }
 
 #[tauri::command]
-pub fn ocr_get_history(state: State<'_, DbState>) -> Result<Vec<OcrScan>, String> {
-    let db = state.0.lock().map_err(|e| e.to_string())?;
+pub fn ocr_get_history(state: State<'_, DbState>) -> Result<Vec<OcrScan>, AppError> {
+    let db = state.0.lock()?;
     let mut stmt = db
         .prepare("SELECT id, file_name, file_path, extracted_text, parsed_data, confidence, status, created_at FROM ocr_scans ORDER BY created_at DESC LIMIT 200")
-        .map_err(|e| e.to_string())?;
+        ?;
     let rows = stmt.query_map([], |row| {
         Ok(OcrScan { id: row.get(0)?, file_name: row.get(1)?, file_path: row.get(2)?, extracted_text: row.get(3)?, parsed_data: row.get(4)?, confidence: row.get(5)?, status: row.get(6)?, created_at: row.get(7)? })
-    }).map_err(|e| e.to_string())?;
+    })?;
     let mut scans = Vec::new();
-    for row in rows { scans.push(row.map_err(|e| e.to_string())?); }
+    for row in rows { scans.push(row?); }
     Ok(scans)
 }
 
 #[tauri::command]
-pub fn ocr_save_scan(state: State<'_, DbState>, input: serde_json::Value) -> Result<i64, String> {
-    let db = state.0.lock().map_err(|e| e.to_string())?;
+pub fn ocr_save_scan(state: State<'_, DbState>, input: serde_json::Value) -> Result<i64, AppError> {
+    let db = state.0.lock()?;
     let file_path = input["file_path"].as_str().unwrap_or("");
     let raw_text = input["raw_text"].as_str().unwrap_or("");
     let parsed_data = input["parsed_data"].as_str().unwrap_or("");
@@ -874,12 +875,12 @@ pub fn ocr_save_scan(state: State<'_, DbState>, input: serde_json::Value) -> Res
     db.execute(
         "INSERT INTO ocr_scans (file_name, file_path, extracted_text, parsed_data, confidence, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         rusqlite::params![file_name, file_path, raw_text, parsed_data, confidence, if confidence > 50.0 { "completed" } else { "pending" }],
-    ).map_err(|e| e.to_string())?;
+    )?;
     Ok(db.last_insert_rowid())
 }
 
 #[tauri::command]
-pub fn ocr_detect_language(text: String) -> Result<String, String> {
+pub fn ocr_detect_language(text: String) -> Result<String, AppError> {
     let arabic_chars = text.chars().filter(|c| (*c as u32) >= 0x0600 && (*c as u32) <= 0x06FF).count();
     let latin_chars = text.chars().filter(|c| c.is_ascii_alphabetic()).count();
     let total = (arabic_chars + latin_chars) as f64;

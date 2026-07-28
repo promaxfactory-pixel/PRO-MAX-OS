@@ -350,6 +350,23 @@ pub fn run() {
             commands::notifications::mark_notification_read,
             commands::notifications::mark_all_notifications_read,
             commands::notifications::get_notification_count,
+            // Operating Advances
+            commands::operating_advance::list_operating_advances,
+            commands::operating_advance::get_operating_advance,
+            commands::operating_advance::create_operating_advance,
+            commands::operating_advance::approve_advance,
+            commands::operating_advance::reject_advance,
+            commands::operating_advance::disburse_advance,
+            commands::operating_advance::record_advance_spend,
+            commands::operating_advance::submit_receipt,
+            commands::operating_advance::approve_receipt,
+            commands::operating_advance::return_advance,
+            commands::operating_advance::reconcile_advance,
+            commands::operating_advance::cancel_advance,
+            commands::operating_advance::get_advance_transactions,
+            commands::operating_advance::get_advance_receipts,
+            commands::operating_advance::get_advance_summary,
+            commands::operating_advance::list_pending_receipts,
         ])
         .run(tauri::generate_context!())
         .expect("error while running ProMax ERP");

@@ -1,5 +1,6 @@
 use crate::commands::rbac;
 use crate::db::DbState;
+use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -63,11 +64,11 @@ struct ProductInfo {
 }
 
 #[tauri::command]
-pub fn list_invoices(state: State<'_, DbState>) -> Result<Vec<SalesInvoice>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn list_invoices(state: State<'_, DbState>) -> Result<Vec<SalesInvoice>, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn.prepare(
         "SELECT si.id, si.inv_no, si.date, si.customer_id, c.name, si.payment_type, si.vat_enabled, si.net_milli, si.vat_milli, si.discount_milli, si.total_milli, si.discount_reason, si.cogs_milli, si.paid_milli, si.status, si.notes, si.created_by, si.created_at FROM sales_invoices si LEFT JOIN customers c ON si.customer_id=c.id ORDER BY si.id DESC"
-    ).map_err(|e| e.to_string())?;
+    )?;
     
     let rows = stmt.query_map([], |row| {
         Ok(SalesInvoice {
@@ -90,15 +91,15 @@ pub fn list_invoices(state: State<'_, DbState>) -> Result<Vec<SalesInvoice>, Str
             created_by: row.get(16)?,
             created_at: row.get(17)?,
         })
-    }).map_err(|e| e.to_string())?;
+    })?;
     
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
 #[tauri::command]
-pub fn get_invoice(state: State<'_, DbState>, id: i64) -> Result<SalesInvoice, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
-    conn.query_row(
+pub fn get_invoice(state: State<'_, DbState>, id: i64) -> Result<SalesInvoice, AppError> {
+    let conn = state.0.lock()?;
+    Ok(conn.query_row(
         "SELECT si.id, si.inv_no, si.date, si.customer_id, c.name, si.payment_type, si.vat_enabled, si.net_milli, si.vat_milli, si.discount_milli, si.total_milli, si.discount_reason, si.cogs_milli, si.paid_milli, si.status, si.notes, si.created_by, si.created_at FROM sales_invoices si LEFT JOIN customers c ON si.customer_id=c.id WHERE si.id=?",
         [id],
         |row| {
@@ -111,15 +112,15 @@ pub fn get_invoice(state: State<'_, DbState>, id: i64) -> Result<SalesInvoice, S
                 created_by: row.get(16)?, created_at: row.get(17)?,
             })
         },
-    ).map_err(|e| e.to_string())
+    )?)
 }
 
 #[tauri::command]
-pub fn get_invoice_lines(state: State<'_, DbState>, invoice_id: i64) -> Result<Vec<InvoiceLine>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_invoice_lines(state: State<'_, DbState>, invoice_id: i64) -> Result<Vec<InvoiceLine>, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn.prepare(
         "SELECT sil.id, sil.invoice_id, sil.product_id, p.name_ar, sil.cartons, sil.cups_per_carton, sil.qty_cups, sil.unit_price_milli, COALESCE(sil.customs_price_milli, 0), sil.line_net_milli, sil.vat_pct, sil.vat_milli FROM sales_invoice_lines sil LEFT JOIN products p ON sil.product_id=p.id WHERE sil.invoice_id=?"
-    ).map_err(|e| e.to_string())?;
+    )?;
     
     let rows = stmt.query_map([invoice_id], |row| {
         Ok(InvoiceLine {
@@ -129,15 +130,15 @@ pub fn get_invoice_lines(state: State<'_, DbState>, invoice_id: i64) -> Result<V
             customs_price_milli: row.get(8)?,
             line_net_milli: row.get(9)?, vat_pct: row.get(10)?, vat_milli: row.get(11)?,
         })
-    }).map_err(|e| e.to_string())?;
+    })?;
     
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
 #[tauri::command]
-pub fn create_invoice(state: State<'_, DbState>, input: CreateInvoiceInput) -> Result<i64, String> {
-    let mut conn = state.0.lock().map_err(|e| e.to_string())?;
-    let tx = conn.transaction().map_err(|e| e.to_string())?;
+pub fn create_invoice(state: State<'_, DbState>, input: CreateInvoiceInput) -> Result<i64, AppError> {
+    let mut conn = state.0.lock()?;
+    let tx = conn.transaction()?;
     let now = chrono::Utc::now().format("%Y-%m-%d").to_string();
     let year = chrono::Utc::now().format("%Y").to_string();
     
@@ -181,7 +182,7 @@ pub fn create_invoice(state: State<'_, DbState>, input: CreateInvoiceInput) -> R
     tx.execute(
         "INSERT INTO sales_invoices(inv_no, date, customer_id, payment_type, net_milli, vat_milli, total_milli, status, notes) VALUES(?,?,?,?,?,?,?,'Draft',?)",
         rusqlite::params![inv_no, now, input.customer_id, input.payment_type.unwrap_or_else(|| "credit".into()), net, vat, total, input.notes],
-    ).map_err(|e| e.to_string())?;
+    )?;
     let inv_id = tx.last_insert_rowid();
     
     for (i, line) in input.lines.iter().enumerate() {
@@ -193,38 +194,38 @@ pub fn create_invoice(state: State<'_, DbState>, input: CreateInvoiceInput) -> R
         tx.execute(
             "INSERT INTO sales_invoice_lines(invoice_id, product_id, cartons, cups_per_carton, qty_cups, unit_price_milli, customs_price_milli, line_net_milli, vat_pct, vat_milli) VALUES(?,?,?,?,?,?,?,?,?,?)",
             rusqlite::params![inv_id, line.product_id, line.cartons, info.cups_per_carton, qty_cups, line.unit_price_milli, customs, line_net, info.vat_pct, line_vat],
-        ).map_err(|e| e.to_string())?;
+        )?;
     }
 
     let _ = rbac::log_audit(&*tx, None, None, "create_invoice", "sales_invoices", Some(inv_id), None, Some(&inv_no), None);
 
-    tx.commit().map_err(|e| e.to_string())?;
+    tx.commit()?;
     
     Ok(inv_id)
 }
 
 #[tauri::command]
-pub fn post_invoice(state: State<'_, DbState>, id: i64) -> Result<String, String> {
-    let mut conn = state.0.lock().map_err(|e| e.to_string())?;
-    let tx = conn.transaction().map_err(|e| e.to_string())?;
+pub fn post_invoice(state: State<'_, DbState>, id: i64) -> Result<String, AppError> {
+    let mut conn = state.0.lock()?;
+    let tx = conn.transaction()?;
 
     let current_status: String = tx
         .query_row("SELECT status FROM sales_invoices WHERE id=?", [id], |r| r.get(0))
-        .map_err(|_| "الفاتورة غير موجودة".to_string())?;
+        .map_err(|_| AppError::not_found("الفاتورة غير موجودة"))?;
     if current_status != "Draft" {
-        return Err("يمكن ترحيل الفواتير المسودة فقط".to_string());
+        return Err(AppError::validation("يمكن ترحيل الفواتير المسودة فقط"));
     }
 
     let lines: Vec<(i64, f64, i64)> = {
         let mut stmt = tx
             .prepare("SELECT product_id, cartons, unit_price_milli FROM sales_invoice_lines WHERE invoice_id=?")
-            .map_err(|e| e.to_string())?;
+            ?;
         let rows = stmt
             .query_map([id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
-            .map_err(|e| e.to_string())?;
+            ?;
         let mut v = Vec::new();
         for r in rows {
-            v.push(r.map_err(|e| e.to_string())?);
+            v.push(r?);
         }
         v
     };
@@ -234,13 +235,13 @@ pub fn post_invoice(state: State<'_, DbState>, id: i64) -> Result<String, String
         let inv_items: Vec<(i64, f64, f64)> = {
             let mut stmt = tx
                 .prepare("SELECT id, qty_on_hand, avg_cost_milli FROM inventory_items WHERE product_id=? AND active=1 ORDER BY kind DESC LIMIT 1")
-                .map_err(|e| e.to_string())?;
+                ?;
             let rows = stmt
                 .query_map([product_id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
-                .map_err(|e| e.to_string())?;
+                ?;
             let mut v = Vec::new();
             for r in rows {
-                v.push(r.map_err(|e| e.to_string())?);
+                v.push(r?);
             }
             v
         };
@@ -253,14 +254,14 @@ pub fn post_invoice(state: State<'_, DbState>, id: i64) -> Result<String, String
                 "UPDATE inventory_items SET qty_on_hand = qty_on_hand - ?1 WHERE id = ?2",
                 rusqlite::params![qty_to_deduct, inv_id],
             )
-            .map_err(|e| e.to_string())?;
+            ?;
 
             tx.execute(
                 "INSERT INTO inventory_movements(ts, item_id, mtype, qty_in, qty_out, unit_cost_milli, ref_type, ref_id, notes)
                  VALUES(datetime('now'), ?1, 'sale', 0, ?2, ?3, 'invoice', ?4, 'فاتورة مبيعات')",
                 rusqlite::params![inv_id, qty_to_deduct, (avg_cost * 1000.0).round() as i64, id],
             )
-            .map_err(|e| e.to_string())?;
+            ?;
         }
     }
 
@@ -268,17 +269,17 @@ pub fn post_invoice(state: State<'_, DbState>, id: i64) -> Result<String, String
         "UPDATE sales_invoices SET status='Posted', cogs_milli=?1 WHERE id=?2",
         rusqlite::params![total_cogs, id],
     )
-    .map_err(|e| e.to_string())?;
+    ?;
 
     let _ = rbac::log_audit(&*tx, None, None, "post_invoice", "sales_invoices", Some(id), None, Some(&format!("COGS: {} mil, status: Posted", total_cogs)), None);
 
-    tx.commit().map_err(|e| e.to_string())?;
+    tx.commit()?;
     Ok("تم ترحيل الفاتورة بنجاح".to_string())
 }
 
 #[tauri::command]
-pub fn void_invoice(state: State<'_, DbState>, id: i64, reason: Option<String>) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn void_invoice(state: State<'_, DbState>, id: i64, reason: Option<String>) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
 
     let status: String = conn.query_row(
         "SELECT status FROM sales_invoices WHERE id=?",
@@ -287,17 +288,17 @@ pub fn void_invoice(state: State<'_, DbState>, id: i64, reason: Option<String>) 
     ).map_err(|e| format!("Invoice not found: {}", e))?;
 
     if status != "Draft" && status != "Posted" {
-        return Err("يمكن إلغاء الفواتير المسودة أو المرحلة فقط".to_string());
+        return Err(AppError::validation("يمكن إلغاء الفواتير المسودة أو المرحلة فقط"));
     }
 
     let notes_addon = reason.unwrap_or_default();
     if notes_addon.is_empty() {
-        conn.execute("UPDATE sales_invoices SET status='Void' WHERE id=?", [id]).map_err(|e| e.to_string())?;
+        conn.execute("UPDATE sales_invoices SET status='Void' WHERE id=?", [id])?;
     } else {
         conn.execute(
             "UPDATE sales_invoices SET status='Void', notes=COALESCE(notes,'') || '\n[إلغاء] ' || ? WHERE id=?",
             rusqlite::params![notes_addon, id],
-        ).map_err(|e| e.to_string())?;
+        )?;
     }
 
     let _ = rbac::log_audit(&conn, None, None, "void_invoice", "sales_invoices", Some(id), None, Some("Void"), Some(&notes_addon));
@@ -305,8 +306,8 @@ pub fn void_invoice(state: State<'_, DbState>, id: i64, reason: Option<String>) 
 }
 
 #[tauri::command]
-pub fn duplicate_invoice(state: State<'_, DbState>, id: i64) -> Result<i64, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn duplicate_invoice(state: State<'_, DbState>, id: i64) -> Result<i64, AppError> {
+    let conn = state.0.lock()?;
     
     let inv: SalesInvoice = conn.query_row(
         "SELECT si.id, si.inv_no, si.date, si.customer_id, c.name, si.payment_type, si.vat_enabled, si.net_milli, si.vat_milli, si.discount_milli, si.total_milli, si.discount_reason, si.cogs_milli, si.paid_milli, si.status, si.notes, si.created_by, si.created_at FROM sales_invoices si LEFT JOIN customers c ON si.customer_id=c.id WHERE si.id=?",
@@ -326,11 +327,11 @@ pub fn duplicate_invoice(state: State<'_, DbState>, id: i64) -> Result<i64, Stri
     let source_lines: Vec<(i64, f64, i64)> = {
         let mut stmt = conn.prepare(
             "SELECT product_id, cartons, unit_price_milli FROM sales_invoice_lines WHERE invoice_id=?"
-        ).map_err(|e| e.to_string())?;
+        )?;
         let rows = stmt.query_map([id], |row| {
             Ok((row.get(0)?, row.get(1)?, row.get(2)?))
-        }).map_err(|e| e.to_string())?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?
+        })?;
+        rows.collect::<Result<Vec<_>, _>>()?
     };
     
     let now = chrono::Utc::now().format("%Y-%m-%d").to_string();
@@ -373,7 +374,7 @@ pub fn duplicate_invoice(state: State<'_, DbState>, id: i64) -> Result<i64, Stri
     conn.execute(
         "INSERT INTO sales_invoices(inv_no, date, customer_id, payment_type, net_milli, vat_milli, total_milli, status, notes) VALUES(?,?,?,?,?,?,?,'Draft',?)",
         rusqlite::params![inv_no, now, inv.customer_id, inv.payment_type.unwrap_or_else(|| "credit".into()), net, vat, total, note],
-    ).map_err(|e| e.to_string())?;
+    )?;
     let new_id = conn.last_insert_rowid();
     
     for (product_id, cartons, unit_price, info) in &line_data {
@@ -383,17 +384,17 @@ pub fn duplicate_invoice(state: State<'_, DbState>, id: i64) -> Result<i64, Stri
         conn.execute(
             "INSERT INTO sales_invoice_lines(invoice_id, product_id, cartons, cups_per_carton, qty_cups, unit_price_milli, line_net_milli, vat_pct, vat_milli) VALUES(?,?,?,?,?,?,?,?,?)",
             rusqlite::params![new_id, product_id, cartons, info.cups_per_carton, qty_cups, unit_price, line_net, info.vat_pct, line_vat],
-        ).map_err(|e| e.to_string())?;
+        )?;
     }
     
     Ok(new_id)
 }
 
 #[tauri::command]
-pub fn update_invoice(state: State<'_, DbState>, id: i64, notes: Option<String>) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn update_invoice(state: State<'_, DbState>, id: i64, notes: Option<String>) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
     if let Some(n) = notes {
-        conn.execute("UPDATE sales_invoices SET notes=? WHERE id=?", rusqlite::params![n, id]).map_err(|e| e.to_string())?;
+        conn.execute("UPDATE sales_invoices SET notes=? WHERE id=?", rusqlite::params![n, id])?;
     }
     Ok("تم التحديث".to_string())
 }
@@ -492,7 +493,7 @@ pub struct CreditNotePrintData {
     pub company: CompanyPrintInfo,
 }
 
-fn get_company_info(conn: &rusqlite::Connection) -> Result<CompanyPrintInfo, String> {
+fn get_company_info(conn: &rusqlite::Connection) -> Result<CompanyPrintInfo, AppError> {
     conn.query_row(
         "SELECT name, factory_name, address, phone, email, vat_number, logo_path, stamp_path, signature_path, footer_notes, bank_details, default_vat_pct FROM company_settings LIMIT 1",
         [],
@@ -510,10 +511,10 @@ fn get_company_info(conn: &rusqlite::Connection) -> Result<CompanyPrintInfo, Str
             bank_details: row.get(10)?,
             default_vat_pct: row.get(11)?,
         }),
-    ).map_err(|e| format!("Company settings not found: {}", e))
+    ).map_err(|e| AppError::business(format!("Company settings not found: {}", e)))
 }
 
-fn get_customer_info(conn: &rusqlite::Connection, customer_id: i64) -> Result<CustomerPrintInfo, String> {
+fn get_customer_info(conn: &rusqlite::Connection, customer_id: i64) -> Result<CustomerPrintInfo, AppError> {
     conn.query_row(
         "SELECT id, name, address, vat_number, phone FROM customers WHERE id=?",
         [customer_id],
@@ -524,12 +525,12 @@ fn get_customer_info(conn: &rusqlite::Connection, customer_id: i64) -> Result<Cu
             vat_number: row.get(3)?,
             phone: row.get(4)?,
         }),
-    ).map_err(|e| format!("Customer not found: {}", e))
+    ).map_err(|e| AppError::business(format!("Customer not found: {}", e)))
 }
 
 #[tauri::command]
-pub fn get_invoice_for_print(state: State<'_, DbState>, invoice_id: i64) -> Result<InvoicePrintData, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_invoice_for_print(state: State<'_, DbState>, invoice_id: i64) -> Result<InvoicePrintData, AppError> {
+    let conn = state.0.lock()?;
     let invoice = get_invoice_by_conn(&conn, invoice_id)?;
     let customer = get_customer_info(&conn, invoice.customer_id)?;
     let lines = get_invoice_lines_internal(&conn, invoice_id)?;
@@ -538,8 +539,8 @@ pub fn get_invoice_for_print(state: State<'_, DbState>, invoice_id: i64) -> Resu
 }
 
 #[tauri::command]
-pub fn get_invoice_for_print_customs(state: State<'_, DbState>, invoice_id: i64) -> Result<InvoicePrintData, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_invoice_for_print_customs(state: State<'_, DbState>, invoice_id: i64) -> Result<InvoicePrintData, AppError> {
+    let conn = state.0.lock()?;
     let invoice = get_invoice_by_conn(&conn, invoice_id)?;
     let customer = get_customer_info(&conn, invoice.customer_id)?;
     let mut lines = get_invoice_lines_internal(&conn, invoice_id)?;
@@ -574,8 +575,8 @@ pub fn get_invoice_for_print_customs(state: State<'_, DbState>, invoice_id: i64)
 }
 
 #[tauri::command]
-pub fn get_receipt_for_print(state: State<'_, DbState>, payment_id: i64) -> Result<ReceiptPrintData, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_receipt_for_print(state: State<'_, DbState>, payment_id: i64) -> Result<ReceiptPrintData, AppError> {
+    let conn = state.0.lock()?;
     let payment = conn.query_row(
         "SELECT cp.id, cp.rec_no, cp.date, cp.amount_milli, cp.method, cp.reference, cp.notes FROM customer_payments cp WHERE cp.id=?",
         [payment_id],
@@ -601,8 +602,8 @@ pub fn get_receipt_for_print(state: State<'_, DbState>, payment_id: i64) -> Resu
 }
 
 #[tauri::command]
-pub fn get_delivery_note_for_print(state: State<'_, DbState>, invoice_id: i64) -> Result<DeliveryNoteData, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_delivery_note_for_print(state: State<'_, DbState>, invoice_id: i64) -> Result<DeliveryNoteData, AppError> {
+    let conn = state.0.lock()?;
     let invoice = get_invoice_by_conn(&conn, invoice_id)?;
     let customer = get_customer_info(&conn, invoice.customer_id)?;
     let lines = get_invoice_lines_internal(&conn, invoice_id)?;
@@ -611,8 +612,8 @@ pub fn get_delivery_note_for_print(state: State<'_, DbState>, invoice_id: i64) -
 }
 
 #[tauri::command]
-pub fn get_credit_note_for_print(state: State<'_, DbState>, credit_note_id: i64) -> Result<CreditNotePrintData, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_credit_note_for_print(state: State<'_, DbState>, credit_note_id: i64) -> Result<CreditNotePrintData, AppError> {
+    let conn = state.0.lock()?;
     let cn = conn.query_row(
         "SELECT cn.id, cn.cn_no, cn.date, si.inv_no, cn.reason, cn.net_milli, cn.vat_milli, cn.total_milli, cn.status, cn.notes FROM credit_notes cn LEFT JOIN sales_invoices si ON cn.invoice_id=si.id WHERE cn.id=?",
         [credit_note_id],
@@ -638,7 +639,7 @@ pub fn get_credit_note_for_print(state: State<'_, DbState>, credit_note_id: i64)
     let company = get_company_info(&conn)?;
     let mut stmt = conn.prepare(
         "SELECT cnl.id, p.name_ar, cnl.cartons, cnl.qty_cups, cnl.unit_price_milli, cnl.line_net_milli, cnl.vat_pct, cnl.vat_milli FROM credit_note_lines cnl LEFT JOIN products p ON cnl.product_id=p.id WHERE cnl.cn_id=?"
-    ).map_err(|e| e.to_string())?;
+    )?;
     let lines = stmt.query_map([credit_note_id], |row| {
         Ok(CreditNoteLineInfo {
             id: row.get(0)?,
@@ -650,13 +651,13 @@ pub fn get_credit_note_for_print(state: State<'_, DbState>, credit_note_id: i64)
             vat_pct: row.get(6)?,
             vat_milli: row.get(7)?,
         })
-    }).map_err(|e| e.to_string())?
-    .collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
+    })?
+    .collect::<Result<Vec<_>, _>>()?;
     Ok(CreditNotePrintData { credit_note: cn, customer, lines, company })
 }
 
 // Internal helpers that work with an existing connection (not State)
-fn get_invoice_by_conn(conn: &rusqlite::Connection, id: i64) -> Result<SalesInvoice, String> {
+fn get_invoice_by_conn(conn: &rusqlite::Connection, id: i64) -> Result<SalesInvoice, AppError> {
     conn.query_row(
         "SELECT si.id, si.inv_no, si.date, si.customer_id, c.name, si.payment_type, si.vat_enabled, si.net_milli, si.vat_milli, si.discount_milli, si.total_milli, si.discount_reason, si.cogs_milli, si.paid_milli, si.status, si.notes, si.created_by, si.created_at FROM sales_invoices si LEFT JOIN customers c ON si.customer_id=c.id WHERE si.id=?",
         [id],
@@ -670,13 +671,13 @@ fn get_invoice_by_conn(conn: &rusqlite::Connection, id: i64) -> Result<SalesInvo
                 created_by: row.get(16)?, created_at: row.get(17)?,
             })
         },
-    ).map_err(|e| format!("Invoice not found: {}", e))
+    ).map_err(|e| AppError::not_found(format!("Invoice not found: {}", e)))
 }
 
-fn get_invoice_lines_internal(conn: &rusqlite::Connection, invoice_id: i64) -> Result<Vec<InvoiceLine>, String> {
+fn get_invoice_lines_internal(conn: &rusqlite::Connection, invoice_id: i64) -> Result<Vec<InvoiceLine>, AppError> {
     let mut stmt = conn.prepare(
         "SELECT sil.id, sil.invoice_id, sil.product_id, p.name_ar, sil.cartons, sil.cups_per_carton, sil.qty_cups, sil.unit_price_milli, COALESCE(sil.customs_price_milli, 0), sil.line_net_milli, sil.vat_pct, sil.vat_milli FROM sales_invoice_lines sil LEFT JOIN products p ON sil.product_id=p.id WHERE sil.invoice_id=?"
-    ).map_err(|e| e.to_string())?;
+    )?;
     let rows = stmt.query_map([invoice_id], |row| {
         Ok(InvoiceLine {
             id: row.get(0)?, invoice_id: row.get(1)?, product_id: row.get(2)?,
@@ -685,6 +686,6 @@ fn get_invoice_lines_internal(conn: &rusqlite::Connection, invoice_id: i64) -> R
             customs_price_milli: row.get(8)?,
             line_net_milli: row.get(9)?, vat_pct: row.get(10)?, vat_milli: row.get(11)?,
         })
-    }).map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    })?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }

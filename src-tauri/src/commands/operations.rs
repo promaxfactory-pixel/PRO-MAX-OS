@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::db::DbState;
+use crate::error::AppError;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OperationsSheet {
@@ -41,14 +42,13 @@ pub struct CreateOperationsSheetInput {
 }
 
 #[tauri::command]
-pub fn list_operations_sheets(state: State<'_, DbState>) -> Result<Vec<OperationsSheet>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn list_operations_sheets(state: State<'_, DbState>) -> Result<Vec<OperationsSheet>, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn
         .prepare(
             "SELECT id, sheet_no, date, shift, supervisor_name, worker_name, start_time, end_time, normal_hours, overtime_hours, cartons_produced, total_cups, status, notes, created_by, created_at
              FROM operations_daily_sheets ORDER BY id DESC",
-        )
-        .map_err(|e| e.to_string())?;
+        )?;
 
     let rows = stmt
         .query_map([], |row| {
@@ -70,12 +70,11 @@ pub fn list_operations_sheets(state: State<'_, DbState>) -> Result<Vec<Operation
                 created_by: row.get(14)?,
                 created_at: row.get(15)?,
             })
-        })
-        .map_err(|e| e.to_string())?;
+        })?;
 
     let mut sheets = Vec::new();
     for row in rows {
-        sheets.push(row.map_err(|e| e.to_string())?);
+        sheets.push(row?);
     }
     Ok(sheets)
 }
@@ -84,9 +83,9 @@ pub fn list_operations_sheets(state: State<'_, DbState>) -> Result<Vec<Operation
 pub fn get_operations_sheet(
     state: State<'_, DbState>,
     id: i64,
-) -> Result<OperationsSheet, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
-    conn.query_row(
+) -> Result<OperationsSheet, AppError> {
+    let conn = state.0.lock()?;
+    Ok(conn.query_row(
         "SELECT id, sheet_no, date, shift, supervisor_name, worker_name, start_time, end_time, normal_hours, overtime_hours, cartons_produced, total_cups, status, notes, created_by, created_at
          FROM operations_daily_sheets WHERE id = ?1",
         params![id],
@@ -110,24 +109,22 @@ pub fn get_operations_sheet(
                 created_at: row.get(15)?,
             })
         },
-    )
-    .map_err(|e| e.to_string())
+    )?)
 }
 
 #[tauri::command]
 pub fn create_operations_sheet(
     state: State<'_, DbState>,
     input: CreateOperationsSheetInput,
-) -> Result<OperationsSheet, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<OperationsSheet, AppError> {
+    let conn = state.0.lock()?;
 
     let seq: i64 = conn
         .query_row(
             "SELECT COALESCE(MAX(id), 0) + 1 FROM operations_daily_sheets",
             [],
             |row| row.get(0),
-        )
-        .map_err(|e| e.to_string())?;
+        )?;
     let sheet_no = format!("OPS-{:04}", seq);
 
     conn.execute(
@@ -148,12 +145,11 @@ pub fn create_operations_sheet(
             input.notes,
             input.created_by,
         ],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
 
     let id = conn.last_insert_rowid();
 
-    conn.query_row(
+    Ok(conn.query_row(
         "SELECT id, sheet_no, date, shift, supervisor_name, worker_name, start_time, end_time, normal_hours, overtime_hours, cartons_produced, total_cups, status, notes, created_by, created_at FROM operations_daily_sheets WHERE id=?1",
         params![id],
         |row| {
@@ -165,5 +161,5 @@ pub fn create_operations_sheet(
                 notes: row.get(13)?, created_by: row.get(14)?, created_at: row.get(15)?,
             })
         },
-    ).map_err(|e| e.to_string())
+    )?)
 }

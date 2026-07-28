@@ -1,4 +1,5 @@
 ﻿use crate::db::DbState;
+use crate::error::AppError;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -61,17 +62,17 @@ fn now_str() -> String {
     chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string()
 }
 
-fn save_setting(conn: &rusqlite::Connection, key: &str, value: &str) -> Result<(), String> {
+fn save_setting(conn: &rusqlite::Connection, key: &str, value: &str) -> Result<(), AppError> {
     conn.execute(
         "INSERT INTO integrations_settings(key, value, updated_at) VALUES(?1, ?2, ?3)
          ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
         params![key, value, now_str()],
     )
-    .map_err(|e| e.to_string())?;
+    ?;
     Ok(())
 }
 
-fn load_setting(conn: &rusqlite::Connection, key: &str) -> Result<Option<String>, String> {
+fn load_setting(conn: &rusqlite::Connection, key: &str) -> Result<Option<String>, AppError> {
     let result = conn.query_row(
         "SELECT value FROM integrations_settings WHERE key=?1",
         params![key],
@@ -83,7 +84,7 @@ fn load_setting(conn: &rusqlite::Connection, key: &str) -> Result<Option<String>
     }
 }
 
-fn build_general_context(conn: &rusqlite::Connection) -> Result<ErpContext, String> {
+fn build_general_context(conn: &rusqlite::Connection) -> Result<ErpContext, AppError> {
     let company_name: String = conn
         .query_row(
             "SELECT COALESCE(name, 'Unknown Company') FROM company_settings LIMIT 1",
@@ -150,7 +151,7 @@ fn build_general_context(conn: &rusqlite::Connection) -> Result<ErpContext, Stri
     })
 }
 
-fn build_financial_context(conn: &rusqlite::Connection) -> Result<ErpContext, String> {
+fn build_financial_context(conn: &rusqlite::Connection) -> Result<ErpContext, AppError> {
     let total_revenue: f64 = conn
         .query_row(
             "SELECT COALESCE(SUM(total_milli), 0) / 1000.0 FROM sales_invoices WHERE status NOT IN ('Void','Draft')",
@@ -230,7 +231,7 @@ fn build_financial_context(conn: &rusqlite::Connection) -> Result<ErpContext, St
     ) {
         let rows: Vec<(String, f64)> = stmt
             .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, f64>(1)?)))
-            .map_err(|e| e.to_string())?
+            ?
             .filter_map(|r| r.ok())
             .collect();
         for (name, total) in &rows {
@@ -263,7 +264,7 @@ fn build_financial_context(conn: &rusqlite::Connection) -> Result<ErpContext, St
     Ok(ErpContext { summary, data_refs })
 }
 
-fn build_production_context(conn: &rusqlite::Connection) -> Result<ErpContext, String> {
+fn build_production_context(conn: &rusqlite::Connection) -> Result<ErpContext, AppError> {
     let total_orders: i64 = conn
         .query_row("SELECT COUNT(*) FROM production_orders", [], |row| row.get(0))
         .unwrap_or(0);
@@ -357,7 +358,7 @@ fn build_production_context(conn: &rusqlite::Connection) -> Result<ErpContext, S
                     row.get::<_, f64>(3)?,
                 ))
             })
-            .map_err(|e| e.to_string())?
+            ?
             .filter_map(|r| r.ok())
             .collect();
         for (machine, good, waste, pct) in &rows {
@@ -391,7 +392,7 @@ fn build_production_context(conn: &rusqlite::Connection) -> Result<ErpContext, S
     Ok(ErpContext { summary, data_refs })
 }
 
-fn build_inventory_context(conn: &rusqlite::Connection) -> Result<ErpContext, String> {
+fn build_inventory_context(conn: &rusqlite::Connection) -> Result<ErpContext, AppError> {
     let total_items: i64 = conn
         .query_row("SELECT COUNT(*) FROM inventory_items WHERE active=1", [], |row| row.get(0))
         .unwrap_or(0);
@@ -442,7 +443,7 @@ fn build_inventory_context(conn: &rusqlite::Connection) -> Result<ErpContext, St
                     row.get::<_, f64>(2)?,
                 ))
             })
-            .map_err(|e| e.to_string())?
+            ?
             .filter_map(|r| r.ok())
             .collect();
         for (name, qty, reorder) in &rows {
@@ -469,7 +470,7 @@ fn build_inventory_context(conn: &rusqlite::Connection) -> Result<ErpContext, St
     Ok(ErpContext { summary, data_refs })
 }
 
-fn build_hr_context(conn: &rusqlite::Connection) -> Result<ErpContext, String> {
+fn build_hr_context(conn: &rusqlite::Connection) -> Result<ErpContext, AppError> {
     let active_employees: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM employees WHERE active=1",
@@ -543,7 +544,7 @@ fn build_hr_context(conn: &rusqlite::Connection) -> Result<ErpContext, String> {
     ) {
         let rows: Vec<(String, i64)> = stmt
             .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))
-            .map_err(|e| e.to_string())?
+            ?
             .filter_map(|r| r.ok())
             .collect();
         for (nat, cnt) in &rows {
@@ -625,8 +626,8 @@ fn extract_suggestions(query: &str) -> Vec<String> {
 }
 
 #[tauri::command]
-pub fn save_ai_settings(state: State<'_, DbState>, input: AiSettings) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn save_ai_settings(state: State<'_, DbState>, input: AiSettings) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
 
     if let Some(ref key) = input.api_key {
         let encrypted = crate::crypto::encrypt_if_needed(key)
@@ -647,8 +648,8 @@ pub fn save_ai_settings(state: State<'_, DbState>, input: AiSettings) -> Result<
 }
 
 #[tauri::command]
-pub fn get_ai_settings(state: State<'_, DbState>) -> Result<AiSettings, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_ai_settings(state: State<'_, DbState>) -> Result<AiSettings, AppError> {
+    let conn = state.0.lock()?;
 
     let api_key = load_setting(&conn, "ai_api_key")?
         .map(|v| crate::crypto::decrypt_if_needed(&v).unwrap_or(v));
@@ -670,8 +671,8 @@ pub fn get_ai_settings(state: State<'_, DbState>) -> Result<AiSettings, String> 
 pub fn ai_chat(
     state: State<'_, DbState>,
     input: AiChatRequest,
-) -> Result<AiChatResponse, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<AiChatResponse, AppError> {
+    let conn = state.0.lock()?;
 
     let context = match input.context_type.as_deref() {
         Some("financial") => build_financial_context(&conn)?,
@@ -711,15 +712,15 @@ pub fn ai_analyze_entity(
     state: State<'_, DbState>,
     entity_type: String,
     entity_id: i64,
-) -> Result<AiAnalysis, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<AiAnalysis, AppError> {
+    let conn = state.0.lock()?;
     let now = now_str();
 
     let (analysis_type, title, summary, findings, recommendations) = match entity_type.as_str() {
         "customer" => {
             let name: String = conn
                 .query_row("SELECT name FROM customers WHERE id=?1", params![entity_id], |row| row.get(0))
-                .map_err(|e| e.to_string())?;
+                ?;
 
             let total_invoices: i64 = conn
                 .query_row(
@@ -805,7 +806,7 @@ pub fn ai_analyze_entity(
         "product" => {
             let name: String = conn
                 .query_row("SELECT COALESCE(name_en, name_ar, 'Unknown') FROM products WHERE id=?1", params![entity_id], |row| row.get(0))
-                .map_err(|e| e.to_string())?;
+                ?;
 
             let total_produced: f64 = conn
                 .query_row(
@@ -876,7 +877,7 @@ pub fn ai_analyze_entity(
         "supplier" => {
             let name: String = conn
                 .query_row("SELECT name FROM suppliers WHERE id=?1", params![entity_id], |row| row.get(0))
-                .map_err(|e| e.to_string())?;
+                ?;
 
             let total_purchases: i64 = conn
                 .query_row(
@@ -937,7 +938,7 @@ pub fn ai_analyze_entity(
             ("supplier".into(), format!("Supplier Analysis: {name}"), format!("Supplier '{name}' with {total_purchases} purchases totaling {total_amount:.2} Rial"), findings, recommendations)
         }
         _ => {
-            return Err(format!("Unknown entity type: {entity_type}. Supported: customer, product, supplier"));
+            return Err(AppError::validation(format!("Unknown entity type: {entity_type}. Supported: customer, product, supplier")));
         }
     };
 
@@ -955,8 +956,8 @@ pub fn ai_analyze_entity(
 pub fn ai_suggest_actions(
     state: State<'_, DbState>,
     context_type: String,
-) -> Result<Vec<String>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<Vec<String>, AppError> {
+    let conn = state.0.lock()?;
     let mut suggestions = Vec::new();
 
     match context_type.as_str() {
@@ -1257,14 +1258,14 @@ pub struct AiProviderStatus {
 pub async fn chat_with_ai(
     state: State<'_, DbState>,
     input: ChatRequest,
-) -> Result<ChatResponse, String> {
+) -> Result<ChatResponse, AppError> {
     let (api_key, model, max_tokens, temperature, context_summary) = {
-        let conn = state.0.lock().map_err(|e| e.to_string())?;
+        let conn = state.0.lock()?;
         let provider = input.provider.as_deref().unwrap_or("openai");
         let api_key = load_setting(&conn, &format!("ai_api_key_{provider}"))?
             .or_else(|| load_setting(&conn, "ai_api_key").ok().flatten())
             .map(|v| crate::crypto::decrypt_if_needed(&v).unwrap_or(v))
-            .ok_or_else(|| "API key not configured. Go to Settings > AI Integration to set up.".to_string())?;
+            .ok_or_else(|| AppError::validation("API key not configured. Go to Settings > AI Integration to set up."))?;
         let model = load_setting(&conn, &format!("ai_model_{provider}"))?
             .or_else(|| load_setting(&conn, "ai_model").ok().flatten())
             .unwrap_or_else(|| {
@@ -1320,7 +1321,7 @@ pub async fn chat_with_ai(
     })
 }
 
-async fn call_openai(api_key: &str, model: &str, system: &str, user: &str, max_tokens: i64, temperature: f64) -> Result<String, String> {
+async fn call_openai(api_key: &str, model: &str, system: &str, user: &str, max_tokens: i64, temperature: f64) -> Result<String, AppError> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(120))
         .build()
@@ -1350,16 +1351,16 @@ async fn call_openai(api_key: &str, model: &str, system: &str, user: &str, max_t
 
     if !status.is_success() {
         let err_msg = json["error"]["message"].as_str().unwrap_or("Unknown error");
-        return Err(format!("OpenAI API error ({}): {}", status.as_u16(), err_msg));
+        return Err(format!("OpenAI API error ({}): {}", status.as_u16(), err_msg).into());
     }
 
     json["choices"][0]["message"]["content"]
         .as_str()
         .map(|s| s.to_string())
-        .ok_or_else(|| "No response content from OpenAI".to_string())
+        .ok_or_else(|| AppError::business("No response content from OpenAI".to_string()))
 }
 
-async fn call_anthropic(api_key: &str, model: &str, system: &str, user: &str, max_tokens: i64, temperature: f64) -> Result<String, String> {
+async fn call_anthropic(api_key: &str, model: &str, system: &str, user: &str, max_tokens: i64, temperature: f64) -> Result<String, AppError> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(120))
         .build()
@@ -1388,23 +1389,23 @@ async fn call_anthropic(api_key: &str, model: &str, system: &str, user: &str, ma
 
     if !status.is_success() {
         let err_msg = json["error"]["message"].as_str().unwrap_or("Unknown error");
-        return Err(format!("Anthropic API error ({}): {}", status.as_u16(), err_msg));
+        return Err(format!("Anthropic API error ({}): {}", status.as_u16(), err_msg).into());
     }
 
     json["content"][0]["text"]
         .as_str()
         .map(|s| s.to_string())
-        .ok_or_else(|| "No response content from Anthropic".to_string())
+        .ok_or_else(|| AppError::business("No response content from Anthropic".to_string()))
 }
 
 #[tauri::command]
 pub async fn test_ai_connection(
     state: State<'_, DbState>,
     provider: Option<String>,
-) -> Result<AiProviderStatus, String> {
+) -> Result<AiProviderStatus, AppError> {
     let prov = provider.as_deref().unwrap_or("openai");
     let (api_key, model) = {
-        let conn = state.0.lock().map_err(|e| e.to_string())?;
+        let conn = state.0.lock()?;
         let api_key = load_setting(&conn, &format!("ai_api_key_{prov}"))?
             .or_else(|| load_setting(&conn, "ai_api_key").ok().flatten())
             .map(|v| crate::crypto::decrypt_if_needed(&v).unwrap_or(v));
@@ -1454,8 +1455,8 @@ pub fn save_ai_provider_settings(
     provider: String,
     api_key: String,
     model: String,
-) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
     let encrypted = crate::crypto::encrypt_if_needed(&api_key)
         .map_err(|e| format!("Failed to encrypt API key: {}", e))?;
     save_setting(&conn, &format!("ai_api_key_{provider}"), &encrypted)?;

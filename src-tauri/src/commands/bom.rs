@@ -1,4 +1,5 @@
 use crate::db::DbState;
+use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -23,9 +24,9 @@ pub struct CreateBomInput {
 }
 
 #[tauri::command]
-pub fn list_boms(state: State<'_, DbState>) -> Result<Vec<BomEntry>, String> {
+pub fn list_boms(state: State<'_, DbState>) -> Result<Vec<BomEntry>, AppError> {
     crate::commands::licensing::require_feature(crate::commands::licensing::FEAT_BOM)?;
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    let conn = state.0.lock()?;
     let mut stmt = conn
         .prepare(
             "SELECT b.id, b.product_id, p.name AS product_name,
@@ -36,8 +37,7 @@ pub fn list_boms(state: State<'_, DbState>) -> Result<Vec<BomEntry>, String> {
              LEFT JOIN inventory_items i ON i.id = b.item_id
              WHERE b.active = 1
              ORDER BY b.id DESC",
-        )
-        .map_err(|e| e.to_string())?;
+        )?;
 
     let rows = stmt
         .query_map([], |row| {
@@ -51,15 +51,14 @@ pub fn list_boms(state: State<'_, DbState>) -> Result<Vec<BomEntry>, String> {
                 waste_pct: row.get(6)?,
                 active: row.get(7)?,
             })
-        })
-        .map_err(|e| e.to_string())?;
+        })?;
 
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
 #[tauri::command]
-pub fn create_bom(state: State<'_, DbState>, input: CreateBomInput) -> Result<i64, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn create_bom(state: State<'_, DbState>, input: CreateBomInput) -> Result<i64, AppError> {
+    let conn = state.0.lock()?;
     conn.execute(
         "INSERT INTO bom (product_id, item_id, qty_per_carton, waste_pct, active)
          VALUES (?1, ?2, ?3, ?4, 1)",
@@ -69,7 +68,6 @@ pub fn create_bom(state: State<'_, DbState>, input: CreateBomInput) -> Result<i6
             input.qty_per_carton,
             input.waste_pct.unwrap_or(0.0),
         ],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
     Ok(conn.last_insert_rowid())
 }

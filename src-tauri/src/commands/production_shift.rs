@@ -4,6 +4,7 @@ use tauri::State;
 
 use crate::commands::rbac;
 use crate::db::DbState;
+use crate::error::AppError;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ShiftLine {
@@ -42,8 +43,8 @@ pub struct ProductProductionSummary {
 }
 
 #[tauri::command]
-pub fn get_shift_sheet(state: State<'_, DbState>, date: String, shift: String) -> Result<i64, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_shift_sheet(state: State<'_, DbState>, date: String, shift: String) -> Result<i64, AppError> {
+    let conn = state.0.lock()?;
 
     let existing: Option<i64> = conn
         .query_row(
@@ -59,7 +60,7 @@ pub fn get_shift_sheet(state: State<'_, DbState>, date: String, shift: String) -
 
     let seq: i64 = conn
         .query_row("SELECT COALESCE(MAX(id), 0) + 1 FROM operations_daily_sheets", [], |row| row.get(0))
-        .map_err(|e| e.to_string())?;
+        ?;
     let sheet_no = format!("PRD-{:04}", seq);
 
     conn.execute(
@@ -67,7 +68,7 @@ pub fn get_shift_sheet(state: State<'_, DbState>, date: String, shift: String) -
          VALUES (?1, ?2, ?3, datetime('now'), 'Draft', datetime('now'))",
         params![sheet_no, date, shift],
     )
-    .map_err(|e| e.to_string())?;
+    ?;
 
     Ok(conn.last_insert_rowid())
 }
@@ -83,8 +84,8 @@ pub fn record_production(
     waste_cartons: Option<f64>,
     recorded_by: Option<String>,
     worker_id: Option<i64>,
-) -> Result<ShiftLine, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<ShiftLine, AppError> {
+    let conn = state.0.lock()?;
 
     let cpc = cups_per_carton.unwrap_or(1000);
     let waste = waste_cartons.unwrap_or(0.0);
@@ -94,7 +95,7 @@ pub fn record_production(
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         params![sheet_id, product_id, customer_brand, cartons_produced, cpc, waste, recorded_by, worker_id],
     )
-    .map_err(|e| e.to_string())?;
+    ?;
 
     let id = conn.last_insert_rowid();
 
@@ -108,7 +109,7 @@ pub fn record_production(
          WHERE psl.id = ?1",
         params![id],
         row_to_shift_line,
-    ).map_err(|e| e.to_string())?;
+    )?;
 
     update_sheet_totals(&conn, sheet_id)?;
 
@@ -117,7 +118,7 @@ pub fn record_production(
     Ok(line)
 }
 
-fn update_sheet_totals(conn: &rusqlite::Connection, sheet_id: i64) -> Result<(), String> {
+fn update_sheet_totals(conn: &rusqlite::Connection, sheet_id: i64) -> Result<(), AppError> {
     conn.execute(
         "UPDATE operations_daily_sheets SET
             cartons_produced = (SELECT COALESCE(SUM(cartons_produced), 0) FROM production_shift_lines WHERE sheet_id = ?1),
@@ -125,13 +126,13 @@ fn update_sheet_totals(conn: &rusqlite::Connection, sheet_id: i64) -> Result<(),
          WHERE id = ?1",
         params![sheet_id],
     )
-    .map_err(|e| e.to_string())?;
+    ?;
     Ok(())
 }
 
 #[tauri::command]
-pub fn get_shift_lines(state: State<'_, DbState>, sheet_id: i64) -> Result<Vec<ShiftLine>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_shift_lines(state: State<'_, DbState>, sheet_id: i64) -> Result<Vec<ShiftLine>, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn
         .prepare(
             "SELECT psl.id, psl.sheet_id, psl.product_id, COALESCE(p.name_ar, p.name_en, ''),
@@ -143,28 +144,28 @@ pub fn get_shift_lines(state: State<'_, DbState>, sheet_id: i64) -> Result<Vec<S
              WHERE psl.sheet_id = ?1
              ORDER BY psl.ts DESC",
         )
-        .map_err(|e| e.to_string())?;
+        ?;
 
-    let rows = stmt.query_map(params![sheet_id], row_to_shift_line).map_err(|e| e.to_string())?;
+    let rows = stmt.query_map(params![sheet_id], row_to_shift_line)?;
     let mut lines = Vec::new();
     for row in rows {
-        lines.push(row.map_err(|e| e.to_string())?);
+        lines.push(row?);
     }
     Ok(lines)
 }
 
 #[tauri::command]
-pub fn complete_shift(state: State<'_, DbState>, sheet_id: i64, completed_by: String) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn complete_shift(state: State<'_, DbState>, sheet_id: i64, completed_by: String) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
 
     let status: String = conn.query_row(
         "SELECT status FROM operations_daily_sheets WHERE id = ?1",
         params![sheet_id],
         |row| row.get(0),
-    ).map_err(|_| "الوريiodية غير موجودة".to_string())?;
+    ).map_err(|_| AppError::not_found("الوريiodية غير موجودة"))?;
 
     if status != "Draft" {
-        return Err("لا يمكن إقفال وردية تم إقفالها مسبقاً".to_string());
+        return Err(AppError::validation("لا يمكن إقفال وردية تم إقفالها مسبقاً"));
     }
 
     conn.execute(
@@ -172,7 +173,7 @@ pub fn complete_shift(state: State<'_, DbState>, sheet_id: i64, completed_by: St
          WHERE id = ?2",
         params![completed_by, sheet_id],
     )
-    .map_err(|e| e.to_string())?;
+    ?;
 
     let lines: Vec<(i64, f64)> = {
         let mut stmt = conn
@@ -180,13 +181,13 @@ pub fn complete_shift(state: State<'_, DbState>, sheet_id: i64, completed_by: St
                 "SELECT psl.product_id, psl.cartons_produced
                  FROM production_shift_lines psl WHERE psl.sheet_id = ?1",
             )
-            .map_err(|e| e.to_string())?;
+            ?;
         let rows = stmt.query_map(params![sheet_id], |row| {
             Ok((row.get::<_, i64>(0)?, row.get::<_, f64>(1)?))
-        }).map_err(|e| e.to_string())?;
+        })?;
         let mut v = Vec::new();
         for r in rows {
-            v.push(r.map_err(|e| e.to_string())?);
+            v.push(r?);
         }
         v
     };
@@ -196,7 +197,7 @@ pub fn complete_shift(state: State<'_, DbState>, sheet_id: i64, completed_by: St
             "UPDATE inventory_items SET qty_on_hand = qty_on_hand + ?1 WHERE product_id = ?2 AND kind = 'finished'",
             params![cartons, product_id],
         )
-        .map_err(|e| e.to_string())?;
+        ?;
 
         conn.execute(
             "INSERT INTO inventory_movements (ts, item_id, mtype, qty_in, ref_type, ref_id, notes)
@@ -204,7 +205,7 @@ pub fn complete_shift(state: State<'_, DbState>, sheet_id: i64, completed_by: St
              FROM inventory_items ii WHERE ii.product_id = ?3 AND ii.kind = 'finished'",
             params![cartons, sheet_id, product_id],
         )
-        .map_err(|e| e.to_string())?;
+        ?;
     }
 
     let _ = rbac::log_audit(&conn, None, None, "complete_shift", "operations_daily_sheets", Some(sheet_id), None, None, None);
@@ -218,8 +219,8 @@ pub fn update_production_line(
     line_id: i64,
     cartons_produced: f64,
     waste_cartons: Option<f64>,
-) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
 
     let sheet_id: i64 = conn.query_row(
         "SELECT psl.sheet_id FROM production_shift_lines psl
@@ -227,13 +228,13 @@ pub fn update_production_line(
          WHERE psl.id = ?1 AND ods.status = 'Draft'",
         params![line_id],
         |row| row.get(0),
-    ).map_err(|_| "السطر غير موجود أو الوردية مقفلة".to_string())?;
+    ).map_err(|_| AppError::not_found("السطر غير موجود أو الوردية مقفلة"))?;
 
     conn.execute(
         "UPDATE production_shift_lines SET cartons_produced = ?1, waste_cartons = COALESCE(?2, waste_cartons) WHERE id = ?3",
         params![cartons_produced, waste_cartons, line_id],
     )
-    .map_err(|e| e.to_string())?;
+    ?;
 
     update_sheet_totals(&conn, sheet_id)?;
 
@@ -241,8 +242,8 @@ pub fn update_production_line(
 }
 
 #[tauri::command]
-pub fn delete_production_line(state: State<'_, DbState>, line_id: i64) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn delete_production_line(state: State<'_, DbState>, line_id: i64) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
 
     let sheet_id: i64 = conn.query_row(
         "SELECT psl.sheet_id FROM production_shift_lines psl
@@ -250,10 +251,10 @@ pub fn delete_production_line(state: State<'_, DbState>, line_id: i64) -> Result
          WHERE psl.id = ?1 AND ods.status = 'Draft'",
         params![line_id],
         |row| row.get(0),
-    ).map_err(|_| "السطر غير موجود أو الوردية مقفلة".to_string())?;
+    ).map_err(|_| AppError::not_found("السطر غير موجود أو الوردية مقفلة"))?;
 
     conn.execute("DELETE FROM production_shift_lines WHERE id = ?1", params![line_id])
-        .map_err(|e| e.to_string())?;
+        ?;
 
     update_sheet_totals(&conn, sheet_id)?;
 
@@ -263,8 +264,8 @@ pub fn delete_production_line(state: State<'_, DbState>, line_id: i64) -> Result
 }
 
 #[tauri::command]
-pub fn get_live_dashboard(state: State<'_, DbState>) -> Result<LiveProductionSummary, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_live_dashboard(state: State<'_, DbState>) -> Result<LiveProductionSummary, AppError> {
+    let conn = state.0.lock()?;
 
     let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
 
@@ -315,7 +316,7 @@ pub fn get_live_dashboard(state: State<'_, DbState>) -> Result<LiveProductionSum
          WHERE ods.date = ?1
          GROUP BY psl.product_id, psl.customer_brand
          ORDER BY tot_cartons DESC",
-    ).map_err(|e| e.to_string())?;
+    )?;
 
     let products: Vec<ProductProductionSummary> = stmt
         .query_map(params![today], |row| {
@@ -328,7 +329,7 @@ pub fn get_live_dashboard(state: State<'_, DbState>) -> Result<LiveProductionSum
                 waste_cartons: row.get(5)?,
             })
         })
-        .map_err(|e| e.to_string())?
+        ?
         .filter_map(|r| r.ok())
         .collect();
 
@@ -342,11 +343,11 @@ pub fn get_live_dashboard(state: State<'_, DbState>) -> Result<LiveProductionSum
          LEFT JOIN employees e ON e.id = psl.worker_id
          WHERE ods.date = ?1
          ORDER BY psl.ts DESC LIMIT 20",
-    ).map_err(|e| e.to_string())?;
+    )?;
 
     let recent_entries: Vec<ShiftLine> = recent
         .query_map(params![today], row_to_shift_line)
-        .map_err(|e| e.to_string())?
+        ?
         .filter_map(|r| r.ok())
         .collect();
 
@@ -365,8 +366,8 @@ pub fn print_shift_report_thermal(
     state: State<'_, DbState>,
     sheet_id: i64,
     printer_name: Option<String>,
-) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
 
     let sheet: (String, String, String, String) = conn.query_row(
         "SELECT date, shift, COALESCE(sheet_no, ''), COALESCE(created_by, 'operator') FROM operations_daily_sheets WHERE id = ?1",
@@ -382,11 +383,11 @@ pub fn print_shift_report_thermal(
          LEFT JOIN products p ON p.id = psl.product_id
          WHERE psl.sheet_id = ?1
          ORDER BY psl.ts"
-    ).map_err(|e| e.to_string())?;
+    )?;
 
     let rows: Vec<(f64, i64, f64, String, Option<String>)> = stmt.query_map(params![sheet_id], |row| {
         Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?))
-    }).map_err(|e| e.to_string())?
+    })?
     .filter_map(|r| r.ok())
     .collect();
 
@@ -465,7 +466,7 @@ pub fn print_shift_report_thermal(
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Print error: {}", stderr));
+        return Err(AppError::business(format!("Print error: {}", stderr)));
     }
 
     let _ = std::fs::remove_file(&temp_file);
@@ -500,8 +501,8 @@ pub struct WorkerDailySummary {
 }
 
 #[tauri::command]
-pub fn get_worker_daily_report(state: State<'_, DbState>, date: String) -> Result<Vec<WorkerDailySummary>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_worker_daily_report(state: State<'_, DbState>, date: String) -> Result<Vec<WorkerDailySummary>, AppError> {
+    let conn = state.0.lock()?;
 
     let mut stmt = conn.prepare(
         "SELECT psl.worker_id, e.name as worker_name,
@@ -514,13 +515,13 @@ pub fn get_worker_daily_report(state: State<'_, DbState>, date: String) -> Resul
          WHERE ods.date = ?1 AND psl.worker_id IS NOT NULL
          GROUP BY psl.worker_id, e.name
          ORDER BY total_cartons DESC",
-    ).map_err(|e| e.to_string())?;
+    )?;
 
     let worker_rows: Vec<(i64, Option<String>, f64, f64, f64)> = stmt
         .query_map(params![date], |row| {
             Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?))
         })
-        .map_err(|e| e.to_string())?
+        ?
         .filter_map(|r| r.ok())
         .collect();
 
@@ -538,7 +539,7 @@ pub fn get_worker_daily_report(state: State<'_, DbState>, date: String) -> Resul
              WHERE ods.date = ?1 AND psl.worker_id = ?2
              GROUP BY psl.product_id, psl.customer_brand
              ORDER BY tot_cartons DESC",
-        ).map_err(|e| e.to_string())?;
+        )?;
 
         let products: Vec<ProductProductionSummary> = prod_stmt
             .query_map(params![date, worker_id], |row| {
@@ -551,7 +552,7 @@ pub fn get_worker_daily_report(state: State<'_, DbState>, date: String) -> Resul
                     waste_cartons: row.get(5)?,
                 })
             })
-            .map_err(|e| e.to_string())?
+            ?
             .filter_map(|r| r.ok())
             .collect();
 
@@ -589,15 +590,15 @@ pub fn record_shift_inventory_snapshot(
     opening_qty: f64,
     closing_qty: f64,
     recorded_by: Option<String>,
-) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
 
     conn.execute(
         "INSERT INTO shift_inventory_snapshots (date, shift, item_id, opening_qty, closing_qty, recorded_by, ts)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now'))",
         params![date, shift, item_id, opening_qty, closing_qty, recorded_by],
     )
-    .map_err(|e| e.to_string())?;
+    ?;
 
     let _ = rbac::log_audit(&conn, None, None, "record_shift_inventory_snapshot", "shift_inventory_snapshots", None, None, None, None);
 
@@ -605,15 +606,15 @@ pub fn record_shift_inventory_snapshot(
 }
 
 #[tauri::command]
-pub fn get_shift_inventory_snapshots(state: State<'_, DbState>, date: String) -> Result<Vec<ShiftInventorySnapshot>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_shift_inventory_snapshots(state: State<'_, DbState>, date: String) -> Result<Vec<ShiftInventorySnapshot>, AppError> {
+    let conn = state.0.lock()?;
 
     let mut stmt = conn.prepare(
         "SELECT id, date, shift, item_id, opening_qty, closing_qty, recorded_by, ts
          FROM shift_inventory_snapshots
          WHERE date = ?1
          ORDER BY shift, item_id",
-    ).map_err(|e| e.to_string())?;
+    )?;
 
     let rows = stmt
         .query_map(params![date], |row| {
@@ -628,11 +629,11 @@ pub fn get_shift_inventory_snapshots(state: State<'_, DbState>, date: String) ->
                 ts: row.get(7)?,
             })
         })
-        .map_err(|e| e.to_string())?;
+        ?;
 
     let mut snapshots = Vec::new();
     for row in rows {
-        snapshots.push(row.map_err(|e| e.to_string())?);
+        snapshots.push(row?);
     }
     Ok(snapshots)
 }

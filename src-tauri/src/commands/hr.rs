@@ -1,5 +1,6 @@
 use crate::commands::rbac;
 use crate::db::DbState;
+use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -129,11 +130,11 @@ pub struct EmployeeListItem {
 const EMPLOYEE_COLUMNS: &str = "id, code, name, nationality, job, salary_milli, allowances_milli, phone, passport_no, passport_expiry, residence_expiry, visa_expiry, workpermit_expiry, insurance_expiry, contract_end, id_number, date_of_birth, gender, marital_status, email, bank_name, bank_account_no, basic_salary_milli, housing_allowance_milli, transport_allowance_milli, food_allowance_milli, other_allowances_milli, overtime_rate_milli, insurance_policy_no, insurance_premium_milli, ticket_allowance_milli, sponsor_name, sponsor_id, joining_date, active, notes";
 
 #[tauri::command]
-pub fn list_employees(state: State<'_, DbState>) -> Result<Vec<Employee>, String> {
+pub fn list_employees(state: State<'_, DbState>) -> Result<Vec<Employee>, AppError> {
     crate::commands::licensing::require_feature(crate::commands::licensing::FEAT_HR)?;
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    let conn = state.0.lock()?;
     let sql = format!("SELECT {} FROM employees WHERE active=1 ORDER BY name", EMPLOYEE_COLUMNS);
-    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(&sql)?;
     let rows = stmt
         .query_map([], |row| {
             Ok(Employee {
@@ -174,16 +175,15 @@ pub fn list_employees(state: State<'_, DbState>) -> Result<Vec<Employee>, String
                 active: row.get(34)?,
                 notes: row.get(35)?,
             })
-        })
-        .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        })?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
 #[tauri::command]
-pub fn get_employee(state: State<'_, DbState>, id: i64) -> Result<Employee, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_employee(state: State<'_, DbState>, id: i64) -> Result<Employee, AppError> {
+    let conn = state.0.lock()?;
     let sql = format!("SELECT {} FROM employees WHERE id=?", EMPLOYEE_COLUMNS);
-    conn.query_row(&sql, [id], |row| {
+    Ok(conn.query_row(&sql, [id], |row| {
         Ok(Employee {
             id: row.get(0)?,
             code: row.get(1)?,
@@ -222,19 +222,17 @@ pub fn get_employee(state: State<'_, DbState>, id: i64) -> Result<Employee, Stri
             active: row.get(34)?,
             notes: row.get(35)?,
         })
-    })
-    .map_err(|e| e.to_string())
+    })?)
 }
 
 #[tauri::command]
 pub fn list_employees_for_production(
     state: State<'_, DbState>,
-) -> Result<Vec<EmployeeListItem>, String> {
+) -> Result<Vec<EmployeeListItem>, AppError> {
     crate::commands::licensing::require_feature(crate::commands::licensing::FEAT_HR)?;
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    let conn = state.0.lock()?;
     let mut stmt = conn
-        .prepare("SELECT id, name, code, job FROM employees WHERE active=1 ORDER BY name")
-        .map_err(|e| e.to_string())?;
+        .prepare("SELECT id, name, code, job FROM employees WHERE active=1 ORDER BY name")?;
     let rows = stmt
         .query_map([], |row| {
             Ok(EmployeeListItem {
@@ -243,17 +241,16 @@ pub fn list_employees_for_production(
                 code: row.get(2)?,
                 job: row.get(3)?,
             })
-        })
-        .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        })?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
 #[tauri::command]
 pub fn create_employee(
     state: State<'_, DbState>,
     input: CreateEmployeeInput,
-) -> Result<i64, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<i64, AppError> {
+    let conn = state.0.lock()?;
     let year = chrono::Utc::now().format("%Y").to_string();
 
     let seq: i64 = conn
@@ -307,8 +304,7 @@ pub fn create_employee(
             input.joining_date,
             input.notes,
         ],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
     let emp_id = conn.last_insert_rowid();
     let _ = rbac::log_audit(&conn, None, None, "create_employee", "employees", Some(emp_id), None, Some(&emp_code), None);
     Ok(emp_id)
@@ -319,8 +315,8 @@ pub fn update_employee(
     state: State<'_, DbState>,
     id: i64,
     input: UpdateEmployeeInput,
-) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
     let mut sets = Vec::new();
     let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
@@ -462,22 +458,20 @@ pub fn update_employee(
     }
 
     if sets.is_empty() {
-        return Err("No changes provided".to_string());
+        return Err(AppError::validation("No changes provided"));
     }
 
     params.push(Box::new(id));
     let sql = format!("UPDATE employees SET {} WHERE id=?", sets.join(", "));
-    conn.execute(&sql, rusqlite::params_from_iter(params.iter()))
-        .map_err(|e| e.to_string())?;
+    conn.execute(&sql, rusqlite::params_from_iter(params.iter()))?;
     let _ = rbac::log_audit(&conn, None, None, "update_employee", "employees", Some(id), None, None, None);
     Ok("Updated successfully".to_string())
 }
 
 #[tauri::command]
-pub fn delete_employee(state: State<'_, DbState>, id: i64) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
-    conn.execute("UPDATE employees SET active=0 WHERE id=?", [id])
-        .map_err(|e| e.to_string())?;
+pub fn delete_employee(state: State<'_, DbState>, id: i64) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
+    conn.execute("UPDATE employees SET active=0 WHERE id=?", [id])?;
     let _ = rbac::log_audit(&conn, None, None, "delete_employee", "employees", Some(id), None, None, None);
     Ok("Deleted successfully".to_string())
 }

@@ -412,6 +412,96 @@ CREATE TABLE IF NOT EXISTS petty_cash_transactions (
     reference TEXT, notes TEXT, journal_id INTEGER, user_id INTEGER
 );
 
+-- ============================================================
+-- OPERATING ADVANCES (سلف العمليات) - Professional Module
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS operating_advances (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    advance_no TEXT UNIQUE NOT NULL,
+    date TEXT NOT NULL,
+    employee_id INTEGER NOT NULL,
+    employee_name TEXT,
+    department TEXT,
+    purpose TEXT NOT NULL,
+    description TEXT,
+    amount_milli INTEGER NOT NULL,
+    currency TEXT DEFAULT 'OMR',
+    exchange_rate REAL DEFAULT 1.0,
+    status TEXT NOT NULL DEFAULT 'draft',  -- draft, approved, disbursed, partially_spent, reconciled, closed, cancelled
+    approval_status TEXT NOT NULL DEFAULT 'pending',  -- pending, approved, rejected
+    approved_by INTEGER,
+    approved_at TEXT,
+    disbursed_by INTEGER,
+    disbursed_at TEXT,
+    source_account_code TEXT,  -- Cash/Bank account code
+    advance_gl_account_code TEXT DEFAULT '1320',  -- Advances to Employees (Asset)
+    default_expense_account_code TEXT,  -- Default expense account for quick entry
+    expected_return_date TEXT,
+    actual_return_date TEXT,
+    total_spent_milli INTEGER DEFAULT 0,
+    total_returned_milli INTEGER DEFAULT 0,
+    balance_milli INTEGER DEFAULT 0,
+    notes TEXT,
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT,
+    FOREIGN KEY (employee_id) REFERENCES employees(id)
+);
+
+CREATE TABLE IF NOT EXISTS advance_transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    advance_id INTEGER NOT NULL,
+    ts TEXT NOT NULL DEFAULT (datetime('now')),
+    ttype TEXT NOT NULL,  -- disburse, spend, receipt, return, adjustment, close
+    amount_milli INTEGER NOT NULL,
+    balance_after_milli INTEGER NOT NULL,
+    account_code TEXT,  -- GL account affected
+    category TEXT,  -- expense category for spend/receipt
+    vendor_name TEXT,
+    invoice_no TEXT,
+    invoice_date TEXT,
+    reference TEXT,
+    notes TEXT,
+    attachment_ids TEXT,  -- comma-separated attachment IDs
+    journal_id INTEGER,
+    created_by TEXT NOT NULL,
+    FOREIGN KEY (advance_id) REFERENCES operating_advances(id)
+);
+
+CREATE TABLE IF NOT EXISTS advance_receipts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    advance_id INTEGER NOT NULL,
+    transaction_id INTEGER,
+    receipt_no TEXT,
+    date TEXT NOT NULL,
+    vendor_name TEXT,
+    amount_milli INTEGER NOT NULL,
+    vat_milli INTEGER DEFAULT 0,
+    net_milli INTEGER NOT NULL,
+    category TEXT,
+    account_code TEXT,  -- Expense account
+    description TEXT,
+    attachment_ids TEXT,
+    status TEXT DEFAULT 'submitted',  -- submitted, approved, rejected
+    approved_by INTEGER,
+    approved_at TEXT,
+    journal_id INTEGER,
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (advance_id) REFERENCES operating_advances(id),
+    FOREIGN KEY (transaction_id) REFERENCES advance_transactions(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_oa_employee ON operating_advances(employee_id);
+CREATE INDEX IF NOT EXISTS idx_oa_status ON operating_advances(status);
+CREATE INDEX IF NOT EXISTS idx_oa_approval ON operating_advances(approval_status);
+CREATE INDEX IF NOT EXISTS idx_oa_date ON operating_advances(date);
+CREATE INDEX IF NOT EXISTS idx_at_advance ON advance_transactions(advance_id);
+CREATE INDEX IF NOT EXISTS idx_at_type ON advance_transactions(ttype);
+CREATE INDEX IF NOT EXISTS idx_ar_advance ON advance_receipts(advance_id);
+CREATE INDEX IF NOT EXISTS idx_ar_status ON advance_receipts(status);
+
 CREATE TABLE IF NOT EXISTS daily_closings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     date TEXT UNIQUE, snapshot_json TEXT, notes TEXT,

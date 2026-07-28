@@ -1,5 +1,6 @@
 use crate::commands::rbac;
 use crate::db::DbState;
+use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -28,13 +29,12 @@ pub struct CreateChequeInput {
 }
 
 #[tauri::command]
-pub fn list_cheques(state: State<'_, DbState>) -> Result<Vec<Cheque>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn list_cheques(state: State<'_, DbState>) -> Result<Vec<Cheque>, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn
         .prepare(
             "SELECT id, kind, cheque_no, bank, party, amount_milli, due_date, status, notes FROM cheques ORDER BY id DESC",
-        )
-        .map_err(|e| e.to_string())?;
+        )?;
     let rows = stmt
         .query_map([], |row| {
             Ok(Cheque {
@@ -48,17 +48,16 @@ pub fn list_cheques(state: State<'_, DbState>) -> Result<Vec<Cheque>, String> {
                 status: row.get(7)?,
                 notes: row.get(8)?,
             })
-        })
-        .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        })?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
 #[tauri::command]
 pub fn create_cheque(
     state: State<'_, DbState>,
     input: CreateChequeInput,
-) -> Result<i64, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<i64, AppError> {
+    let conn = state.0.lock()?;
 
     conn.execute(
         "INSERT INTO cheques(kind, cheque_no, bank, party, amount_milli, due_date, status, notes) VALUES(?,?,?,?,?,?,'issued',?)",
@@ -71,8 +70,7 @@ pub fn create_cheque(
             input.due_date,
             input.notes,
         ],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
     let id = conn.last_insert_rowid();
     let _ = rbac::log_audit(&conn, None, None, "create_cheque", "cheques", Some(id), None, None, None);
     Ok(id)

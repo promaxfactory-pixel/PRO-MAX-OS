@@ -1,5 +1,6 @@
 use crate::commands::rbac;
 use crate::db::DbState;
+use crate::error::AppError;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -45,8 +46,8 @@ pub struct CreateBarterInput {
 const BARTER_COLUMNS: &str = "e.id, e.exchange_no, e.date, e.local_supplier_id, sp.name AS supplier_name, e.product_id, p.name AS product_name, e.cartons_given, e.carton_value_milli, e.received_item_id, ii.name AS received_item_name, e.bags_received, e.bag_value_milli, e.net_value_milli, e.balance_milli, e.settlement_status, e.reference, e.notes, e.status, e.created_by, e.created_at";
 
 #[tauri::command]
-pub fn list_barter_exchanges(state: State<'_, DbState>) -> Result<Vec<BarterExchange>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn list_barter_exchanges(state: State<'_, DbState>) -> Result<Vec<BarterExchange>, AppError> {
+    let conn = state.0.lock()?;
     let sql = format!(
         "SELECT {} FROM local_supplier_exchanges e
          LEFT JOIN suppliers sp ON sp.id = e.local_supplier_id
@@ -55,7 +56,7 @@ pub fn list_barter_exchanges(state: State<'_, DbState>) -> Result<Vec<BarterExch
          ORDER BY e.id DESC",
         BARTER_COLUMNS
     );
-    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(&sql)?;
     let rows = stmt
         .query_map([], |row| {
             Ok(BarterExchange {
@@ -81,17 +82,16 @@ pub fn list_barter_exchanges(state: State<'_, DbState>) -> Result<Vec<BarterExch
                 created_by: row.get(19)?,
                 created_at: row.get(20)?,
             })
-        })
-        .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        })?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
 #[tauri::command]
 pub fn create_barter_exchange(
     state: State<'_, DbState>,
     input: CreateBarterInput,
-) -> Result<i64, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<i64, AppError> {
+    let conn = state.0.lock()?;
     let year = chrono::Utc::now().format("%Y").to_string();
 
     let seq: i64 = conn
@@ -131,8 +131,7 @@ pub fn create_barter_exchange(
             input.reference,
             input.notes,
         ],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
     let id = conn.last_insert_rowid();
     let _ = rbac::log_audit(&conn, None, None, "create_barter_exchange", "local_supplier_exchanges", Some(id), None, Some(&exchange_no), None);
     Ok(id)
@@ -151,9 +150,9 @@ pub struct BarterBalance {
 pub fn get_barter_balance(
     state: State<'_, DbState>,
     local_supplier_id: i64,
-) -> Result<BarterBalance, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
-    conn.query_row(
+) -> Result<BarterBalance, AppError> {
+    let conn = state.0.lock()?;
+    Ok(conn.query_row(
         "SELECT e.local_supplier_id,
                 sp.name,
                 COALESCE(SUM(e.net_value_milli), 0),
@@ -173,6 +172,5 @@ pub fn get_barter_balance(
                 open_exchanges: row.get(4)?,
             })
         },
-    )
-    .map_err(|e| e.to_string())
+    )?)
 }

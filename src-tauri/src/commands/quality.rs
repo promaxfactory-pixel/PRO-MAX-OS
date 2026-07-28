@@ -1,5 +1,6 @@
 use crate::commands::rbac;
 use crate::db::DbState;
+use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -31,14 +32,13 @@ pub struct CreateQualityInspectionInput {
 #[tauri::command]
 pub fn list_quality_inspections(
     state: State<'_, DbState>,
-) -> Result<Vec<QualityInspection>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<Vec<QualityInspection>, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn
         .prepare(
             "SELECT id, production_line_id, date, inspector, result, defect_type, defect_qty, notes, status
              FROM quality_inspections ORDER BY id DESC",
-        )
-        .map_err(|e| e.to_string())?;
+        )?;
 
     let rows = stmt
         .query_map([], |row| {
@@ -53,18 +53,17 @@ pub fn list_quality_inspections(
                 notes: row.get(7)?,
                 status: row.get(8)?,
             })
-        })
-        .map_err(|e| e.to_string())?;
+        })?;
 
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
 #[tauri::command]
 pub fn create_quality_inspection(
     state: State<'_, DbState>,
     input: CreateQualityInspectionInput,
-) -> Result<i64, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<i64, AppError> {
+    let conn = state.0.lock()?;
     conn.execute(
         "INSERT INTO quality_inspections (production_line_id, date, inspector, result, defect_type, defect_qty, notes, status)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
@@ -78,8 +77,7 @@ pub fn create_quality_inspection(
             input.notes,
             input.status,
         ],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
     let insp_id = conn.last_insert_rowid();
     let _ = rbac::log_audit(&conn, None, None, "create_quality_inspection", "quality_inspections", Some(insp_id), None, None, None);
     Ok(insp_id)

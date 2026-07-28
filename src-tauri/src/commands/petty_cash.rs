@@ -1,5 +1,6 @@
 use crate::commands::rbac;
 use crate::db::DbState;
+use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -28,16 +29,15 @@ pub struct CreatePettyCashInput {
 }
 
 #[tauri::command]
-pub fn list_petty_cash_accounts(state: State<'_, DbState>) -> Result<Vec<PettyCashAccount>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn list_petty_cash_accounts(state: State<'_, DbState>) -> Result<Vec<PettyCashAccount>, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn
         .prepare(
             "SELECT id, code, name, responsible, role, spending_limit_milli, balance_milli, status, active, notes
              FROM petty_cash_accounts
              WHERE active = 1
              ORDER BY id ASC",
-        )
-        .map_err(|e| e.to_string())?;
+        )?;
 
     let rows = stmt.query_map([], |row| {
         Ok(PettyCashAccount {
@@ -52,19 +52,18 @@ pub fn list_petty_cash_accounts(state: State<'_, DbState>) -> Result<Vec<PettyCa
             active: row.get(8)?,
             notes: row.get(9)?,
         })
-    })
-    .map_err(|e| e.to_string())?;
+    })?;
 
     let mut items = Vec::new();
     for row in rows {
-        items.push(row.map_err(|e| e.to_string())?);
+        items.push(row?);
     }
     Ok(items)
 }
 
 #[tauri::command]
-pub fn create_petty_cash_account(input: CreatePettyCashInput, state: State<'_, DbState>) -> Result<i64, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn create_petty_cash_account(input: CreatePettyCashInput, state: State<'_, DbState>) -> Result<i64, AppError> {
+    let conn = state.0.lock()?;
 
     conn.execute(
         "INSERT INTO petty_cash_accounts(code, name, responsible, role, spending_limit_milli, balance_milli, status, active, notes)
@@ -77,8 +76,7 @@ pub fn create_petty_cash_account(input: CreatePettyCashInput, state: State<'_, D
             input.spending_limit_milli.unwrap_or(0),
             input.notes,
         ],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
 
     let id = conn.last_insert_rowid();
     let _ = rbac::log_audit(&conn, None, None, "create_petty_cash_account", "petty_cash_accounts", Some(id), None, Some(&input.name), None);

@@ -1,4 +1,5 @@
 use crate::db::DbState;
+use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -27,9 +28,9 @@ pub struct CreateStockTransferInput {
 #[tauri::command]
 pub fn list_stock_transfers(
     state: State<'_, DbState>,
-) -> Result<Vec<StockTransfer>, String> {
+) -> Result<Vec<StockTransfer>, AppError> {
     crate::commands::licensing::require_feature(crate::commands::licensing::FEAT_STOCK_TRANSFERS)?;
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    let conn = state.0.lock()?;
     let mut stmt = conn
         .prepare(
             "SELECT st.id, st.transfer_no, mw_from.name AS from_name, mw_to.name AS to_name, ii.name AS item_name, st.qty, st.status, st.notes, st.created_at
@@ -38,8 +39,7 @@ pub fn list_stock_transfers(
              LEFT JOIN multi_warehouse mw_to ON mw_to.id = st.to_warehouse_id
              LEFT JOIN inventory_items ii ON ii.id = st.item_id
              ORDER BY st.id DESC",
-        )
-        .map_err(|e| e.to_string())?;
+        )?;
 
     let rows = stmt
         .query_map([], |row| {
@@ -54,26 +54,24 @@ pub fn list_stock_transfers(
                 notes: row.get(7)?,
                 created_at: row.get(8)?,
             })
-        })
-        .map_err(|e| e.to_string())?;
+        })?;
 
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
 #[tauri::command]
 pub fn create_stock_transfer(
     state: State<'_, DbState>,
     input: CreateStockTransferInput,
-) -> Result<i64, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<i64, AppError> {
+    let conn = state.0.lock()?;
 
     let seq: i64 = conn
         .query_row(
             "SELECT COALESCE(MAX(id), 0) + 1 FROM stock_transfers",
             [],
             |row| row.get(0),
-        )
-        .map_err(|e| e.to_string())?;
+        )?;
     let transfer_no = format!("ST-{:04}", seq);
 
     conn.execute(
@@ -87,7 +85,6 @@ pub fn create_stock_transfer(
             input.qty,
             input.notes,
         ],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
     Ok(conn.last_insert_rowid())
 }

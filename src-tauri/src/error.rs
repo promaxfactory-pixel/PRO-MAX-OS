@@ -67,6 +67,11 @@ impl From<&str> for AppError {
     fn from(e: &str) -> Self { AppError::BusinessLogic(e.to_string()) }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+impl From<reqwest::Error> for AppError {
+    fn from(e: reqwest::Error) -> Self { AppError::BusinessLogic(format!("HTTP request failed: {}", e)) }
+}
+
 pub type AppResult<T> = Result<T, AppError>;
 
 impl AppError {

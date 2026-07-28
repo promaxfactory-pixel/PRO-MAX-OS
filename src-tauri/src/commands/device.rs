@@ -1,3 +1,4 @@
+use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 
@@ -13,7 +14,7 @@ pub struct ScannerInfo {
 }
 
 #[tauri::command]
-pub fn list_printers() -> Result<Vec<PrinterInfo>, String> {
+pub fn list_printers() -> Result<Vec<PrinterInfo>, AppError> {
     let ps = r#"
 Get-CimInstance -ClassName Win32_Printer | Select-Object Name, Default | ConvertTo-Json -Compress
 "#;
@@ -27,7 +28,7 @@ Get-CimInstance -ClassName Win32_Printer | Select-Object Name, Default | Convert
         return Ok(Vec::new());
     }
 
-    serde_json::from_str::<Vec<serde_json::Value>>(&stdout)
+    Ok(serde_json::from_str::<Vec<serde_json::Value>>(&stdout)
         .map(|items| {
             items
                 .into_iter()
@@ -46,11 +47,11 @@ Get-CimInstance -ClassName Win32_Printer | Select-Object Name, Default | Convert
                 }]
             })
         })
-        .map_err(|e| format!("Failed to parse printer list: {}", e))
+        .map_err(|e| format!("Failed to parse printer list: {}", e))?)
 }
 
 #[tauri::command]
-pub fn print_html(html: String, printer_name: Option<String>) -> Result<String, String> {
+pub fn print_html(html: String, printer_name: Option<String>) -> Result<String, AppError> {
     let temp_dir = std::env::temp_dir();
     let html_path = temp_dir.join("promax_print.html");
     std::fs::write(&html_path, &html).map_err(|e| format!("Failed to write temp HTML: {}", e))?;
@@ -81,7 +82,7 @@ pub fn print_thermal(
     lines: Vec<String>,
     printer_name: Option<String>,
     copies: Option<u32>,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     let esc = |c: u8| -> String { format!("\\x{:02x}", c) };
     let mut raw = String::new();
 
@@ -118,7 +119,7 @@ pub fn print_thermal(
 }
 
 #[tauri::command]
-pub fn list_scanners() -> Result<Vec<ScannerInfo>, String> {
+pub fn list_scanners() -> Result<Vec<ScannerInfo>, AppError> {
     let ps = r#"
 $scanners = @()
 try {
@@ -149,7 +150,7 @@ if ($scanners.Count -eq 0) {
         return Ok(Vec::new());
     }
 
-    serde_json::from_str::<Vec<serde_json::Value>>(&stdout)
+    Ok(serde_json::from_str::<Vec<serde_json::Value>>(&stdout)
         .map(|items| {
             items
                 .into_iter()
@@ -165,11 +166,11 @@ if ($scanners.Count -eq 0) {
                 }]
             })
         })
-        .map_err(|e| format!("Failed to parse scanner list: {}", e))
+        .map_err(|e| format!("Failed to parse scanner list: {}", e))?)
 }
 
 #[tauri::command]
-pub fn scan_document(scanner_name: Option<String>, output_path: Option<String>) -> Result<String, String> {
+pub fn scan_document(scanner_name: Option<String>, output_path: Option<String>) -> Result<String, AppError> {
     let out_path = output_path.unwrap_or_else(|| {
         let ts = chrono::Utc::now().format("%Y%m%d_%H%M%S");
         std::env::temp_dir()
@@ -219,7 +220,7 @@ Write-Output "OK:$outPath"
 
     if !out.status.success() {
         let err = String::from_utf8_lossy(&out.stderr);
-        return Err(format!("فشل المسح الضوئي: {}", err));
+        return Err(AppError::business(format!("فشل المسح الضوئي: {}", err)));
     }
 
     let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();

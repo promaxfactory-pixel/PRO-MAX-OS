@@ -1,5 +1,6 @@
 use crate::commands::rbac;
 use crate::db::DbState;
+use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -64,8 +65,8 @@ pub struct CreateSupplierPaymentInput {
 }
 
 #[tauri::command]
-pub fn list_purchases(state: State<'_, DbState>) -> Result<Vec<Purchase>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn list_purchases(state: State<'_, DbState>) -> Result<Vec<Purchase>, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn
         .prepare(
             "SELECT p.id, p.pur_no, p.date, p.supplier_id, s.name AS supplier_name,
@@ -74,8 +75,7 @@ pub fn list_purchases(state: State<'_, DbState>) -> Result<Vec<Purchase>, String
              FROM purchases p
              LEFT JOIN suppliers s ON s.id = p.supplier_id
              ORDER BY p.id DESC",
-        )
-        .map_err(|e| e.to_string())?;
+        )?;
 
     let rows = stmt.query_map([], |row| {
         Ok(Purchase {
@@ -95,19 +95,18 @@ pub fn list_purchases(state: State<'_, DbState>) -> Result<Vec<Purchase>, String
             created_by: row.get(13)?,
             created_at: row.get(14)?,
         })
-    })
-    .map_err(|e| e.to_string())?;
+    })?;
 
     let mut items = Vec::new();
     for row in rows {
-        items.push(row.map_err(|e| e.to_string())?);
+        items.push(row?);
     }
     Ok(items)
 }
 
 #[tauri::command]
-pub fn get_purchase(id: i64, state: State<'_, DbState>) -> Result<Purchase, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_purchase(id: i64, state: State<'_, DbState>) -> Result<Purchase, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn
         .prepare(
             "SELECT p.id, p.pur_no, p.date, p.supplier_id, s.name AS supplier_name,
@@ -116,8 +115,7 @@ pub fn get_purchase(id: i64, state: State<'_, DbState>) -> Result<Purchase, Stri
              FROM purchases p
              LEFT JOIN suppliers s ON s.id = p.supplier_id
              WHERE p.id = ?1",
-        )
-        .map_err(|e| e.to_string())?;
+        )?;
 
     let purchase = stmt
         .query_row([id], |row| {
@@ -138,15 +136,14 @@ pub fn get_purchase(id: i64, state: State<'_, DbState>) -> Result<Purchase, Stri
                 created_by: row.get(13)?,
                 created_at: row.get(14)?,
             })
-        })
-        .map_err(|e| e.to_string())?;
+        })?;
 
     Ok(purchase)
 }
 
 #[tauri::command]
-pub fn get_purchase_lines(purchase_id: i64, state: State<'_, DbState>) -> Result<Vec<PurchaseLine>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_purchase_lines(purchase_id: i64, state: State<'_, DbState>) -> Result<Vec<PurchaseLine>, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn
         .prepare(
             "SELECT pl.id, pl.purchase_id, pl.item_id, i.name AS item_name,
@@ -154,8 +151,7 @@ pub fn get_purchase_lines(purchase_id: i64, state: State<'_, DbState>) -> Result
              FROM purchase_lines pl
              LEFT JOIN inventory_items i ON i.id = pl.item_id
              WHERE pl.purchase_id = ?1",
-        )
-        .map_err(|e| e.to_string())?;
+        )?;
 
     let rows = stmt.query_map([purchase_id], |row| {
         Ok(PurchaseLine {
@@ -169,24 +165,22 @@ pub fn get_purchase_lines(purchase_id: i64, state: State<'_, DbState>) -> Result
             vat_pct: row.get(7)?,
             vat_milli: row.get(8)?,
         })
-    })
-    .map_err(|e| e.to_string())?;
+    })?;
 
     let mut items = Vec::new();
     for row in rows {
-        items.push(row.map_err(|e| e.to_string())?);
+        items.push(row?);
     }
     Ok(items)
 }
 
 #[tauri::command]
-pub fn create_purchase(input: CreatePurchaseInput, state: State<'_, DbState>) -> Result<i64, String> {
-    let mut conn = state.0.lock().map_err(|e| e.to_string())?;
-    let tx = conn.transaction().map_err(|e| e.to_string())?;
+pub fn create_purchase(input: CreatePurchaseInput, state: State<'_, DbState>) -> Result<i64, AppError> {
+    let mut conn = state.0.lock()?;
+    let tx = conn.transaction()?;
 
     let year: String = tx
-        .query_row("SELECT substr(?1, 1, 4)", [&input.date], |row| row.get(0))
-        .map_err(|e| e.to_string())?;
+        .query_row("SELECT substr(?1, 1, 4)", [&input.date], |row| row.get(0))?;
 
     let next_num: i64 = tx
         .query_row(
@@ -199,8 +193,7 @@ pub fn create_purchase(input: CreatePurchaseInput, state: State<'_, DbState>) ->
     tx.execute(
         "INSERT INTO doc_sequences(doc_type, year, last_number) VALUES(?,?,?) ON CONFLICT(doc_type, year) DO UPDATE SET last_number=excluded.last_number",
         ["PUR", &year, &next_num.to_string()],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
 
     let pur_no = format!("PUR-{}-{:04}", year, next_num);
     let vat_enabled: i64 = if input.vat_enabled.unwrap_or(false) { 1 } else { 0 };
@@ -229,8 +222,7 @@ pub fn create_purchase(input: CreatePurchaseInput, state: State<'_, DbState>) ->
             total_milli,
             input.notes,
         ],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
 
     let purchase_id: i64 = tx.last_insert_rowid();
 
@@ -250,41 +242,38 @@ pub fn create_purchase(input: CreatePurchaseInput, state: State<'_, DbState>) ->
                 line.vat_pct.unwrap_or(0.0),
                 line_vat,
             ],
-        )
-        .map_err(|e| e.to_string())?;
+        )?;
     }
 
     let _ = rbac::log_audit(&*tx, None, None, "create_purchase", "purchases", Some(purchase_id), None, Some(&pur_no), None);
-    tx.commit().map_err(|e| e.to_string())?;
+    tx.commit()?;
     Ok(purchase_id)
 }
 
 #[tauri::command]
-pub fn list_suppliers_for_select(state: State<'_, DbState>) -> Result<Vec<serde_json::Value>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn list_suppliers_for_select(state: State<'_, DbState>) -> Result<Vec<serde_json::Value>, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn
-        .prepare("SELECT id, name FROM suppliers ORDER BY name")
-        .map_err(|e| e.to_string())?;
+        .prepare("SELECT id, name FROM suppliers ORDER BY name")?;
 
     let rows = stmt.query_map([], |row| {
         Ok(serde_json::json!({
             "id": row.get::<_, i64>(0)?,
             "name": row.get::<_, String>(1)?,
         }))
-    })
-    .map_err(|e| e.to_string())?;
+    })?;
 
     let mut items = Vec::new();
     for row in rows {
-        items.push(row.map_err(|e| e.to_string())?);
+        items.push(row?);
     }
     Ok(items)
 }
 
 #[tauri::command]
-pub fn create_supplier_payment(input: CreateSupplierPaymentInput, state: State<'_, DbState>) -> Result<i64, String> {
-    let mut conn = state.0.lock().map_err(|e| e.to_string())?;
-    let tx = conn.transaction().map_err(|e| e.to_string())?;
+pub fn create_supplier_payment(input: CreateSupplierPaymentInput, state: State<'_, DbState>) -> Result<i64, AppError> {
+    let mut conn = state.0.lock()?;
+    let tx = conn.transaction()?;
 
     tx.execute(
         "INSERT INTO supplier_payments(supplier_id, date, amount_milli, method, reference, notes)
@@ -297,18 +286,16 @@ pub fn create_supplier_payment(input: CreateSupplierPaymentInput, state: State<'
             input.reference,
             input.notes,
         ],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
 
     let payment_id: i64 = tx.last_insert_rowid();
 
     tx.execute(
         "UPDATE purchases SET paid_milli = paid_milli + ?1 WHERE supplier_id = ?2 AND status != 'Void'",
         [input.amount_milli, input.supplier_id],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
 
     let _ = rbac::log_audit(&*tx, None, None, "create_supplier_payment", "supplier_payments", Some(payment_id), None, None, None);
-    tx.commit().map_err(|e| e.to_string())?;
+    tx.commit()?;
     Ok(payment_id)
 }

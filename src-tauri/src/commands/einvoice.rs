@@ -1,4 +1,5 @@
 ﻿use crate::db::DbState;
+use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -218,9 +219,9 @@ fn generate_pint_om_xml(
 pub fn einvoice_generate(
     state: State<'_, DbState>,
     invoice_id: i64,
-) -> Result<EInvoiceResult, String> {
+) -> Result<EInvoiceResult, AppError> {
     crate::commands::licensing::require_feature(crate::commands::licensing::FEAT_EINVOICE)?;
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    let conn = state.0.lock()?;
 
     let inv = conn
         .query_row(
@@ -284,7 +285,7 @@ pub fn einvoice_generate(
                  LEFT JOIN products p ON sil.product_id = p.id
                  WHERE sil.invoice_id = ?1",
             )
-            .map_err(|e| e.to_string())?;
+            ?;
         let rows = stmt_lines
             .query_map([invoice_id], |row| {
                 Ok((
@@ -294,7 +295,7 @@ pub fn einvoice_generate(
                     row.get::<_, i64>(3)? as f64 / 1000.0,
                 ))
             })
-            .map_err(|e| e.to_string())?;
+            ?;
         for r in rows.filter_map(|r| r.ok()) {
             lines_data.push(r);
         }
@@ -328,7 +329,7 @@ pub fn einvoice_generate(
          VALUES (?1, ?2, ?3, 'generated', ?4)",
         rusqlite::params![invoice_id, xml, qr_code_data, now],
     )
-    .map_err(|e| e.to_string())?;
+    ?;
 
     Ok(EInvoiceResult {
         invoice_id,
@@ -344,8 +345,8 @@ pub fn einvoice_generate(
 pub fn einvoice_validate(
     state: State<'_, DbState>,
     invoice_id: i64,
-) -> Result<EInvoiceValidation, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<EInvoiceValidation, AppError> {
+    let conn = state.0.lock()?;
 
     let inv = conn
         .query_row(
@@ -469,8 +470,8 @@ pub fn einvoice_validate(
 pub fn einvoice_get_status(
     state: State<'_, DbState>,
     invoice_id: i64,
-) -> Result<Option<EInvoiceStatusInfo>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<Option<EInvoiceStatusInfo>, AppError> {
+    let conn = state.0.lock()?;
     let result = conn
         .query_row(
             "SELECT invoice_id, status, submitted_at, zatca_uuid
@@ -493,8 +494,8 @@ pub fn einvoice_get_status(
 pub fn einvoice_list(
     state: State<'_, DbState>,
     status: Option<String>,
-) -> Result<Vec<EInvoiceRecord>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<Vec<EInvoiceRecord>, AppError> {
+    let conn = state.0.lock()?;
 
     let stmt = if let Some(ref s) = status {
         let mut st = conn
@@ -507,7 +508,7 @@ pub fn einvoice_list(
                  WHERE ei.status = ?1
                  ORDER BY ei.created_at DESC",
             )
-            .map_err(|e| e.to_string())?;
+            ?;
         let rows = st
             .query_map([s], |row| {
                 Ok(EInvoiceRecord {
@@ -522,7 +523,7 @@ pub fn einvoice_list(
                     submitted_at: row.get(8)?,
                 })
             })
-            .map_err(|e| e.to_string())?;
+            ?;
         rows.filter_map(|r| r.ok()).collect::<Vec<_>>()
     } else {
         let mut st = conn
@@ -534,7 +535,7 @@ pub fn einvoice_list(
                  LEFT JOIN customers c ON si.customer_id = c.id
                  ORDER BY ei.created_at DESC",
             )
-            .map_err(|e| e.to_string())?;
+            ?;
         let rows = st
             .query_map([], |row| {
                 Ok(EInvoiceRecord {
@@ -549,7 +550,7 @@ pub fn einvoice_list(
                     submitted_at: row.get(8)?,
                 })
             })
-            .map_err(|e| e.to_string())?;
+            ?;
         rows.filter_map(|r| r.ok()).collect::<Vec<_>>()
     };
 
@@ -561,8 +562,8 @@ pub fn einvoice_mark_submitted(
     state: State<'_, DbState>,
     invoice_id: i64,
     submission_ref: Option<String>,
-) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
     let now = chrono::Utc::now().to_rfc3339();
     let rows = conn
         .execute(
@@ -570,9 +571,9 @@ pub fn einvoice_mark_submitted(
              WHERE invoice_id = ?3",
             rusqlite::params![now, submission_ref, invoice_id],
         )
-        .map_err(|e| e.to_string())?;
+        ?;
     if rows == 0 {
-        return Err(format!("No e-invoice found for invoice_id {}", invoice_id));
+        return Err(AppError::not_found(format!("No e-invoice found for invoice_id {}", invoice_id)));
     }
     Ok(format!("Invoice {} marked as submitted", invoice_id))
 }
@@ -582,8 +583,8 @@ pub fn einvoice_cancel(
     state: State<'_, DbState>,
     invoice_id: i64,
     reason: String,
-) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
     let now = chrono::Utc::now().to_rfc3339();
     let rows = conn
         .execute(
@@ -591,9 +592,9 @@ pub fn einvoice_cancel(
              WHERE invoice_id = ?3 AND status IN ('generated', 'submitted', 'pending')",
             rusqlite::params![reason, now, invoice_id],
         )
-        .map_err(|e| e.to_string())?;
+        ?;
     if rows == 0 {
-        return Err(format!("Cannot cancel invoice {}. Already processed or not found.", invoice_id));
+        return Err(AppError::business(format!("Cannot cancel invoice {}. Already processed or not found.", invoice_id)));
     }
     Ok(format!("Invoice {} cancelled: {}", invoice_id, reason))
 }
@@ -602,8 +603,8 @@ pub fn einvoice_cancel(
 pub fn einvoice_submit(
     state: State<'_, DbState>,
     invoice_id: i64,
-) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
 
     let einv = conn
         .query_row(
@@ -618,12 +619,12 @@ pub fn einvoice_submit(
                 ))
             },
         )
-        .map_err(|_| format!("E-invoice not generated for invoice_id {}", invoice_id))?;
+        .map_err(|_| AppError::not_found(format!("E-invoice not generated for invoice_id {}", invoice_id)))?;
 
     let (_einv_id, _inv_id, xml_content, status) = einv;
 
     if status == "submitted" || status == "accepted" {
-        return Err(format!("Invoice already submitted (status: {})", status));
+        return Err(AppError::validation(format!("Invoice already submitted (status: {})", status)));
     }
 
     let settings = conn
@@ -661,7 +662,7 @@ pub fn einvoice_submit(
             conn.execute(
                 "UPDATE e_invoices SET status = 'submitted', submitted_at = ?1, zatca_uuid = ?2 WHERE invoice_id = ?3",
                 rusqlite::params![now, ref_no, invoice_id],
-            ).map_err(|e| e.to_string())?;
+            )?;
             conn.execute(
                 "UPDATE einvoice_queue SET status = 'completed' WHERE invoice_id = ?1",
                 [invoice_id],
@@ -669,15 +670,16 @@ pub fn einvoice_submit(
             Ok(format!("Invoice {} submitted successfully. Ref: {}", invoice_id, ref_no))
         }
         Err(e) => {
+            let err_str = e.to_string();
             conn.execute(
                 "UPDATE e_invoices SET status = 'rejected', rejection_reason = ?1 WHERE invoice_id = ?2",
-                rusqlite::params![e, invoice_id],
+                rusqlite::params![err_str, invoice_id],
             ).ok();
             conn.execute(
                 "UPDATE einvoice_queue SET status = 'failed', last_error = ?1, retry_count = retry_count + 1 WHERE invoice_id = ?2",
-                rusqlite::params![e, invoice_id],
+                rusqlite::params![err_str, invoice_id],
             ).ok();
-            Err(format!("Submission failed: {}", e))
+            Err(AppError::business(format!("Submission failed: {}", e)))
         }
     }
 }
@@ -689,7 +691,7 @@ fn submit_to_tax_authority(
     _api_key: Option<&str>,
     _api_secret: Option<&str>,
     _xml_content: &str,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     if environment == "sandbox" || endpoint.is_none() {
         return Ok(format!("SANDBOX-{}-{}", invoice_id, chrono::Utc::now().timestamp()));
     }
@@ -706,8 +708,8 @@ pub fn einvoice_add_to_queue(
     invoice_id: i64,
     action: Option<String>,
     priority: Option<i32>,
-) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
     let act = action.unwrap_or_else(|| "submit".into());
     let pri = priority.unwrap_or(0);
 
@@ -725,7 +727,7 @@ pub fn einvoice_add_to_queue(
     conn.execute(
         "INSERT INTO einvoice_queue (invoice_id, action, priority) VALUES (?1, ?2, ?3)",
         rusqlite::params![invoice_id, act, pri],
-    ).map_err(|e| e.to_string())?;
+    )?;
 
     Ok(format!("Invoice {} queued for {}", invoice_id, act))
 }
@@ -733,9 +735,9 @@ pub fn einvoice_add_to_queue(
 #[tauri::command]
 pub fn einvoice_process_queue(
     state: State<'_, DbState>,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     let items: Vec<i64> = {
-        let conn = state.0.lock().map_err(|e| e.to_string())?;
+        let conn = state.0.lock()?;
         let mut stmt = conn
             .prepare(
                 "SELECT invoice_id FROM einvoice_queue
@@ -745,10 +747,10 @@ pub fn einvoice_process_queue(
                  ORDER BY priority DESC, created_at ASC
                  LIMIT 10",
             )
-            .map_err(|e| e.to_string())?;
+            ?;
         let rows = stmt
             .query_map([], |row| row.get::<_, i64>(0))
-            .map_err(|e| e.to_string())?;
+            ?;
         rows.filter_map(|r| r.ok()).collect()
     };
 
@@ -756,7 +758,7 @@ pub fn einvoice_process_queue(
     let mut failed = 0i64;
 
     for inv_id in items {
-        let conn = state.0.lock().map_err(|e| e.to_string())?;
+        let conn = state.0.lock()?;
 
         let einv = conn
             .query_row(
@@ -784,7 +786,7 @@ pub fn einvoice_process_queue(
                 Err(e) => {
                     conn.execute(
                         "UPDATE einvoice_queue SET status = 'failed', last_error = ?1, retry_count = retry_count + 1 WHERE invoice_id = ?2",
-                        rusqlite::params![e, inv_id],
+                        rusqlite::params![e.to_string(), inv_id],
                     ).ok();
                     failed += 1;
                 }
@@ -798,8 +800,8 @@ pub fn einvoice_process_queue(
 #[tauri::command]
 pub fn einvoice_get_dashboard(
     state: State<'_, DbState>,
-) -> Result<EInvoiceDashboard, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<EInvoiceDashboard, AppError> {
+    let conn = state.0.lock()?;
 
     let stats = conn
         .query_row(
@@ -870,8 +872,8 @@ pub fn einvoice_get_dashboard(
 #[tauri::command]
 pub fn einvoice_get_settings(
     state: State<'_, DbState>,
-) -> Result<Option<EInvoiceSettingsData>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<Option<EInvoiceSettingsData>, AppError> {
+    let conn = state.0.lock()?;
     let result = conn
         .query_row(
             "SELECT id, company_id, environment, auto_submit, submit_on_post,
@@ -905,17 +907,17 @@ pub fn einvoice_save_settings(
     api_secret: Option<String>,
     portal_username: Option<String>,
     portal_password: Option<String>,
-) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
 
     let company_id: i64 = conn
         .query_row("SELECT id FROM companies LIMIT 1", [], |row| row.get(0))
         .unwrap_or(1);
 
-    let enc_key = api_key.as_ref().map(|k| crate::crypto::encrypt_if_needed(k)).transpose().map_err(|e| e.to_string())?;
-    let enc_secret = api_secret.as_ref().map(|s| crate::crypto::encrypt_if_needed(s)).transpose().map_err(|e| e.to_string())?;
-    let enc_portal_user = portal_username.as_ref().map(|u| crate::crypto::encrypt_if_needed(u)).transpose().map_err(|e| e.to_string())?;
-    let enc_portal_pass = portal_password.as_ref().map(|p| crate::crypto::encrypt_if_needed(p)).transpose().map_err(|e| e.to_string())?;
+    let enc_key = api_key.as_ref().map(|k| crate::crypto::encrypt_if_needed(k)).transpose()?;
+    let enc_secret = api_secret.as_ref().map(|s| crate::crypto::encrypt_if_needed(s)).transpose()?;
+    let enc_portal_user = portal_username.as_ref().map(|u| crate::crypto::encrypt_if_needed(u)).transpose()?;
+    let enc_portal_pass = portal_password.as_ref().map(|p| crate::crypto::encrypt_if_needed(p)).transpose()?;
 
     let existing = conn
         .query_row(
@@ -936,7 +938,7 @@ pub fn einvoice_save_settings(
              WHERE id = ?9",
             rusqlite::params![environment, auto_submit as i32, submit_on_post as i32,
                 tax_authority_endpoint, enc_key, enc_secret, enc_portal_user, enc_portal_pass, eid],
-        ).map_err(|e| e.to_string())?;
+        )?;
     } else {
         conn.execute(
             "INSERT INTO einvoice_settings (company_id, environment, auto_submit, submit_on_post,
@@ -944,7 +946,7 @@ pub fn einvoice_save_settings(
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             rusqlite::params![company_id, environment, auto_submit as i32, submit_on_post as i32,
                 tax_authority_endpoint, enc_key, enc_secret, enc_portal_user, enc_portal_pass],
-        ).map_err(|e| e.to_string())?;
+        )?;
     }
 
     Ok("Settings saved".into())
@@ -953,8 +955,8 @@ pub fn einvoice_save_settings(
 #[tauri::command]
 pub fn einvoice_get_queue(
     state: State<'_, DbState>,
-) -> Result<Vec<EInvoiceQueueItem>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<Vec<EInvoiceQueueItem>, AppError> {
+    let conn = state.0.lock()?;
 
     let mut stmt = conn
         .prepare(
@@ -966,7 +968,7 @@ pub fn einvoice_get_queue(
              LEFT JOIN customers c ON si.customer_id = c.id
              ORDER BY eq.priority DESC, eq.created_at DESC",
         )
-        .map_err(|e| e.to_string())?;
+        ?;
 
     let rows = stmt
         .query_map([], |row| {
@@ -985,7 +987,7 @@ pub fn einvoice_get_queue(
                 created_at: row.get(11)?,
             })
         })
-        .map_err(|e| e.to_string())?;
+        ?;
 
     Ok(rows.filter_map(|r| r.ok()).collect())
 }
@@ -994,12 +996,12 @@ pub fn einvoice_get_queue(
 pub fn einvoice_retry_queue_item(
     state: State<'_, DbState>,
     queue_id: i64,
-) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
     conn.execute(
         "UPDATE einvoice_queue SET status = 'pending', last_error = NULL, next_retry_at = datetime('now') WHERE id = ?1",
         [queue_id],
-    ).map_err(|e| e.to_string())?;
+    )?;
     Ok("Queue item reset for retry".into())
 }
 
@@ -1008,8 +1010,8 @@ pub fn einvoice_summary_report(
     state: State<'_, DbState>,
     from_date: String,
     to_date: String,
-) -> Result<EInvoiceReport, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<EInvoiceReport, AppError> {
+    let conn = state.0.lock()?;
 
     let report = conn
         .query_row(
@@ -1039,7 +1041,7 @@ pub fn einvoice_summary_report(
                 })
             },
         )
-        .map_err(|e| e.to_string())?;
+        ?;
 
     Ok(report)
 }
@@ -1048,15 +1050,15 @@ pub fn einvoice_summary_report(
 pub fn einvoice_get_xml(
     state: State<'_, DbState>,
     invoice_id: i64,
-) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
     let xml = conn
         .query_row(
             "SELECT xml_content FROM e_invoices WHERE invoice_id = ?1",
             [invoice_id],
             |row| row.get::<_, String>(0),
         )
-        .map_err(|_| "XML not found".to_string())?;
+        .map_err(|_| AppError::not_found("XML not found"))?;
     Ok(xml)
 }
 
@@ -1064,8 +1066,8 @@ pub fn einvoice_get_xml(
 pub fn einvoice_bulk_generate(
     state: State<'_, DbState>,
     invoice_ids: Vec<i64>,
-) -> Result<i64, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<i64, AppError> {
+    let conn = state.0.lock()?;
     let mut count = 0i64;
     for inv_id in &invoice_ids {
         let exists: bool = conn

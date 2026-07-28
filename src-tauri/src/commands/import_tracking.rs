@@ -1,5 +1,6 @@
 use crate::commands::rbac;
 use crate::db::DbState;
+use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -95,13 +96,13 @@ pub struct UpdateShipmentStatusInput {
 const SHIPMENT_COLUMNS: &str = "s.id, s.shipment_no, s.supplier_id, sp.name AS supplier_name, s.currency, s.exchange_rate, s.status, s.shipping_company, s.container_no, s.bl_no, s.vessel_flight, s.port_of_loading, s.port_of_discharge, s.estimated_arrival, s.actual_arrival, s.customs_declaration_no, s.customs_clearance_date, s.duty_amount_milli, s.vat_on_import_milli, s.freight_cost_milli, s.insurance_cost_milli, s.handling_cost_milli, s.commercial_invoice_no, s.packing_list_no, s.origin_country, s.gross_weight_kg, s.cbm, s.clearance_agent, s.total_landed_cost_milli, s.notes, s.created_by, s.created_at";
 
 #[tauri::command]
-pub fn list_shipments(state: State<'_, DbState>) -> Result<Vec<ImportShipment>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn list_shipments(state: State<'_, DbState>) -> Result<Vec<ImportShipment>, AppError> {
+    let conn = state.0.lock()?;
     let sql = format!(
         "SELECT {} FROM import_shipments s LEFT JOIN suppliers sp ON sp.id = s.supplier_id ORDER BY s.id DESC",
         SHIPMENT_COLUMNS
     );
-    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(&sql)?;
     let rows = stmt
         .query_map([], |row| {
             Ok(ImportShipment {
@@ -138,19 +139,18 @@ pub fn list_shipments(state: State<'_, DbState>) -> Result<Vec<ImportShipment>, 
                 created_by: row.get(30)?,
                 created_at: row.get(31)?,
             })
-        })
-        .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        })?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
 #[tauri::command]
-pub fn get_shipment(state: State<'_, DbState>, id: i64) -> Result<ImportShipment, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+pub fn get_shipment(state: State<'_, DbState>, id: i64) -> Result<ImportShipment, AppError> {
+    let conn = state.0.lock()?;
     let sql = format!(
         "SELECT {} FROM import_shipments s LEFT JOIN suppliers sp ON sp.id = s.supplier_id WHERE s.id=?",
         SHIPMENT_COLUMNS
     );
-    conn.query_row(&sql, [id], |row| {
+    Ok(conn.query_row(&sql, [id], |row| {
         Ok(ImportShipment {
             id: row.get(0)?,
             shipment_no: row.get(1)?,
@@ -185,16 +185,15 @@ pub fn get_shipment(state: State<'_, DbState>, id: i64) -> Result<ImportShipment
             created_by: row.get(30)?,
             created_at: row.get(31)?,
         })
-    })
-    .map_err(|e| e.to_string())
+    })?)
 }
 
 #[tauri::command]
 pub fn create_shipment(
     state: State<'_, DbState>,
     input: CreateShipmentInput,
-) -> Result<i64, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<i64, AppError> {
+    let conn = state.0.lock()?;
     let year = chrono::Utc::now().format("%Y").to_string();
 
     let seq: i64 = conn
@@ -234,8 +233,7 @@ pub fn create_shipment(
             input.notes,
             input.supplier_id.map(|_| "".to_string()),
         ],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
     let id = conn.last_insert_rowid();
     let _ = rbac::log_audit(&conn, None, None, "create_shipment", "import_shipments", Some(id), None, Some(&shipment_no), None);
     Ok(id)
@@ -246,8 +244,8 @@ pub fn update_shipment(
     state: State<'_, DbState>,
     id: i64,
     input: UpdateShipmentInput,
-) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
     let mut sets = Vec::new();
     let mut p: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
@@ -321,13 +319,12 @@ pub fn update_shipment(
     }
 
     if sets.is_empty() {
-        return Err("No changes provided".to_string());
+        return Err(AppError::validation("No changes provided"));
     }
 
     p.push(Box::new(id));
     let sql = format!("UPDATE import_shipments SET {} WHERE id=?", sets.join(", "));
-    conn.execute(&sql, rusqlite::params_from_iter(p.iter()))
-        .map_err(|e| e.to_string())?;
+    conn.execute(&sql, rusqlite::params_from_iter(p.iter()))?;
     let _ = rbac::log_audit(&conn, None, None, "update_shipment", "import_shipments", Some(id), None, None, None);
     Ok("Updated successfully".to_string())
 }
@@ -337,8 +334,8 @@ pub fn update_shipment_status(
     state: State<'_, DbState>,
     id: i64,
     input: UpdateShipmentStatusInput,
-) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
     let mut sets = vec!["status=?"];
     let mut p: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
     p.push(Box::new(input.status));
@@ -370,8 +367,7 @@ pub fn update_shipment_status(
 
     p.push(Box::new(id));
     let sql = format!("UPDATE import_shipments SET {} WHERE id=?", sets.join(", "));
-    conn.execute(&sql, rusqlite::params_from_iter(p.iter()))
-        .map_err(|e| e.to_string())?;
+    conn.execute(&sql, rusqlite::params_from_iter(p.iter()))?;
     let _ = rbac::log_audit(&conn, None, None, "update_shipment_status", "import_shipments", Some(id), None, None, None);
     Ok("Status updated successfully".to_string())
 }

@@ -1,5 +1,6 @@
 use crate::commands::rbac;
 use crate::db::DbState;
+use crate::error::AppError;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -45,15 +46,15 @@ const PAYMENT_COLUMNS: &str = "p.id, p.installment_id, i.name AS installment_nam
 #[tauri::command]
 pub fn list_installment_payments(
     state: State<'_, DbState>,
-) -> Result<Vec<InstallmentPayment>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<Vec<InstallmentPayment>, AppError> {
+    let conn = state.0.lock()?;
     let sql = format!(
         "SELECT {} FROM installment_payments p
          LEFT JOIN installments i ON i.id = p.installment_id
          ORDER BY p.installment_id, p.installment_number",
         PAYMENT_COLUMNS
     );
-    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(&sql)?;
     let rows = stmt
         .query_map([], |row| {
             Ok(InstallmentPayment {
@@ -69,17 +70,16 @@ pub fn list_installment_payments(
                 status: row.get(9)?,
                 notes: row.get(10)?,
             })
-        })
-        .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        })?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
 #[tauri::command]
 pub fn create_installment_payment(
     state: State<'_, DbState>,
     input: CreateInstallmentPaymentInput,
-) -> Result<i64, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<i64, AppError> {
+    let conn = state.0.lock()?;
 
     conn.execute(
         "INSERT INTO installment_payments(installment_id, installment_number, due_date, amount_milli, status, notes) VALUES(?,?,?,?, 'pending', ?)",
@@ -90,8 +90,7 @@ pub fn create_installment_payment(
             input.amount_milli,
             input.notes,
         ],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
     let id = conn.last_insert_rowid();
     let _ = rbac::log_audit(&conn, None, None, "create_installment_payment", "installment_payments", Some(id), None, None, None);
     Ok(id)
@@ -101,13 +100,12 @@ pub fn create_installment_payment(
 pub fn mark_installment_paid(
     state: State<'_, DbState>,
     id: i64,
-) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
     conn.execute(
         "UPDATE installment_payments SET paid_milli = amount_milli, paid_date = datetime('now'), status = 'paid' WHERE id = ?",
         [id],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
     let _ = rbac::log_audit(&conn, None, None, "mark_installment_paid", "installment_payments", Some(id), None, None, None);
     Ok("Payment marked as paid".to_string())
 }
@@ -116,9 +114,9 @@ pub fn mark_installment_paid(
 pub fn get_installment_summary(
     state: State<'_, DbState>,
     installment_id: i64,
-) -> Result<InstallmentSummary, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
-    conn.query_row(
+) -> Result<InstallmentSummary, AppError> {
+    let conn = state.0.lock()?;
+    Ok(conn.query_row(
         "SELECT i.id,
                 i.name,
                 COALESCE(SUM(p.amount_milli), 0),
@@ -144,6 +142,5 @@ pub fn get_installment_summary(
                 pending_payments: row.get(7)?,
             })
         },
-    )
-    .map_err(|e| e.to_string())
+    )?)
 }

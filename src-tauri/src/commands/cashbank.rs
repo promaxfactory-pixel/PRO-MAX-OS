@@ -1,5 +1,6 @@
 use crate::commands::rbac;
 use crate::db::DbState;
+use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -23,13 +24,12 @@ pub struct CreateCashbankInput {
 #[tauri::command]
 pub fn list_cashbank_accounts(
     state: State<'_, DbState>,
-) -> Result<Vec<CashbankAccount>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<Vec<CashbankAccount>, AppError> {
+    let conn = state.0.lock()?;
     let mut stmt = conn
         .prepare(
             "SELECT id, code, name, atype, balance_milli, active FROM cashbank_accounts WHERE active=1 ORDER BY name",
-        )
-        .map_err(|e| e.to_string())?;
+        )?;
     let rows = stmt
         .query_map([], |row| {
             Ok(CashbankAccount {
@@ -40,17 +40,16 @@ pub fn list_cashbank_accounts(
                 balance_milli: row.get(4)?,
                 active: row.get(5)?,
             })
-        })
-        .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        })?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
 #[tauri::command]
 pub fn create_cashbank_account(
     state: State<'_, DbState>,
     input: CreateCashbankInput,
-) -> Result<i64, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+) -> Result<i64, AppError> {
+    let conn = state.0.lock()?;
 
     conn.execute(
         "INSERT INTO cashbank_accounts(code, name, atype, balance_milli, active) VALUES(?,?,?,0,1)",
@@ -59,8 +58,7 @@ pub fn create_cashbank_account(
             input.name,
             input.atype,
         ],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
     let id = conn.last_insert_rowid();
     let _ = rbac::log_audit(&conn, None, None, "create_cashbank_account", "cashbank_accounts", Some(id), None, Some(&input.name), None);
     Ok(id)
