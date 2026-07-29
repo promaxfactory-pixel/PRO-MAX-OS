@@ -1,2 +1,0 @@
-   Compiling promax-os v2.0.0 (D:\PRO MAX OS\src-tauri)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 17.49s

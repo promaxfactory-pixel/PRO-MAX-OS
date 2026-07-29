@@ -57,5 +57,7 @@ releases/
 # Generated schemas
 src-tauri/gen/
 
-# Clippy output files
+# Clippy / build check output files
 clippy_*.txt
+*_check.txt
+*_results.txt
