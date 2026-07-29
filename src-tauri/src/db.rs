@@ -56,7 +56,7 @@ fn ensure_admin_user(conn: &Connection) -> Result<()> {
 mod migrations {
     use rusqlite::{Connection, Result};
     
-    const SCHEMA_VERSION: i32 = 22;
+    const SCHEMA_VERSION: i32 = 23;
     
     pub fn run(conn: &Connection) -> Result<()> {
         let current: i32 = conn
@@ -616,6 +616,39 @@ mod migrations {
                     CREATE INDEX IF NOT EXISTS idx_emp_contract ON employees(contract_end);"
                 ).ok();
             }
+            23 => {
+                conn.execute_batch(
+                    "
+                    -- MIGRATION 23: Missing FK indexes + composite reporting indexes
+                    -- See complete schema audit in db.rs documentation
+
+                    -- FK indexes (14 missing foreign key columns)
+                    CREATE INDEX IF NOT EXISTS idx_pp_product ON product_prices(product_id);
+                    CREATE INDEX IF NOT EXISTS idx_bom_product ON bom(product_id);
+                    CREATE INDEX IF NOT EXISTS idx_bom_item ON bom(item_id);
+                    CREATE INDEX IF NOT EXISTS idx_cba_account ON cashbank_accounts(account_code);
+                    CREATE INDEX IF NOT EXISTS idx_art_txn ON advance_receipts(transaction_id);
+                    CREATE INDEX IF NOT EXISTS idx_gi_entity ON gov_integrations(entity_id);
+                    CREATE INDEX IF NOT EXISTS idx_grt_entity ON gov_report_templates(entity_id);
+                    CREATE INDEX IF NOT EXISTS idx_gs_template ON gov_submissions(report_template_id);
+                    CREATE INDEX IF NOT EXISTS idx_fy_company ON fiscal_years(company_id);
+                    CREATE INDEX IF NOT EXISTS idx_tr_company ON tax_rates(company_id);
+                    CREATE INDEX IF NOT EXISTS idx_einvq_invoice ON einvoice_queue(invoice_id);
+                    CREATE INDEX IF NOT EXISTS idx_lse_product ON local_supplier_exchanges(product_id);
+                    CREATE INDEX IF NOT EXISTS idx_lse_rcvd_item ON local_supplier_exchanges(received_item_id);
+                    CREATE INDEX IF NOT EXISTS idx_sis_item ON shift_inventory_snapshots(item_id);
+
+                    -- Composite indexes for common reporting patterns
+                    CREATE INDEX IF NOT EXISTS idx_si_customer_date ON sales_invoices(customer_id, date);
+                    CREATE INDEX IF NOT EXISTS idx_pur_supplier_date ON purchases(supplier_id, date);
+                    CREATE INDEX IF NOT EXISTS idx_im_item_ts ON inventory_movements(item_id, ts);
+                    CREATE INDEX IF NOT EXISTS idx_audit_entity_ts ON audit_logs(entity, entity_id, ts);
+                    CREATE INDEX IF NOT EXISTS idx_cbt_cashbank_ts ON cashbank_transactions(cashbank_id, ts);
+                    CREATE INDEX IF NOT EXISTS idx_pl_product_order ON production_lines(product_id, order_id);
+                    CREATE INDEX IF NOT EXISTS idx_jel_entry_account ON journal_entry_lines(entry_id, account_code);
+                    "
+                ).ok();
+            }
             _ => {}
         }
         Ok(())
@@ -692,7 +725,7 @@ mod tests {
     }
 
     #[test]
-    fn test_schema_version_is_22() {
+    fn test_schema_version_is_23() {
         let conn = test_conn();
         let version: i32 = conn
             .query_row(
@@ -701,7 +734,7 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap_or(0);
-        assert_eq!(version, 22, "Schema version should be 22");
+        assert_eq!(version, 23, "Schema version should be 23");
     }
 
     #[test]

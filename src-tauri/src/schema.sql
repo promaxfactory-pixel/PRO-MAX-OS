@@ -78,6 +78,7 @@ CREATE TABLE IF NOT EXISTS product_prices (
     price_milli INTEGER NOT NULL,
     note        TEXT
 );
+CREATE INDEX IF NOT EXISTS idx_pp_product ON product_prices(product_id);
 
 CREATE TABLE IF NOT EXISTS inventory_items (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -152,6 +153,8 @@ CREATE TABLE IF NOT EXISTS bom (
     waste_pct REAL NOT NULL DEFAULT 0,
     active INTEGER NOT NULL DEFAULT 1
 );
+CREATE INDEX IF NOT EXISTS idx_bom_product ON bom(product_id);
+CREATE INDEX IF NOT EXISTS idx_bom_item ON bom(item_id);
 
 CREATE TABLE IF NOT EXISTS production_orders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -307,6 +310,7 @@ CREATE TABLE IF NOT EXISTS cashbank_accounts (
     balance_milli INTEGER NOT NULL DEFAULT 0,
     active INTEGER NOT NULL DEFAULT 1
 );
+CREATE INDEX IF NOT EXISTS idx_cba_account ON cashbank_accounts(account_code);
 
 CREATE TABLE IF NOT EXISTS renewals (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -501,6 +505,7 @@ CREATE INDEX IF NOT EXISTS idx_at_advance ON advance_transactions(advance_id);
 CREATE INDEX IF NOT EXISTS idx_at_type ON advance_transactions(ttype);
 CREATE INDEX IF NOT EXISTS idx_ar_advance ON advance_receipts(advance_id);
 CREATE INDEX IF NOT EXISTS idx_ar_status ON advance_receipts(status);
+CREATE INDEX IF NOT EXISTS idx_art_txn ON advance_receipts(transaction_id);
 
 CREATE TABLE IF NOT EXISTS daily_closings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -763,12 +768,14 @@ CREATE INDEX IF NOT EXISTS idx_inventory_items_product ON inventory_items(produc
 CREATE INDEX IF NOT EXISTS idx_inventory_movements_item ON inventory_movements(item_id);
 CREATE INDEX IF NOT EXISTS idx_inventory_movements_ts ON inventory_movements(ts);
 CREATE INDEX IF NOT EXISTS idx_inventory_movements_type ON inventory_movements(mtype);
+CREATE INDEX IF NOT EXISTS idx_im_item_ts ON inventory_movements(item_id, ts);
 
 -- Sales Invoices
 CREATE INDEX IF NOT EXISTS idx_si_customer ON sales_invoices(customer_id);
 CREATE INDEX IF NOT EXISTS idx_si_date ON sales_invoices(date);
 CREATE INDEX IF NOT EXISTS idx_si_status ON sales_invoices(status);
 CREATE INDEX IF NOT EXISTS idx_si_inv_no ON sales_invoices(inv_no);
+CREATE INDEX IF NOT EXISTS idx_si_customer_date ON sales_invoices(customer_id, date);
 CREATE INDEX IF NOT EXISTS idx_si_lines_invoice ON sales_invoice_lines(invoice_id);
 CREATE INDEX IF NOT EXISTS idx_si_lines_product ON sales_invoice_lines(product_id);
 
@@ -782,6 +789,7 @@ CREATE INDEX IF NOT EXISTS idx_pa_invoice ON payment_allocations(invoice_id);
 CREATE INDEX IF NOT EXISTS idx_pur_supplier ON purchases(supplier_id);
 CREATE INDEX IF NOT EXISTS idx_pur_date ON purchases(date);
 CREATE INDEX IF NOT EXISTS idx_pur_status ON purchases(status);
+CREATE INDEX IF NOT EXISTS idx_pur_supplier_date ON purchases(supplier_id, date);
 CREATE INDEX IF NOT EXISTS idx_pur_lines_purchase ON purchase_lines(purchase_id);
 CREATE INDEX IF NOT EXISTS idx_pur_lines_item ON purchase_lines(item_id);
 
@@ -794,6 +802,7 @@ CREATE INDEX IF NOT EXISTS idx_je_date ON journal_entries(date);
 CREATE INDEX IF NOT EXISTS idx_je_entry_no ON journal_entries(entry_no);
 CREATE INDEX IF NOT EXISTS idx_jel_entry ON journal_entry_lines(entry_id);
 CREATE INDEX IF NOT EXISTS idx_jel_account ON journal_entry_lines(account_code);
+CREATE INDEX IF NOT EXISTS idx_jel_entry_account ON journal_entry_lines(entry_id, account_code);
 
 -- Production
 CREATE INDEX IF NOT EXISTS idx_po_date ON production_orders(date);
@@ -801,6 +810,7 @@ CREATE INDEX IF NOT EXISTS idx_po_status ON production_orders(status);
 CREATE INDEX IF NOT EXISTS idx_po_prod_no ON production_orders(prod_no);
 CREATE INDEX IF NOT EXISTS idx_pl_order ON production_lines(order_id);
 CREATE INDEX IF NOT EXISTS idx_pl_product ON production_lines(product_id);
+CREATE INDEX IF NOT EXISTS idx_pl_product_order ON production_lines(product_id, order_id);
 
 -- Operations
 CREATE INDEX IF NOT EXISTS idx_ops_date ON operations_daily_sheets(date);
@@ -826,6 +836,7 @@ CREATE INDEX IF NOT EXISTS idx_cb_code ON cashbank_accounts(code);
 CREATE INDEX IF NOT EXISTS idx_cb_active ON cashbank_accounts(active);
 CREATE INDEX IF NOT EXISTS idx_cbt_cashbank ON cashbank_transactions(cashbank_id);
 CREATE INDEX IF NOT EXISTS idx_cbt_ts ON cashbank_transactions(ts);
+CREATE INDEX IF NOT EXISTS idx_cbt_cashbank_ts ON cashbank_transactions(cashbank_id, ts);
 
 -- Expenses
 CREATE INDEX IF NOT EXISTS idx_exp_date ON expenses(date);
@@ -847,6 +858,7 @@ CREATE INDEX IF NOT EXISTS idx_inst_status ON installments(status);
 CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_logs(ts);
 CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity, entity_id);
+CREATE INDEX IF NOT EXISTS idx_audit_entity_ts ON audit_logs(entity, entity_id, ts);
 
 -- E-Invoices
 CREATE INDEX IF NOT EXISTS idx_einv_invoice ON e_invoices(invoice_id);
