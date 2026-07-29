@@ -214,8 +214,11 @@ pub fn create_user(state: State<'_, DbState>, caller_id: i64, input: CreateUserI
 }
 
 #[tauri::command]
-pub fn update_user(state: State<'_, DbState>, id: i64, input: UpdateUserInput) -> Result<String, AppError> {
+pub fn update_user(state: State<'_, DbState>, caller_id: i64, id: i64, input: UpdateUserInput) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+
+    rbac::require_role(&conn, caller_id, &["admin"])?;
+
     let mut sets = Vec::new();
     let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
