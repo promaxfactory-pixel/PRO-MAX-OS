@@ -73,6 +73,7 @@ pub fn get_shift_sheet(state: State<'_, DbState>, date: String, shift: String) -
     Ok(conn.last_insert_rowid())
 }
 
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn record_production(
     state: State<'_, DbState>,
@@ -436,18 +437,18 @@ pub fn print_shift_report_thermal(
     // ESC/POS commands via PowerShell
     let esc = |c: u8| -> String { format!("\\x{:02x}", c) };
     let mut raw = String::new();
-    raw.push_str(&esc(0x1b)); raw.push_str("@"); // Initialize
-    raw.push_str(&esc(0x1b)); raw.push_str("E"); raw.push_str("\x01"); // Bold on
+    raw.push_str(&esc(0x1b)); raw.push('@'); // Initialize
+    raw.push_str(&esc(0x1b)); raw.push('E'); raw.push('\x01'); // Bold on
     raw.push_str("           ProMax ERP\n");
-    raw.push_str(&esc(0x1b)); raw.push_str("E"); raw.push_str("\x00"); // Bold off
+    raw.push_str(&esc(0x1b)); raw.push('E'); raw.push('\x00'); // Bold off
     raw.push_str("----------------------------------------\n");
 
     for line in &lines {
         raw.push_str(line);
-        raw.push_str("\n");
+        raw.push('\n');
     }
 
-    raw.push_str(&esc(0x1b)); raw.push_str("m"); // Cut
+    raw.push_str(&esc(0x1b)); raw.push('m'); // Cut
 
     let temp_file = std::env::temp_dir().join("promax_shift_report.bin");
     std::fs::write(&temp_file, raw.as_bytes()).map_err(|e| format!("Failed to write temp file: {}", e))?;

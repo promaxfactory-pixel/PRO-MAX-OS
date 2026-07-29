@@ -214,9 +214,7 @@ fn extract_possible_text_from_binary(data: &[u8]) -> String {
     let mut result = String::new();
     let mut current_run = Vec::new();
     for &byte in data.iter() {
-        if byte >= 0x20 && byte < 0x7F {
-            current_run.push(byte);
-        } else if byte == b'\n' || byte == b'\r' || byte == b'\t' {
+        if (0x20..0x7F).contains(&byte) || byte == b'\n' || byte == b'\r' || byte == b'\t' {
             current_run.push(byte);
         } else {
             if current_run.len() >= 4 {
@@ -242,7 +240,7 @@ fn try_read_text_from_file(path: &str) -> Option<String> {
         .chunks(4096)
         .filter_map(|chunk| {
             let valid: Vec<u8> = chunk.iter()
-                .filter(|&&b| b >= 0x20 && b < 0x7F || b == b'\n' || b == b'\r' || b == b'\t')
+                .filter(|&&b| (0x20..0x7F).contains(&b) || b == b'\n' || b == b'\r' || b == b'\t')
                 .cloned().collect();
             if valid.len() as f64 > chunk.len() as f64 * 0.7 {
                 String::from_utf8(valid).ok()
@@ -376,7 +374,7 @@ fn extract_date_from_text(text: &str) -> Option<String> {
                         let (year, month, day) = if n1 > 31 { (n1, n2, n3) }
                             else if n3 > 31 { (n3, if n1 > 12 { n2 } else { n1 }, if n1 > 12 { n1 } else { n2 }) }
                             else { (n3, n1, n2) };
-                        if year < 2200 && month >= 1 && month <= 12 && day >= 1 && day <= 31 {
+                        if year < 2200 && (1..=12).contains(&month) && (1..=31).contains(&day) {
                             return Some(format!("{:04}-{:02}-{:02}", if year < 100 { year + 2000 } else { year }, month, day));
                         }
                     }

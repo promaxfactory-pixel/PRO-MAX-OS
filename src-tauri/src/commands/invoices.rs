@@ -197,7 +197,7 @@ pub fn create_invoice(state: State<'_, DbState>, input: CreateInvoiceInput) -> R
         )?;
     }
 
-    let _ = rbac::log_audit(&*tx, None, None, "create_invoice", "sales_invoices", Some(inv_id), None, Some(&inv_no), None);
+    let _ = rbac::log_audit(&tx, None, None, "create_invoice", "sales_invoices", Some(inv_id), None, Some(&inv_no), None);
 
     tx.commit()?;
     
@@ -271,7 +271,7 @@ pub fn post_invoice(state: State<'_, DbState>, id: i64) -> Result<String, AppErr
     )
     ?;
 
-    let _ = rbac::log_audit(&*tx, None, None, "post_invoice", "sales_invoices", Some(id), None, Some(&format!("COGS: {} mil, status: Posted", total_cogs)), None);
+    let _ = rbac::log_audit(&tx, None, None, "post_invoice", "sales_invoices", Some(id), None, Some(&format!("COGS: {} mil, status: Posted", total_cogs)), None);
 
     tx.commit()?;
     Ok("تم ترحيل الفاتورة بنجاح".to_string())
@@ -361,7 +361,7 @@ pub fn duplicate_invoice(state: State<'_, DbState>, id: i64) -> Result<i64, AppE
                 vat_pct: row.get(1)?,
             }),
         ).map_err(|e| format!("Product {} not found: {}", product_id, e))?;
-        let line_net = (*cartons as f64 * *unit_price as f64).round() as i64;
+        let line_net = (*cartons * *unit_price as f64).round() as i64;
         let line_vat = (line_net as f64 * info.vat_pct / 100.0).round() as i64;
         net += line_net;
         vat += line_vat;
@@ -379,7 +379,7 @@ pub fn duplicate_invoice(state: State<'_, DbState>, id: i64) -> Result<i64, AppE
     
     for (product_id, cartons, unit_price, info) in &line_data {
         let qty_cups = *cartons * info.cups_per_carton as f64;
-        let line_net = (*cartons as f64 * *unit_price as f64).round() as i64;
+        let line_net = (*cartons * *unit_price as f64).round() as i64;
         let line_vat = (line_net as f64 * info.vat_pct / 100.0).round() as i64;
         conn.execute(
             "INSERT INTO sales_invoice_lines(invoice_id, product_id, cartons, cups_per_carton, qty_cups, unit_price_milli, line_net_milli, vat_pct, vat_milli) VALUES(?,?,?,?,?,?,?,?,?)",

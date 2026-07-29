@@ -317,7 +317,7 @@ pub fn ai_sales_forecast(
         });
     }
 
-    let confidence = (r2 * 100.0).min(100.0).max(0.0);
+    let confidence = (r2 * 100.0).clamp(0.0, 100.0);
 
     let mut recommendations = Vec::new();
     if trend == "increasing" {
@@ -587,7 +587,7 @@ pub fn ai_production_analysis(state: State<'_, DbState>) -> Result<ProductionAna
 
     let efficiency_score = if avg_waste > 0.0 {
         let v: f64 = 100.0 - avg_waste;
-        v.max(0.0).min(100.0)
+        v.clamp(0.0, 100.0)
     } else {
         0.0
     };

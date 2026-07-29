@@ -33,6 +33,7 @@ pub fn require_role(conn: &rusqlite::Connection, user_id: i64, allowed_roles: &[
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn log_audit(
     conn: &rusqlite::Connection,
     user_id: Option<i64>,

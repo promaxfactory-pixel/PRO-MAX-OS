@@ -1,5 +1,5 @@
-/// PRO MAX OS - Cryptographic & Security Module
-/// Argon2 password hashing, JWT tokens, secrets management, AES-256-GCM encryption.
+//! PRO MAX OS - Cryptographic & Security Module
+//! Argon2 password hashing, JWT tokens, secrets management, AES-256-GCM encryption.
 
 use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
@@ -8,7 +8,7 @@ use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use rand::rngs::OsRng;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::OnceLock;
 
 // ─── Secrets Management ───────────────────────────────────────────────
@@ -37,7 +37,7 @@ impl Default for AppSecrets {
 
 static SECRETS: OnceLock<AppSecrets> = OnceLock::new();
 
-pub fn init_secrets(db_path: &PathBuf) -> AppSecrets {
+pub fn init_secrets(db_path: &Path) -> AppSecrets {
     if let Some(s) = SECRETS.get() {
         return s.clone();
     }

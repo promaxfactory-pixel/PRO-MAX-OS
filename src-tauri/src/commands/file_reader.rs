@@ -166,7 +166,7 @@ fn extract_text_from_bytes(bytes: &[u8]) -> String {
     let mut current = String::new();
 
     for &b in bytes {
-        if b >= 32 && b < 127 {
+        if (32..127).contains(&b) {
             current.push(b as char);
         } else if b == 10 || b == 13 {
             if !current.is_empty() {
@@ -249,7 +249,7 @@ pub fn file_read_spreadsheet(path: String) -> Result<SpreadsheetContent, AppErro
 
         let mut rows: Vec<Vec<String>> = Vec::new();
         for row in range.rows() {
-            rows.push(row.iter().map(|cell| data_to_string(cell)).collect());
+            rows.push(row.iter().map(data_to_string).collect());
         }
 
         let headers = if !rows.is_empty() {

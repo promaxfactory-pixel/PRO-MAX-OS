@@ -1,5 +1,5 @@
-/// PRO MAX OS - Input Validation Module
-/// Shared validation functions for all command modules.
+//! PRO MAX OS - Input Validation Module
+//! Shared validation functions for all command modules.
 
 pub struct Validator;
 
@@ -75,8 +75,8 @@ impl Validator {
         if value.is_empty() {
             return Ok(());
         }
-        if value.len() != 10 || !value.chars().nth(4).map_or(false, |c| c == '-')
-            || !value.chars().nth(7).map_or(false, |c| c == '-') {
+        if value.len() != 10 || !(value.chars().nth(4) == Some('-'))
+            || !(value.chars().nth(7) == Some('-')) {
             return Err("Date must be in YYYY-MM-DD format".to_string());
         }
         Ok(())

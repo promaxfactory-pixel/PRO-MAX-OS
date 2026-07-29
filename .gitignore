@@ -56,3 +56,6 @@ releases/
 
 # Generated schemas
 src-tauri/gen/
+
+# Clippy output files
+clippy_*.txt

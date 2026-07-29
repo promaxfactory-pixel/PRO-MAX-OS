@@ -135,7 +135,7 @@ fn read_file_data(
         .map_err(|e| format!("فشل في قراءة ورقة العمل: {}", e))?;
     let mut rows_iter = range.rows();
     let headers = match rows_iter.next() {
-        Some(row) => row.iter().map(|c| cell_to_string(c)).collect(),
+        Some(row) => row.iter().map(cell_to_string).collect(),
         None => return Err(AppError::validation("ورقة العمل فارغة")),
     };
     let data: Vec<Vec<Data>> = rows_iter.map(|r| r.to_vec()).collect();
@@ -143,7 +143,7 @@ fn read_file_data(
 }
 
 fn row_data_to_strings(row: &[Data]) -> Vec<String> {
-    row.iter().map(|c| cell_to_string(c)).collect()
+    row.iter().map(cell_to_string).collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -540,8 +540,8 @@ fn validate_preview(
                             row_has_error = true;
                         }
                     }
-                    "date" => {
-                        if parse_date_flexible(val).is_none() {
+                    "date"
+                        if parse_date_flexible(val).is_none() => {
                             errors.push(ImportError {
                                 row: row_num,
                                 field: "date".to_string(),
@@ -549,7 +549,6 @@ fn validate_preview(
                                 severity: "warning".to_string(),
                             });
                         }
-                    }
                     _ => {}
                 }
             }
@@ -604,7 +603,7 @@ fn parse_date_flexible(s: &str) -> Option<String> {
                 } else {
                     (m, d, y)
                 };
-                if month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 2000 {
+                if (1..=12).contains(&month) && (1..=31).contains(&day) && year >= 2000 {
                     return Some(format!("{:04}-{:02}-{:02}", year, month, day));
                 }
             }
@@ -629,11 +628,11 @@ fn parse_date_flexible(s: &str) -> Option<String> {
 }
 
 fn month_in_range(m: u32) -> bool {
-    m >= 1 && m <= 12
+    (1..=12).contains(&m)
 }
 
 fn day_in_range(d: u32) -> bool {
-    d >= 1 && d <= 31
+    (1..=31).contains(&d)
 }
 
 fn parse_amount_to_milli(s: &str) -> i64 {
@@ -1222,11 +1221,11 @@ pub fn execute_import(
                 let entity_lower = entity.trim().to_lowercase();
 
                 if entity_lower.contains("عميل") || entity_lower == "customer" || entity_lower == "customers" {
-                    let found = code.trim().is_empty().then(|| {
+                    let found = if code.trim().is_empty() { {
                         conn.query_row("SELECT id FROM customers WHERE name=? AND active=1", [name.trim()], |r| r.get::<_, i64>(0))
-                    }).unwrap_or_else(|| {
+                    } } else { {
                         conn.query_row("SELECT id FROM customers WHERE code=? AND active=1", [code.trim()], |r| r.get::<_, i64>(0))
-                    });
+                    } };
                     match found {
                         Ok(id) => {
                             conn.execute("UPDATE customers SET opening_balance_milli=?1, balance_milli=?1 WHERE id=?2", rusqlite::params![bal_milli, id])
@@ -1239,11 +1238,11 @@ pub fn execute_import(
                         }
                     }
                 } else if entity_lower.contains("مورد") || entity_lower == "supplier" || entity_lower == "suppliers" {
-                    let found = code.trim().is_empty().then(|| {
+                    let found = if code.trim().is_empty() { {
                         conn.query_row("SELECT id FROM suppliers WHERE name=? AND active=1", [name.trim()], |r| r.get::<_, i64>(0))
-                    }).unwrap_or_else(|| {
+                    } } else { {
                         conn.query_row("SELECT id FROM suppliers WHERE code=? AND active=1", [code.trim()], |r| r.get::<_, i64>(0))
-                    });
+                    } };
                     match found {
                         Ok(id) => {
                             conn.execute("UPDATE suppliers SET opening_balance_milli=?1, balance_milli=?1 WHERE id=?2", rusqlite::params![bal_milli, id])
@@ -1258,11 +1257,11 @@ pub fn execute_import(
                 } else if entity_lower.contains("صنف") || entity_lower.contains("مخزون") || entity_lower == "inventory" || entity_lower == "inventories" {
                     let qty_val: f64 = qty_str.trim().parse().unwrap_or(0.0);
                     let cost_val: f64 = parse_amount_to_f64(&cost_str) * 1000.0;
-                    let found = code.trim().is_empty().then(|| {
+                    let found = if code.trim().is_empty() { {
                         conn.query_row("SELECT id FROM inventory_items WHERE name_ar=? AND active=1", [name.trim()], |r| r.get::<_, i64>(0))
-                    }).unwrap_or_else(|| {
+                    } } else { {
                         conn.query_row("SELECT id FROM inventory_items WHERE code=? AND active=1", [code.trim()], |r| r.get::<_, i64>(0))
-                    });
+                    } };
                     match found {
                         Ok(id) => {
                             if qty_val != 0.0 {
@@ -1515,24 +1514,15 @@ fn load_existing_names(
     let mut set = std::collections::HashSet::new();
     let mut stmt = conn.prepare(query)?;
     let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
-    for r in rows {
-        if let Ok(name) = r {
-            set.insert(name.to_lowercase());
-        }
+    for name in rows.flatten() {
+        set.insert(name.to_lowercase());
     }
     Ok(set)
 }
 
 fn auto_generate_code(conn: &rusqlite::Connection, prefix: &str) -> Result<String, AppError> {
     let year = chrono::Utc::now().format("%Y").to_string();
-    let doc_type = match prefix {
-        "CUST" => "CUST",
-        "SUP" => "SUP",
-        "PRD" => "PRD",
-        "INV" => "INV",
-        "EMP" => "EMP",
-        _ => prefix,
-    };
+    let doc_type = prefix;
     let seq: i64 = conn
         .query_row(
             "SELECT COALESCE(last_number,0)+1 FROM doc_sequences WHERE doc_type=? AND year=?",

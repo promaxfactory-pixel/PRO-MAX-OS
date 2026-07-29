@@ -187,7 +187,7 @@ pub fn gov_list_entities(state: State<'_, DbState>, category: Option<String>) ->
 #[tauri::command]
 pub fn gov_list_submissions(state: State<'_, DbState>, entity_id: Option<i64>) -> Result<Vec<GovSubmission>, AppError> {
     let conn = state.0.lock()?;
-    let _ = match entity_id {
+    match entity_id {
         Some(eid) => {
             let mut stmt = conn
                 .prepare(
@@ -214,7 +214,7 @@ pub fn gov_list_submissions(state: State<'_, DbState>, entity_id: Option<i64>) -
                 ?
                 .filter_map(|r| r.ok())
                 .collect();
-            return Ok(rows);
+            Ok(rows)
         }
         None => {
             let mut stmt = conn
@@ -242,9 +242,9 @@ pub fn gov_list_submissions(state: State<'_, DbState>, entity_id: Option<i64>) -
                 ?
                 .filter_map(|r| r.ok())
                 .collect();
-            return Ok(rows);
+            Ok(rows)
         }
-    };
+    }
 }
 
 #[tauri::command]

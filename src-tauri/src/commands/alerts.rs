@@ -36,24 +36,22 @@ fn check_low_stock(conn: &rusqlite::Connection) -> Vec<Alert> {
         ))
     });
     if let Ok(rows) = rows {
-        for r in rows {
-            if let Ok((id, code, name_ar, name_en, qty, reorder, uom)) = r {
-                let name = name_ar.or(name_en).unwrap_or_else(|| code.unwrap_or_default());
-                let severity = if qty <= 0.0 { "critical".to_string() } else { "warning".to_string() };
-                let deficit = (reorder * 2.0) - qty;
-                let uom_str = uom.unwrap_or_default();
-                alerts.push(Alert {
-                    alert_type: "low_stock".to_string(),
-                    severity,
-                    entity_type: "inventory_item".to_string(),
-                    entity_id: id,
-                    title: format!("مخزون منخفض: {}", name),
-                    message: format!("الكمية: {:.0} {}, إعادة الطلب: {:.0} {}", qty, uom_str, reorder, uom_str),
-                    action_suggestion: format!("اطلب {:.0} {}", deficit.max(0.0), uom_str),
-                    value: qty,
-                    threshold: reorder,
-                });
-            }
+        for (id, code, name_ar, name_en, qty, reorder, uom) in rows.flatten() {
+            let name = name_ar.or(name_en).unwrap_or_else(|| code.unwrap_or_default());
+            let severity = if qty <= 0.0 { "critical".to_string() } else { "warning".to_string() };
+            let deficit = (reorder * 2.0) - qty;
+            let uom_str = uom.unwrap_or_default();
+            alerts.push(Alert {
+                alert_type: "low_stock".to_string(),
+                severity,
+                entity_type: "inventory_item".to_string(),
+                entity_id: id,
+                title: format!("مخزون منخفض: {}", name),
+                message: format!("الكمية: {:.0} {}, إعادة الطلب: {:.0} {}", qty, uom_str, reorder, uom_str),
+                action_suggestion: format!("اطلب {:.0} {}", deficit.max(0.0), uom_str),
+                value: qty,
+                threshold: reorder,
+            });
         }
     }
     alerts
@@ -79,26 +77,24 @@ fn check_overdue_invoices(conn: &rusqlite::Connection) -> Vec<Alert> {
         ))
     });
     if let Ok(rows) = rows {
-        for r in rows {
-            if let Ok((id, inv_no, date, total, paid, cname)) = r {
-                let remaining = total - paid;
-                if remaining <= 0 { continue; }
-                let inv_date = chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").unwrap_or_default();
-                let today_date = chrono::NaiveDate::parse_from_str(&today, "%Y-%m-%d").unwrap_or_default();
-                let days = (today_date - inv_date).num_days();
-                let severity = if days > 90 { "critical".to_string() } else { "warning".to_string() };
-                alerts.push(Alert {
-                    alert_type: "overdue_invoice".to_string(),
-                    severity,
-                    entity_type: "sales_invoice".to_string(),
-                    entity_id: id,
-                    title: format!("فاتورة متأخرة: {}", inv_no.unwrap_or_default()),
-                    message: format!("العميل: {}, المتبقي: {:.3} ر.ع, {} يوم", cname, remaining as f64 / 1000.0, days),
-                    action_suggestion: format!("تواصل مع {}", cname),
-                    value: remaining as f64,
-                    threshold: 0.0,
-                });
-            }
+        for (id, inv_no, date, total, paid, cname) in rows.flatten() {
+            let remaining = total - paid;
+            if remaining <= 0 { continue; }
+            let inv_date = chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").unwrap_or_default();
+            let today_date = chrono::NaiveDate::parse_from_str(&today, "%Y-%m-%d").unwrap_or_default();
+            let days = (today_date - inv_date).num_days();
+            let severity = if days > 90 { "critical".to_string() } else { "warning".to_string() };
+            alerts.push(Alert {
+                alert_type: "overdue_invoice".to_string(),
+                severity,
+                entity_type: "sales_invoice".to_string(),
+                entity_id: id,
+                title: format!("فاتورة متأخرة: {}", inv_no.unwrap_or_default()),
+                message: format!("العميل: {}, المتبقي: {:.3} ر.ع, {} يوم", cname, remaining as f64 / 1000.0, days),
+                action_suggestion: format!("تواصل مع {}", cname),
+                value: remaining as f64,
+                threshold: 0.0,
+            });
         }
     }
     alerts
@@ -124,36 +120,34 @@ fn check_production_delays(conn: &rusqlite::Connection) -> Vec<Alert> {
         ))
     });
     if let Ok(rows) = rows {
-        for r in rows {
-            if let Ok((id, date, downtime, run)) = r {
-                let prod_date = chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").unwrap_or_default();
-                let today_date = chrono::NaiveDate::parse_from_str(&today, "%Y-%m-%d").unwrap_or_default();
-                let days = (today_date - prod_date).num_days();
-                if days > 7 {
-                    alerts.push(Alert {
-                        alert_type: "production_delay".to_string(),
-                        severity: "warning".to_string(),
-                        entity_type: "production_order".to_string(),
-                        entity_id: id,
-                        title: format!("أمر إنتاج متأخر: #{}", id),
-                        message: format!("أنشئ قبل {} أيام، لا يزال مسودة", days),
-                        action_suggestion: "راجع واعتمد الأمر".to_string(),
-                        value: days as f64,
-                        threshold: 7.0,
-                    });
-                } else if downtime > run && downtime > 120 {
-                    alerts.push(Alert {
-                        alert_type: "production_delay".to_string(),
-                        severity: "critical".to_string(),
-                        entity_type: "production_order".to_string(),
-                        entity_id: id,
-                        title: format!("توقف كبير: #{}", id),
-                        message: format!("التوقف {} دقيقة > التشغيل {} دقيقة", downtime, run),
-                        action_suggestion: "تحقق من سبب التوقف".to_string(),
-                        value: downtime as f64,
-                        threshold: 120.0,
-                    });
-                }
+        for (id, date, downtime, run) in rows.flatten() {
+            let prod_date = chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").unwrap_or_default();
+            let today_date = chrono::NaiveDate::parse_from_str(&today, "%Y-%m-%d").unwrap_or_default();
+            let days = (today_date - prod_date).num_days();
+            if days > 7 {
+                alerts.push(Alert {
+                    alert_type: "production_delay".to_string(),
+                    severity: "warning".to_string(),
+                    entity_type: "production_order".to_string(),
+                    entity_id: id,
+                    title: format!("أمر إنتاج متأخر: #{}", id),
+                    message: format!("أنشئ قبل {} أيام، لا يزال مسودة", days),
+                    action_suggestion: "راجع واعتمد الأمر".to_string(),
+                    value: days as f64,
+                    threshold: 7.0,
+                });
+            } else if downtime > run && downtime > 120 {
+                alerts.push(Alert {
+                    alert_type: "production_delay".to_string(),
+                    severity: "critical".to_string(),
+                    entity_type: "production_order".to_string(),
+                    entity_id: id,
+                    title: format!("توقف كبير: #{}", id),
+                    message: format!("التوقف {} دقيقة > التشغيل {} دقيقة", downtime, run),
+                    action_suggestion: "تحقق من سبب التوقف".to_string(),
+                    value: downtime as f64,
+                    threshold: 120.0,
+                });
             }
         }
     }
@@ -178,21 +172,19 @@ fn check_quality_issues(conn: &rusqlite::Connection) -> Vec<Alert> {
         ))
     });
     if let Ok(rows) = rows {
-        for r in rows {
-            if let Ok((id, insp_no, status, notes)) = r {
-                let severity = if status == "Failed" { "critical".to_string() } else { "warning".to_string() };
-                alerts.push(Alert {
-                    alert_type: "quality_issue".to_string(),
-                    severity,
-                    entity_type: "quality_inspection".to_string(),
-                    entity_id: id,
-                    title: format!("فحص جودة: {}", insp_no.unwrap_or_else(|| format!("#{}", id))),
-                    message: notes.unwrap_or_else(|| format!("الحالة: {}", status)),
-                    action_suggestion: "راجع واتخذ إجراء تصحيحي".to_string(),
-                    value: 0.0,
-                    threshold: 0.0,
-                });
-            }
+        for (id, insp_no, status, notes) in rows.flatten() {
+            let severity = if status == "Failed" { "critical".to_string() } else { "warning".to_string() };
+            alerts.push(Alert {
+                alert_type: "quality_issue".to_string(),
+                severity,
+                entity_type: "quality_inspection".to_string(),
+                entity_id: id,
+                title: format!("فحص جودة: {}", insp_no.unwrap_or_else(|| format!("#{}", id))),
+                message: notes.unwrap_or_else(|| format!("الحالة: {}", status)),
+                action_suggestion: "راجع واتخذ إجراء تصحيحي".to_string(),
+                value: 0.0,
+                threshold: 0.0,
+            });
         }
     }
     alerts

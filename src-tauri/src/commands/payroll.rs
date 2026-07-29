@@ -101,7 +101,7 @@ pub fn create_payroll_run(
         ],
     )?;
     let run_id = tx.last_insert_rowid();
-    let _ = rbac::log_audit(&*tx, None, None, "create_payroll_run", "payroll_runs", Some(run_id), None, Some(&run_no), None);
+    let _ = rbac::log_audit(&tx, None, None, "create_payroll_run", "payroll_runs", Some(run_id), None, Some(&run_no), None);
     tx.commit()?;
     Ok(run_id)
 }

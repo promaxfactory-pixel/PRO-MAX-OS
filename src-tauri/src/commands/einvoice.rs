@@ -120,6 +120,7 @@ fn xml_escape(s: &str) -> String {
         .replace('\'', "&apos;")
 }
 
+#[allow(clippy::too_many_arguments)]
 fn generate_pint_om_xml(
     _inv_id: i64,
     inv_no: &str,
@@ -161,7 +162,7 @@ fn generate_pint_om_xml(
         xml.push_str(&format!("        <ram:ID schemeID=\"9921\">{}</ram:ID>\n", xml_escape(company_vat)));
     }
     if !company_cr.is_empty() {
-        xml.push_str(&format!("        <ram:ID schemeID=\"9930\">OM</ram:ID>\n"));
+        xml.push_str("        <ram:ID schemeID=\"9930\">OM</ram:ID>\n");
     }
     xml.push_str("      </ram:SellerTradeParty>\n");
     xml.push_str("    </ram:ApplicableHeaderTradeAgreement>\n\n");
@@ -177,7 +178,7 @@ fn generate_pint_om_xml(
     xml.push_str(&format!("        <ram:BasisAmount currencyID=\"OMR\">{:.3}</ram:BasisAmount>\n", net_milli as f64 / 1000.0));
     xml.push_str("        <ram:RateApplicablePercent>5.00</ram:RateApplicablePercent>\n");
     xml.push_str("      </ram:ApplicableTradeTax>\n");
-    xml.push_str(&format!("      <ram:SpecifiedTradeSettlementMonetarySummation>\n"));
+    xml.push_str("      <ram:SpecifiedTradeSettlementMonetarySummation>\n");
     xml.push_str(&format!("        <ram:LineTotalAmount currencyID=\"OMR\">{:.3}</ram:LineTotalAmount>\n", net_milli as f64 / 1000.0));
     xml.push_str(&format!("        <ram:TaxBasisTotalAmount currencyID=\"OMR\">{:.3}</ram:TaxBasisTotalAmount>\n", net_milli as f64 / 1000.0));
     xml.push_str(&format!("        <ram:TaxTotalAmount currencyID=\"OMR\">{:.3}</ram:TaxTotalAmount>\n", vat_milli as f64 / 1000.0));
@@ -200,11 +201,11 @@ fn generate_pint_om_xml(
         xml.push_str(&format!("        <ram:BilledQuantity unitCode=\"C62\">{:.0}</ram:BilledQuantity>\n", qty));
         xml.push_str("      </ram:SpecifiedLineTradeDelivery>\n");
         xml.push_str("      <ram:SpecifiedLineTradeSettlement>\n");
-        xml.push_str(&format!("        <ram:ApplicableTradeTax>\n"));
+        xml.push_str("        <ram:ApplicableTradeTax>\n");
         xml.push_str("          <ram:TypeCode>VAT</ram:TypeCode>\n");
         xml.push_str("          <ram:RateApplicablePercent>5.00</ram:RateApplicablePercent>\n");
         xml.push_str("        </ram:ApplicableTradeTax>\n");
-        xml.push_str(&format!("        <ram:SpecifiedTradeSettlementMonetarySummation>\n"));
+        xml.push_str("        <ram:SpecifiedTradeSettlementMonetarySummation>\n");
         xml.push_str(&format!("          <ram:LineTotalAmount currencyID=\"OMR\">{:.3}</ram:LineTotalAmount>\n", total));
         xml.push_str("        </ram:SpecifiedTradeSettlementMonetarySummation>\n");
         xml.push_str("      </ram:SpecifiedLineTradeSettlement>\n");
@@ -896,6 +897,7 @@ pub fn einvoice_get_settings(
     Ok(result)
 }
 
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn einvoice_save_settings(
     state: State<'_, DbState>,

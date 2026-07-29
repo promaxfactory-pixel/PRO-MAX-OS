@@ -137,6 +137,7 @@ pub struct SubmitReceiptInput {
     pub account_code: Option<String>,
     pub description: Option<String>,
     pub attachment_ids: Option<String>,
+    #[allow(dead_code)]
     pub notes: Option<String>,
     pub created_by: String,
 }
@@ -167,6 +168,7 @@ pub struct ApproveAdvanceInput {
 #[derive(Debug, Deserialize)]
 pub struct RejectAdvanceInput {
     pub advance_id: i64,
+    #[allow(dead_code)]
     pub rejected_by: i64,
     pub reason: String,
 }
@@ -279,7 +281,7 @@ pub fn create_operating_advance(
     let tx = conn.transaction()?;
     let advance_no = gen_advance_no(&tx)?;
     let currency = input.currency.unwrap_or_else(|| "OMR".to_string());
-    let exchange_rate = input.exchange_rate.unwrap_or(1.0);
+    let _exchange_rate = input.exchange_rate.unwrap_or(1.0);
     let date_str = chrono::Utc::now().format("%Y-%m-%d").to_string();
     tx.execute(
         "INSERT INTO operating_advances (advance_no, date, employee_id, employee_name,
@@ -598,7 +600,7 @@ pub fn reconcile_advance(
 ) -> Result<OperatingAdvance, AppError> {
     let mut conn = state.0.lock()?;
     let tx = conn.transaction()?;
-    let (a_balance, a_spent): (i64, i64) = tx.query_row(
+    let (_a_balance, a_spent): (i64, i64) = tx.query_row(
         "SELECT balance_milli, total_spent_milli FROM operating_advances WHERE id = ?1",
         params![input.advance_id], |r| Ok((r.get(0)?, r.get(1)?)),
     )?;

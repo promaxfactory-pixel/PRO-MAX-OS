@@ -227,7 +227,7 @@ fn read_sheet(
         .map_err(|e| format!("Failed to read sheet: {}", e))?;
     let mut rows_iter = range.rows();
     let headers = match rows_iter.next() {
-        Some(row) => row.iter().map(|c| cell_to_string(c)).collect(),
+        Some(row) => row.iter().map(cell_to_string).collect(),
         None => return Err(AppError::validation("Sheet is empty")),
     };
     let data: Vec<Vec<Data>> = rows_iter.map(|r| r.to_vec()).collect();
@@ -248,7 +248,7 @@ fn read_all_rows(
         .map_err(|e| format!("Failed to read sheet: {}", e))?;
     let mut rows_iter = range.rows();
     let headers = match rows_iter.next() {
-        Some(row) => row.iter().map(|c| cell_to_string(c)).collect(),
+        Some(row) => row.iter().map(cell_to_string).collect(),
         None => return Err(AppError::validation("Sheet is empty")),
     };
     let data: Vec<Vec<Data>> = rows_iter.map(|r| r.to_vec()).collect();
@@ -507,7 +507,7 @@ pub fn excel_import_journal(
     for (i, row) in data_rows.iter().enumerate() {
         let date_val = date_col
             .and_then(|ci| row.get(ci))
-            .map(|c| cell_to_string(c))
+            .map(cell_to_string)
             .unwrap_or_default();
 
         if !date_val.is_empty() && current_date.as_ref() != Some(&date_val) {
@@ -548,7 +548,7 @@ pub fn excel_import_journal(
 
             let account = account_col
                 .and_then(|ci| row.get(ci))
-                .map(|c| cell_to_string(c))
+                .map(cell_to_string)
                 .unwrap_or_default();
 
             if account.is_empty() {
@@ -565,22 +565,22 @@ pub fn excel_import_journal(
 
             let description = desc_col
                 .and_then(|ci| row.get(ci))
-                .map(|c| cell_to_string(c))
+                .map(cell_to_string)
                 .unwrap_or_default();
 
             let debit = debit_col
                 .and_then(|ci| row.get(ci))
-                .and_then(|c| cell_to_f64(c))
+                .and_then(cell_to_f64)
                 .unwrap_or(0.0);
 
             let credit = credit_col
                 .and_then(|ci| row.get(ci))
-                .and_then(|c| cell_to_f64(c))
+                .and_then(cell_to_f64)
                 .unwrap_or(0.0);
 
             let reference = ref_col
                 .and_then(|ci| row.get(ci))
-                .map(|c| cell_to_string(c))
+                .map(cell_to_string)
                 .unwrap_or_default();
 
             if debit < 0.0 {
@@ -751,7 +751,7 @@ pub fn excel_import_customers(
     for (i, row) in data_rows.iter().enumerate() {
         let excel_row = i + if input.skip_first_row { 2 } else { 1 };
 
-        let name = row.get(name_col).map(|c| cell_to_string(c)).unwrap_or_default();
+        let name = row.get(name_col).map(cell_to_string).unwrap_or_default();
         if name.is_empty() {
             errors.push(ImportError {
                 row: excel_row,
@@ -772,14 +772,14 @@ pub fn excel_import_customers(
             continue;
         }
 
-        let phone = phone_col.and_then(|ci| row.get(ci)).map(|c| cell_to_string(c)).unwrap_or_default();
-        let email = email_col.and_then(|ci| row.get(ci)).map(|c| cell_to_string(c)).unwrap_or_default();
-        let vat_number = vat_col.and_then(|ci| row.get(ci)).map(|c| cell_to_string(c)).unwrap_or_default();
-        let credit_limit = credit_col.and_then(|ci| row.get(ci)).and_then(|c| cell_to_f64(c)).unwrap_or(0.0);
-        let address = address_col.and_then(|ci| row.get(ci)).map(|c| cell_to_string(c)).unwrap_or_default();
-        let _city = city_col.and_then(|ci| row.get(ci)).map(|c| cell_to_string(c)).unwrap_or_default();
-        let _country = country_col.and_then(|ci| row.get(ci)).map(|c| cell_to_string(c)).unwrap_or_default();
-        let code = code_col.and_then(|ci| row.get(ci)).map(|c| cell_to_string(c)).unwrap_or_default();
+        let phone = phone_col.and_then(|ci| row.get(ci)).map(cell_to_string).unwrap_or_default();
+        let email = email_col.and_then(|ci| row.get(ci)).map(cell_to_string).unwrap_or_default();
+        let vat_number = vat_col.and_then(|ci| row.get(ci)).map(cell_to_string).unwrap_or_default();
+        let credit_limit = credit_col.and_then(|ci| row.get(ci)).and_then(cell_to_f64).unwrap_or(0.0);
+        let address = address_col.and_then(|ci| row.get(ci)).map(cell_to_string).unwrap_or_default();
+        let _city = city_col.and_then(|ci| row.get(ci)).map(cell_to_string).unwrap_or_default();
+        let _country = country_col.and_then(|ci| row.get(ci)).map(cell_to_string).unwrap_or_default();
+        let code = code_col.and_then(|ci| row.get(ci)).map(cell_to_string).unwrap_or_default();
 
         // Validate email format if present
         if !email.is_empty() && !email.contains('@') {
@@ -889,7 +889,7 @@ pub fn excel_import_products(
     for (i, row) in data_rows.iter().enumerate() {
         let excel_row = i + if input.skip_first_row { 2 } else { 1 };
 
-        let name = row.get(name_col).map(|c| cell_to_string(c)).unwrap_or_default();
+        let name = row.get(name_col).map(cell_to_string).unwrap_or_default();
         if name.is_empty() {
             errors.push(ImportError {
                 row: excel_row,
@@ -902,7 +902,7 @@ pub fn excel_import_products(
             continue;
         }
 
-        let code = code_col.and_then(|ci| row.get(ci)).map(|c| cell_to_string(c)).unwrap_or_default();
+        let code = code_col.and_then(|ci| row.get(ci)).map(cell_to_string).unwrap_or_default();
         let lower_code = code.to_lowercase();
         if !code.is_empty() && existing_codes.contains(&lower_code) {
             warnings.push(format!("Row {}: product code '{}' already exists, skipping.", excel_row, code));
@@ -910,13 +910,13 @@ pub fn excel_import_products(
             continue;
         }
 
-        let _description = desc_col.and_then(|ci| row.get(ci)).map(|c| cell_to_string(c)).unwrap_or_default();
-        let price = price_col.and_then(|ci| row.get(ci)).and_then(|c| cell_to_f64(c)).unwrap_or(0.0);
-        let cost = cost_col.and_then(|ci| row.get(ci)).and_then(|c| cell_to_f64(c)).unwrap_or(0.0);
-        let _unit = unit_col.and_then(|ci| row.get(ci)).map(|c| cell_to_string(c)).unwrap_or_else(|| "piece".into());
-        let _category = category_col.and_then(|ci| row.get(ci)).map(|c| cell_to_string(c)).unwrap_or_default();
-        let size = size_col.and_then(|ci| row.get(ci)).map(|c| cell_to_string(c)).unwrap_or_default();
-        let barcode = barcode_col.and_then(|ci| row.get(ci)).map(|c| cell_to_string(c)).unwrap_or_default();
+        let _description = desc_col.and_then(|ci| row.get(ci)).map(cell_to_string).unwrap_or_default();
+        let price = price_col.and_then(|ci| row.get(ci)).and_then(cell_to_f64).unwrap_or(0.0);
+        let cost = cost_col.and_then(|ci| row.get(ci)).and_then(cell_to_f64).unwrap_or(0.0);
+        let _unit = unit_col.and_then(|ci| row.get(ci)).map(cell_to_string).unwrap_or_else(|| "piece".into());
+        let _category = category_col.and_then(|ci| row.get(ci)).map(cell_to_string).unwrap_or_default();
+        let size = size_col.and_then(|ci| row.get(ci)).map(cell_to_string).unwrap_or_default();
+        let barcode = barcode_col.and_then(|ci| row.get(ci)).map(cell_to_string).unwrap_or_default();
 
         if price < 0.0 {
             errors.push(ImportError {
@@ -1042,7 +1042,7 @@ pub fn excel_import_inventory(
     for (i, row) in data_rows.iter().enumerate() {
         let excel_row = i + if input.skip_first_row { 2 } else { 1 };
 
-        let name = row.get(name_col).map(|c| cell_to_string(c)).unwrap_or_default();
+        let name = row.get(name_col).map(cell_to_string).unwrap_or_default();
         if name.is_empty() {
             errors.push(ImportError {
                 row: excel_row,
@@ -1055,7 +1055,7 @@ pub fn excel_import_inventory(
             continue;
         }
 
-        let code = code_col.and_then(|ci| row.get(ci)).map(|c| cell_to_string(c)).unwrap_or_default();
+        let code = code_col.and_then(|ci| row.get(ci)).map(cell_to_string).unwrap_or_default();
         let lower_code = code.to_lowercase();
         if !code.is_empty() && existing_codes.contains(&lower_code) {
             warnings.push(format!("Row {}: item code '{}' already exists, skipping.", excel_row, code));
@@ -1063,14 +1063,14 @@ pub fn excel_import_inventory(
             continue;
         }
 
-        let quantity = qty_col.and_then(|ci| row.get(ci)).and_then(|c| cell_to_f64(c)).unwrap_or(0.0);
-        let reorder_level = reorder_col.and_then(|ci| row.get(ci)).and_then(|c| cell_to_f64(c)).unwrap_or(0.0);
-        let cost = cost_col.and_then(|ci| row.get(ci)).and_then(|c| cell_to_f64(c)).unwrap_or(0.0);
-        let _location = location_col.and_then(|ci| row.get(ci)).map(|c| cell_to_string(c)).unwrap_or_default();
-        let _warehouse = warehouse_col.and_then(|ci| row.get(ci)).map(|c| cell_to_string(c)).unwrap_or_default();
-        let unit = unit_col.and_then(|ci| row.get(ci)).map(|c| cell_to_string(c)).unwrap_or_default();
-        let min_stock = min_col.and_then(|ci| row.get(ci)).and_then(|c| cell_to_f64(c)).unwrap_or(0.0);
-        let max_stock = max_col.and_then(|ci| row.get(ci)).and_then(|c| cell_to_f64(c)).unwrap_or(0.0);
+        let quantity = qty_col.and_then(|ci| row.get(ci)).and_then(cell_to_f64).unwrap_or(0.0);
+        let reorder_level = reorder_col.and_then(|ci| row.get(ci)).and_then(cell_to_f64).unwrap_or(0.0);
+        let cost = cost_col.and_then(|ci| row.get(ci)).and_then(cell_to_f64).unwrap_or(0.0);
+        let _location = location_col.and_then(|ci| row.get(ci)).map(cell_to_string).unwrap_or_default();
+        let _warehouse = warehouse_col.and_then(|ci| row.get(ci)).map(cell_to_string).unwrap_or_default();
+        let unit = unit_col.and_then(|ci| row.get(ci)).map(cell_to_string).unwrap_or_default();
+        let min_stock = min_col.and_then(|ci| row.get(ci)).and_then(cell_to_f64).unwrap_or(0.0);
+        let max_stock = max_col.and_then(|ci| row.get(ci)).and_then(cell_to_f64).unwrap_or(0.0);
 
         if quantity < 0.0 {
             errors.push(ImportError {
@@ -1181,12 +1181,9 @@ pub fn excel_analyze_data(
 
         for row in data.iter() {
             let cell = row.get(col_idx).cloned().unwrap_or(Data::Empty);
-            match &cell {
-                Data::Empty => {
-                    null_count += 1;
-                    continue;
-                }
-                _ => {}
+            if cell == Data::Empty {
+                null_count += 1;
+                continue;
             }
             let s = cell_to_string(&cell);
             unique_vals.insert(s.to_lowercase());
@@ -1204,7 +1201,7 @@ pub fn excel_analyze_data(
                     if let Some(v) = type_votes.get_mut("currency") { *v += 1; }
                 }
                 if let Some(v) = type_votes.get_mut("number") { *v += 1; }
-            } else if let Some(_) = cell_to_i64(&cell) {
+            } else if cell_to_i64(&cell).is_some() {
                 if let Some(v) = type_votes.get_mut("number") { *v += 1; }
                 if let Some(v) = type_votes.get_mut("id") { *v += 1; }
             } else {
@@ -1212,11 +1209,10 @@ pub fn excel_analyze_data(
                 // Date detection
                 if lower.contains('/') || lower.contains('-') || lower.contains('.') {
                     let parts: Vec<&str> = lower.split(&['/', '-', '.'][..]).collect();
-                    if parts.len() == 3 {
-                        if parts.iter().all(|p| p.parse::<u32>().is_ok()) {
+                    if parts.len() == 3
+                        && parts.iter().all(|p| p.parse::<u32>().is_ok()) {
                             if let Some(v) = type_votes.get_mut("date") { *v += 3; }
                         }
-                    }
                 }
                 if let Some(v) = type_votes.get_mut("text") { *v += 1; }
             }

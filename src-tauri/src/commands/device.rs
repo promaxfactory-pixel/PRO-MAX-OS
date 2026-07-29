@@ -87,7 +87,7 @@ pub fn print_thermal(
     let mut raw = String::new();
 
     raw.push_str(&esc(0x1b));
-    raw.push_str("@");
+    raw.push('@');
 
     for _ in 0..copies.unwrap_or(1) {
         for line in &lines {
@@ -97,7 +97,7 @@ pub fn print_thermal(
     }
 
     raw.push_str(&esc(0x1b));
-    raw.push_str("m");
+    raw.push('m');
 
     let temp_file = std::env::temp_dir().join("promax_thermal.bin");
     std::fs::write(&temp_file, raw.as_bytes()).map_err(|e| format!("Failed to write temp file: {}", e))?;
@@ -141,7 +141,7 @@ if ($scanners.Count -eq 0) {
 "#;
 
     let out = Command::new("powershell")
-        .args(["-NoProfile", "-Command", &ps])
+        .args(["-NoProfile", "-Command", ps])
         .output()
         .map_err(|e| format!("Failed to list scanners: {}", e))?;
 
@@ -224,8 +224,8 @@ Write-Output "OK:$outPath"
     }
 
     let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    if stdout.starts_with("OK:") {
-        Ok(stdout[3..].to_string())
+    if let Some(stripped) = stdout.strip_prefix("OK:") {
+        Ok(stripped.to_string())
     } else {
         Ok(out_path)
     }

@@ -78,8 +78,7 @@ fn query_rows(conn: &Connection, sql: &str, params: impl rusqlite::Params, limit
         .collect();
     let iter = stmt.query_map(params, |row| {
         let mut map = serde_json::Map::new();
-        for i in 0..col_count {
-            let name = &col_names[i];
+        for (i, name) in col_names.iter().enumerate() {
             if let Ok(v) = row.get::<_, String>(i) {
                 map.insert(name.clone(), Value::String(v));
             } else if let Ok(v) = row.get::<_, i64>(i) {
@@ -201,13 +200,10 @@ fn tool_get_invoice(conn: &Connection, args: &Value) -> Value {
     let inv = inv_rows.into_iter().next();
 
     let lines = if inv.is_some() {
-        match query_rows(conn,
+        query_rows(conn,
             "SELECT COALESCE(p.name_ar,''), sil.cartons, sil.unit_price_milli, sil.line_net_milli
              FROM sales_invoice_lines sil LEFT JOIN products p ON sil.product_id = p.id
-             WHERE sil.invoice_id = ?1", [id], None) {
-            Ok(r) => r,
-            Err(_) => vec![],
-        }
+             WHERE sil.invoice_id = ?1", [id], None).unwrap_or_default()
     } else { vec![] };
 
     json!({ "invoice": inv, "lines": lines })

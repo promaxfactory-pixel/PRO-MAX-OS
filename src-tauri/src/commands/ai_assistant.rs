@@ -1162,7 +1162,7 @@ pub fn ai_suggest_actions(
                 suggestions.push(format!("ACTION: {pending_overtime} overtime records pending approval."));
             }
         }
-        "general" | _ => {
+        _ => {
             let overdue_inv: i64 = conn
                 .query_row(
                     "SELECT COUNT(*) FROM sales_invoices WHERE status IN ('Issued','Partially Paid','Posted') AND total_milli > paid_milli AND date < date('now')",

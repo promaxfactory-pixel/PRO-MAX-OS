@@ -211,7 +211,7 @@ pub fn create_product(state: State<'_, DbState>, input: CreateProductInput) -> R
         ],
     )?;
     let id = conn.last_insert_rowid();
-    let _ = rbac::log_audit(&conn, None, None, "create_product", "products", Some(id), None, Some(&input.name_ar.as_deref().unwrap_or("")), None);
+    let _ = rbac::log_audit(&conn, None, None, "create_product", "products", Some(id), None, Some(input.name_ar.as_deref().unwrap_or("")), None);
     Ok(id)
 }
 

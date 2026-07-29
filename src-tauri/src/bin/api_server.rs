@@ -1,6 +1,6 @@
-/// PRO MAX OS - REST API Server v2
-/// Secure JWT-authenticated API for mobile app and third-party integration.
-/// Usage: promax-api [--port 8080] [--db-path path] [--host 127.0.0.1]
+//! PRO MAX OS - REST API Server v2
+//! Secure JWT-authenticated API for mobile app and third-party integration.
+//! Usage: promax-api [--port 8080] [--db-path path] [--host 127.0.0.1]
 
 use actix_cors::Cors;
 use actix_web::{web, App, HttpServer, HttpResponse, middleware, HttpRequest};
@@ -35,7 +35,7 @@ impl RateLimiter {
 
     fn is_allowed(&mut self, key: &str) -> bool {
         let now = Instant::now();
-        let entries = self.attempts.entry(key.to_string()).or_insert_with(Vec::new);
+        let entries = self.attempts.entry(key.to_string()).or_default();
         entries.retain(|t| now.duration_since(*t) < self.window);
         if entries.len() >= self.max_attempts {
             return false;
@@ -492,7 +492,7 @@ async fn main() -> std::io::Result<()> {
     let _ = promax_os_lib::crypto::init_secrets(&db_path_buf);
 
     let is_local = host == "127.0.0.1";
-    let bind_addr = format!("{}:{}", &host, port);
+    let bind_addr = format!("{}:{}", host, port);
 
     println!("PRO MAX OS API Server v2.0.0");
     println!("Database: {}", db_path);

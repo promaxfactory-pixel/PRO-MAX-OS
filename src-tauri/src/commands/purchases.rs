@@ -245,7 +245,7 @@ pub fn create_purchase(input: CreatePurchaseInput, state: State<'_, DbState>) ->
         )?;
     }
 
-    let _ = rbac::log_audit(&*tx, None, None, "create_purchase", "purchases", Some(purchase_id), None, Some(&pur_no), None);
+    let _ = rbac::log_audit(&tx, None, None, "create_purchase", "purchases", Some(purchase_id), None, Some(&pur_no), None);
     tx.commit()?;
     Ok(purchase_id)
 }
@@ -295,7 +295,7 @@ pub fn create_supplier_payment(input: CreateSupplierPaymentInput, state: State<'
         [input.amount_milli, input.supplier_id],
     )?;
 
-    let _ = rbac::log_audit(&*tx, None, None, "create_supplier_payment", "supplier_payments", Some(payment_id), None, None, None);
+    let _ = rbac::log_audit(&tx, None, None, "create_supplier_payment", "supplier_payments", Some(payment_id), None, None, None);
     tx.commit()?;
     Ok(payment_id)
 }
