@@ -50,7 +50,7 @@ function highlightMatch(text: string, query: string) {
   return (
     <>
       {text.slice(0, idx)}
-      <span className="text-gold-400 font-semibold">{text.slice(idx, idx + query.length)}</span>
+      <span className="font-semibold" style={{ color: 'var(--brand-500)' }}>{text.slice(idx, idx + query.length)}</span>
       {text.slice(idx + query.length)}
     </>
   );
@@ -175,7 +175,7 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
         }
 
         setResults(all);
-      } catch (e) {
+      } catch {
         setResults([]);
         addNotification({ type: "error", title: "خطأ", message: "فشل البحث" });
       } finally {
@@ -204,30 +204,36 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]"
+      style={{ background: 'color-mix(in srgb, #000 50%, transparent)', backdropFilter: 'blur(4px)' }}
       onClick={() => onClose()}
     >
       <div
-        className="w-full max-w-xl mx-4 bg-surface-800 rounded-2xl border border-surface-700 shadow-2xl overflow-hidden"
+        className="w-full max-w-xl mx-4 rounded-2xl overflow-hidden shadow-2xl"
+        style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-surface-700">
-          <Search className="h-5 w-5 text-surface-400 shrink-0" />
+        <div className="flex items-center gap-3 px-4 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
+          <Search className="h-5 w-5 shrink-0" style={{ color: 'var(--text-muted)' }} />
           <input
             ref={inputRef}
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="بحث..."
-            className="flex-1 bg-transparent text-white text-sm placeholder-surface-400 outline-none"
+            className="flex-1 bg-transparent text-sm outline-none"
+            style={{ color: 'var(--text-primary)' }}
           />
-          <kbd className="hidden sm:inline text-[10px] text-surface-400 border border-surface-700 rounded px-1.5 py-0.5">
+          <kbd className="hidden sm:inline text-[10px] rounded px-1.5 py-0.5" style={{ color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
             ESC
           </kbd>
           {query && (
             <button
               onClick={() => setQuery("")}
-              className="text-surface-400 hover:text-white transition-colors"
+              className="transition-colors"
+              style={{ color: 'var(--text-muted)' }}
+              onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
+              onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
             >
               <X className="h-4 w-4" />
             </button>
@@ -236,20 +242,20 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
 
         <div className="max-h-[400px] overflow-y-auto p-2">
           {!query && (
-            <div className="flex flex-col items-center justify-center py-12 text-surface-400">
+            <div className="flex flex-col items-center justify-center py-12" style={{ color: 'var(--text-muted)' }}>
               <Search className="h-10 w-10 mb-3 opacity-30" />
               <p className="text-sm">اكتب للبحث...</p>
             </div>
           )}
 
           {query && !loading && results.length === 0 && (
-            <div className="py-12 text-center text-surface-400 text-sm">
+            <div className="py-12 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
               لا توجد نتائج لـ &quot;{query}&quot;
             </div>
           )}
 
           {loading && (
-            <div className="py-12 text-center text-surface-400 text-sm">جاري البحث...</div>
+            <div className="py-12 text-center text-sm" style={{ color: 'var(--text-muted)' }}>جاري البحث...</div>
           )}
 
           {Object.entries(groupedResults).map(([type, items]) => {
@@ -260,8 +266,8 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
             return (
               <div key={type} className="mb-2">
                 <div className="flex items-center gap-2 px-3 py-1.5">
-                  <Icon className="h-3.5 w-3.5 text-surface-400" />
-                  <span className="text-xs font-semibold text-surface-400 uppercase tracking-wider">
+                  <Icon className="h-3.5 w-3.5" style={{ color: 'var(--text-muted)' }} />
+                  <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                     {meta.label}
                   </span>
                 </div>
@@ -269,14 +275,16 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
                   <button
                     key={`${item.type}-${item.id}`}
                     onClick={() => handleSelect(item.route)}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-right hover:bg-surface-700 transition-colors"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-right transition-colors"
+                    onMouseEnter={e => e.currentTarget.style.background = 'color-mix(in srgb, var(--border) 40%, transparent)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-white truncate">
+                      <p className="text-sm truncate" style={{ color: 'var(--text-primary)' }}>
                         {highlightMatch(item.title, query)}
                       </p>
                       {item.subtitle && (
-                        <p className="text-xs text-surface-400 truncate">{item.subtitle}</p>
+                        <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{item.subtitle}</p>
                       )}
                     </div>
                   </button>

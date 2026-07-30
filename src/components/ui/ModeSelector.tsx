@@ -29,18 +29,28 @@ export default function ModeSelector({ showLabel = false }: { showLabel?: boolea
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-surface-800/50 transition-all duration-200 border border-transparent hover:border-surface-700/50"
+        className="btn-ghost flex items-center gap-2 px-3 py-1.5"
         title={t("mode." + workMode)}
       >
-        <Icon className="w-4 h-4" style={{ color: `var(--mode-accent)` }} />
-        {showLabel && <span className="text-xs text-surface-400">{t("mode." + workMode)}</span>}
+        <Icon className="w-4 h-4" style={{ color: 'var(--brand-500)' }} />
+        {showLabel && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{t("mode." + workMode)}</span>}
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full mt-2 w-64 bg-surface-800 border border-surface-700 rounded-2xl shadow-luxury overflow-hidden animate-scale-in z-50">
-          <div className="p-3 border-b border-surface-700/50">
-            <p className="text-xs font-bold text-surface-400 uppercase tracking-wider">{t("mode.title")}</p>
-            <p className="text-[10px] text-surface-500 mt-0.5">{t("mode.subtitle")}</p>
+        <div
+          className="absolute left-0 top-full mt-2 w-64 rounded-2xl overflow-hidden animate-scale-in z-50"
+          style={{
+            background: 'var(--surface-card)',
+            border: '1px solid var(--border)',
+            boxShadow: 'var(--shadow-modal)',
+          }}
+        >
+          <div
+            className="p-3 border-b"
+            style={{ borderColor: 'var(--border)' }}
+          >
+            <p className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{t("mode.title")}</p>
+            <p className="text-[10px]" style={{ color: 'var(--text-muted)', marginTop: '0.125rem' }}>{t("mode.subtitle")}</p>
           </div>
           <div className="p-1.5">
             {modeIds.map((id) => {
@@ -50,25 +60,28 @@ export default function ModeSelector({ showLabel = false }: { showLabel?: boolea
                 <button
                   key={id}
                   onClick={() => { setWorkMode(id); setOpen(false); }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200 ${
-                    isActive
-                      ? "text-white"
-                      : "text-surface-400 hover:text-white hover:bg-surface-700/50"
-                  }`}
-                  style={isActive ? { backgroundColor: `var(--mode-glow)`, color: `var(--mode-accent)` } : {}}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200"
+                  style={{
+                    color: isActive ? 'var(--brand-500)' : 'var(--text-muted)',
+                    background: isActive ? 'color-mix(in srgb, var(--brand-500) 10%, transparent)' : 'transparent',
+                  }}
+                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'color-mix(in srgb, var(--border) 40%, transparent)'; }}
+                  onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
                 >
                   <div
                     className="w-8 h-8 rounded-lg flex items-center justify-center"
-                    style={{ backgroundColor: `var(--mode-glow)` }}
+                    style={{ background: 'color-mix(in srgb, var(--brand-500) 10%, transparent)' }}
                   >
-                    <ModeIcon className="w-4 h-4" style={{ color: `var(--mode-accent)` }} />
+                    <ModeIcon className="w-4 h-4" style={{ color: 'var(--brand-500)' }} />
                   </div>
                   <div className="text-right flex-1">
-                    <p className="font-medium text-xs">{t("mode." + id)}</p>
-                    <p className="text-[10px] text-surface-500">{t("mode." + id + "Desc")}</p>
+                    <p className="font-medium text-xs" style={{ color: isActive ? 'var(--text-primary)' : 'var(--text-primary)' }}>
+                      {t("mode." + id)}
+                    </p>
+                    <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{t("mode." + id + "Desc")}</p>
                   </div>
                   {isActive && (
-                    <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: `var(--mode-accent)` }} />
+                    <div className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--brand-500)' }} />
                   )}
                 </button>
               );

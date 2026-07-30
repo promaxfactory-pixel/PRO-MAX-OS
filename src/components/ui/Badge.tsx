@@ -14,7 +14,7 @@ export default function Badge({ children, variant = 'default', size = 'sm', clas
     danger: 'badge-danger',
     info: 'badge-info',
     gold: 'badge-gold',
-    default: 'badge bg-surface-700/50 text-surface-300 border border-surface-600/50',
+    default: 'badge-default',
   };
   const sizes = {
     sm: 'text-xs px-2 py-0.5',

@@ -69,7 +69,7 @@ export default function DataTable<T>({
                     key={col.key}
                     role="columnheader"
                     aria-sort={col.sortable ? ariaSort : undefined}
-                    className={cn(alignClass(col.align), col.sortable && 'cursor-pointer select-none hover:text-white')}
+                    className={cn(alignClass(col.align), col.sortable && 'sortable')}
                     style={{ width: col.width }}
                     onClick={() => col.sortable && handleSort(col.key)}
                     onKeyDown={(e) => { if (col.sortable && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); handleSort(col.key); }}}
@@ -91,7 +91,7 @@ export default function DataTable<T>({
           <tbody>
             {sorted.length === 0 ? (
               <tr role="row">
-                <td colSpan={columns.length} className="text-center py-12 text-surface-500">
+                <td colSpan={columns.length} className="text-center py-12" style={{ color: 'var(--text-muted)' }}>
                   {loading ? 'جاري التحميل...' : emptyMessage}
                 </td>
               </tr>
@@ -103,7 +103,7 @@ export default function DataTable<T>({
                   onClick={() => onRowClick?.(item)}
                   onKeyDown={(e) => { if (onRowClick && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onRowClick(item); }}}
                   tabIndex={onRowClick ? 0 : undefined}
-                  className={cn(onRowClick && 'cursor-pointer hover:bg-surface-800/50 focus:outline-none focus:ring-2 focus:ring-brand-500/50')}
+                  className={cn(onRowClick && 'cursor-pointer')}
                 >
                   {columns.map((col) => (
                     <td key={col.key} role="cell" className={cn(alignClass(col.align), compact && 'py-2 text-xs')}>

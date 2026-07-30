@@ -79,19 +79,28 @@ export default function Modal({ open, onClose, title, children, size = 'md', foo
       onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
     >
       <div className={cn('modal-content', sizes[size])} onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between p-6 border-b border-surface-700/50">
-          <h2 id={titleId} className="text-lg font-bold text-white">{title}</h2>
+        <div
+          className="flex items-center justify-between p-6 border-b"
+          style={{ borderColor: 'var(--border)' }}
+        >
+          <h2 id={titleId} className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>{title}</h2>
           <button
             onClick={onClose}
             aria-label="إغلاق"
-            className="btn-ghost p-2 hover:bg-surface-700 rounded-lg"
+            className="p-2 rounded-lg transition-colors"
+            style={{ color: 'var(--text-muted)' }}
+            onMouseEnter={e => e.currentTarget.style.background = 'color-mix(in srgb, var(--border) 40%, transparent)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
           >
             <X className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
         <div className="p-6">{children}</div>
         {footer && (
-          <div className="flex items-center justify-end gap-3 p-6 border-t border-surface-700/50">
+          <div
+            className="flex items-center justify-end gap-3 p-6 border-t"
+            style={{ borderColor: 'var(--border)' }}
+          >
             {footer}
           </div>
         )}

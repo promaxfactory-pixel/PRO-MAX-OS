@@ -15,22 +15,29 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       <div className="input-group">
         {label && <label className="input-label">{label}</label>}
         <div className="relative">
-          {icon && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-400">{icon}</span>}
-          {prefix && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-400 text-sm">{prefix}</span>}
+          {icon && <span className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }}>{icon}</span>}
+          {prefix && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm" style={{ color: 'var(--text-muted)' }}>{prefix}</span>}
           <input
             ref={ref}
             className={cn(
-              'w-full',
+              'w-full rounded-xl px-4 py-2.5 text-sm transition-all duration-200',
+              'focus:outline-none focus:ring-2',
               icon && 'pr-10',
               prefix && 'pr-16',
-              error && 'border-red-500 focus:ring-red-500/50 focus:border-red-500',
+              error ? 'border-red-500' : '',
               className
             )}
+            style={{
+              background: 'color-mix(in srgb, var(--surface-card) 70%, var(--surface-bg))',
+              border: '1.5px solid var(--border)',
+              color: 'var(--text-primary)',
+              '--tw-ring-color': error ? 'color-mix(in srgb, var(--danger) 30%, transparent)' : 'color-mix(in srgb, var(--brand-500) 30%, transparent)',
+            } as React.CSSProperties}
             {...props}
           />
         </div>
-        {error && <p className="text-xs text-red-400">{error}</p>}
-        {hint && !error && <p className="text-xs text-surface-500">{hint}</p>}
+        {error && <p className="text-xs" style={{ color: 'var(--danger)' }}>{error}</p>}
+        {hint && !error && <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{hint}</p>}
       </div>
     );
   }
@@ -51,15 +58,19 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
         <textarea
           ref={ref}
           className={cn(
-            'w-full bg-surface-800 border border-surface-700 text-white rounded-lg px-4 py-2.5',
-            'focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500',
-            'transition-all duration-200 placeholder:text-surface-500 resize-y min-h-[80px]',
-            error && 'border-red-500',
+            'w-full rounded-xl px-4 py-2.5 text-sm transition-all duration-200 resize-y min-h-[80px]',
+            'focus:outline-none focus:ring-2',
+            error ? 'border-red-500' : '',
             className
           )}
+          style={{
+            background: 'color-mix(in srgb, var(--surface-card) 70%, var(--surface-bg))',
+            border: '1.5px solid var(--border)',
+            color: 'var(--text-primary)',
+          }}
           {...props}
         />
-        {error && <p className="text-xs text-red-400">{error}</p>}
+        {error && <p className="text-xs" style={{ color: 'var(--danger)' }}>{error}</p>}
       </div>
     );
   }
@@ -82,20 +93,24 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(
         <select
           ref={ref}
           className={cn(
-            'w-full bg-surface-800 border border-surface-700 text-white rounded-lg px-4 py-2.5',
-            'focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500',
-            'transition-all duration-200 appearance-none',
-            error && 'border-red-500',
+            'w-full rounded-xl px-4 py-2.5 text-sm transition-all duration-200 appearance-none',
+            'focus:outline-none focus:ring-2',
+            error ? 'border-red-500' : '',
             className
           )}
+          style={{
+            background: 'color-mix(in srgb, var(--surface-card) 70%, var(--surface-bg))',
+            border: '1.5px solid var(--border)',
+            color: 'var(--text-primary)',
+          }}
           {...props}
         >
-          {placeholder && <option value="">{placeholder}</option>}
+          {placeholder && <option value="" style={{ color: 'var(--text-muted)' }}>{placeholder}</option>}
           {options.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
+            <option key={opt.value} value={opt.value} style={{ background: 'var(--surface-card)', color: 'var(--text-primary)' }}>{opt.label}</option>
           ))}
         </select>
-        {error && <p className="text-xs text-red-400">{error}</p>}
+        {error && <p className="text-xs" style={{ color: 'var(--danger)' }}>{error}</p>}
       </div>
     );
   }

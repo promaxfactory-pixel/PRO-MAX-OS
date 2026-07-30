@@ -9,9 +9,9 @@ import {
   Receipt, CreditCard, CircleDollarSign, Landmark, BookOpen,
   Cog, Eye, ShoppingCart, Wallet, Coins, Boxes, ListChecks,
   ClipboardCheck, Award, RefreshCw, Bell, Search,
-  GitBranch,   HandCoins, FileClock, FileWarning, Clock,
+  GitBranch, HandCoins, FileClock, FileWarning, Clock,
   Building2, ScrollText, IdCard, Globe,
-  Ship, ArrowLeftRight
+  Ship, ArrowLeftRight, Sun, Moon, LogOut
 } from "lucide-react";
 import LanguageSwitcher from "./LanguageSwitcher";
 
@@ -20,6 +20,32 @@ interface SidebarProps {
   onToggle: () => void;
   currentPath: string;
 }
+
+const sectionColors: Record<string, string> = {
+  "nav.dashboard": "#8b5cf6",
+  "nav.sales": "#10b981",
+  "inventory.title": "#06b6d4",
+  "accounting.title": "#d4af37",
+  "nav.hr": "#f43f5e",
+  "الحكومة": "#3b82f6",
+  "الاستيراد والتعاملات": "#f97316",
+  "nav.reports": "#a855f7",
+  "nav.tools": "#64748b",
+  "nav.settings": "#6b7280",
+};
+
+const sectionIcons: Record<string, React.ElementType> = {
+  "nav.dashboard": LayoutDashboard,
+  "nav.sales": ShoppingCart,
+  "inventory.title": Package,
+  "accounting.title": BookOpen,
+  "nav.hr": Users,
+  "الحكومة": Building2,
+  "الاستيراد والتعاملات": Ship,
+  "nav.reports": BarChart3,
+  "nav.tools": Wrench,
+  "nav.settings": Settings,
+};
 
 const menuSections = (t: (key: string) => string) => [
   {
@@ -125,80 +151,215 @@ const menuSections = (t: (key: string) => string) => [
 const Sidebar = memo(function Sidebar({ collapsed, onToggle, currentPath }: SidebarProps) {
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
 
   const isActive = (path: string) => {
     if (path === '/dashboard' && (currentPath === '/' || currentPath === '/dashboard')) return true;
     return currentPath.startsWith(path) && path !== '/';
   };
 
+  const toggleTheme = () => {
+    const current = document.documentElement.getAttribute('data-theme');
+    const next = current === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('promax-theme', next);
+  };
+
   return (
     <aside
       role="navigation"
       aria-label="القائمة الرئيسية"
-      className="fixed right-0 top-0 h-full bg-surface-900/80 backdrop-blur-xl border-l border-surface-700/50 z-40 flex flex-col"
-      style={{ width: collapsed ? '72px' : '260px', transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)' }}
+      className="fixed right-0 top-0 h-full z-40 flex flex-col border-l"
+      style={{
+        width: collapsed ? 'var(--sidebar-collapsed-width)' : 'var(--sidebar-width)',
+        background: 'var(--surface-sidebar)',
+        borderColor: 'var(--border)',
+        transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+      }}
     >
-      <div className="h-16 flex items-center px-4 border-b border-surface-700/50">
+      <div
+        className="h-16 flex items-center px-4 border-b cursor-pointer"
+        style={{ borderColor: 'var(--border)' }}
+        onClick={() => navigate('/')}
+      >
         {!collapsed ? (
-          <div className="flex items-center justify-between w-full cursor-pointer" onClick={() => navigate('/')}>
+          <div className="flex items-center justify-between w-full">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-700 to-brand-900 flex items-center justify-center shadow-glow" aria-hidden="true">
-                <Factory className="w-5 h-5 text-gold-400" />
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center"
+                style={{
+                  background: 'linear-gradient(135deg, var(--brand-500), var(--brand-700))',
+                }}
+              >
+                <Factory className="w-5 h-5" style={{ color: 'var(--brand-gold)' }} />
               </div>
               <div>
-                <h1 className="text-sm font-bold text-white leading-none">PRO MAX OS</h1>
-                <p className="text-[10px] text-gold-400 font-medium">بروماكس</p>
+                <h1 className="text-sm font-bold leading-none" style={{ color: 'var(--text-primary)' }}>PRO MAX OS</h1>
+                <p className="text-[10px] font-medium" style={{ color: 'var(--brand-gold)' }}>بروماكس</p>
               </div>
             </div>
             <LanguageSwitcher />
           </div>
         ) : (
-          <div className="flex flex-col items-center gap-1">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-700 to-brand-900 flex items-center justify-center shadow-glow mx-auto cursor-pointer" onClick={() => navigate('/')} aria-label="الصفحة الرئيسية">
-              <Factory className="w-5 h-5 text-gold-400" aria-hidden="true" />
+          <div className="flex flex-col items-center gap-1 w-full">
+            <div
+              className="w-9 h-9 rounded-xl flex items-center justify-center mx-auto"
+              style={{
+                background: 'linear-gradient(135deg, var(--brand-500), var(--brand-700))',
+              }}
+              aria-label="الصفحة الرئيسية"
+            >
+              <Factory className="w-5 h-5" style={{ color: 'var(--brand-gold)' }} />
             </div>
-            <LanguageSwitcher />
           </div>
         )}
       </div>
 
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1" aria-label="التنقل">
-        {menuSections(t).map((section) => (
-          <div key={section.title} role="group" aria-label={section.title}>
-            {!collapsed && (
-              <div className="sidebar-section-title" aria-hidden="true">{section.title}</div>
-            )}
-            {section.items.map((item) => {
-              const active = isActive(item.path);
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.path}
-                  onClick={() => navigate(item.path)}
-                  aria-current={active ? "page" : undefined}
-                  aria-label={item.label}
-                  className={`sidebar-link w-full ${active ? 'active' : ''} ${collapsed ? 'justify-center px-2' : ''}`}
-                  title={collapsed ? item.label : undefined}
+        {menuSections(t).map((section) => {
+          const color = sectionColors[section.title] || '#8b5cf6';
+          const SectionIcon = sectionIcons[section.title];
+          const hasActive = section.items.some(i => isActive(i.path));
+
+          return (
+            <div key={section.title} role="group" aria-label={section.title}>
+              {!collapsed && (
+                <div
+                  className="sidebar-section-title flex items-center gap-2"
+                  style={{ opacity: hasActive ? 1 : 0.6 }}
                 >
-                  <Icon className="w-[18px] h-[18px] flex-shrink-0" aria-hidden="true" />
-                  {!collapsed && <span>{item.label}</span>}
-                </button>
-              );
-            })}
-          </div>
-        ))}
+                  {SectionIcon && (
+                    <SectionIcon className="w-3 h-3" style={{ color }} />
+                  )}
+                  <span>{section.title}</span>
+                </div>
+              )}
+              {section.items.map((item) => {
+                const active = isActive(item.path);
+                const Icon = item.icon;
+
+                if (collapsed) {
+                  return (
+                    <div key={item.path} className="relative group">
+                      <button
+                        onClick={() => navigate(item.path)}
+                        aria-current={active ? "page" : undefined}
+                        aria-label={item.label}
+                        className="sidebar-link w-full justify-center px-0 py-2.5"
+                        style={{
+                          color: active ? 'var(--brand-500)' : 'var(--text-muted)',
+                          background: active ? 'color-mix(in srgb, var(--brand-500) 12%, transparent)' : 'transparent',
+                        }}
+                      >
+                        <Icon className="w-[18px] h-[18px] flex-shrink-0" aria-hidden="true" />
+                      </button>
+                      <div
+                        className="absolute right-full mr-2 top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-lg text-xs whitespace-nowrap pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50"
+                        style={{
+                          background: 'var(--surface-elevated)',
+                          color: 'var(--text-primary)',
+                          border: '1px solid var(--border)',
+                          boxShadow: 'var(--shadow-elevated)',
+                        }}
+                      >
+                        {item.label}
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <button
+                    key={item.path}
+                    onClick={() => navigate(item.path)}
+                    aria-current={active ? "page" : undefined}
+                    aria-label={item.label}
+                    className="sidebar-link w-full"
+                    style={{
+                      color: active ? 'var(--brand-500)' : 'var(--text-muted)',
+                      background: active ? 'color-mix(in srgb, var(--brand-500) 12%, transparent)' : 'transparent',
+                      fontWeight: active ? 600 : 500,
+                    }}
+                  >
+                    <Icon className="w-[18px] h-[18px] flex-shrink-0" aria-hidden="true" />
+                    <span className="truncate">{item.label}</span>
+                    {active && (
+                      <span
+                        className="w-1.5 h-1.5 rounded-full mr-auto"
+                        style={{ background: 'var(--brand-500)', boxShadow: '0 0 6px var(--brand-500)' }}
+                      />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })}
       </nav>
 
-      <div className="p-2 border-t border-surface-700/50">
-        <button
-          onClick={onToggle}
-          aria-label={collapsed ? "توسيع القائمة" : "طي القائمة"}
-          aria-expanded={!collapsed}
-          className="btn-ghost w-full flex items-center justify-center gap-2 py-2"
-        >
-          {collapsed ? <ChevronLeft className="w-4 h-4" aria-hidden="true" /> : <ChevronRight className="w-4 h-4" aria-hidden="true" />}
-          {!collapsed && <span className="text-xs">{t("common.close")}</span>}
-        </button>
+      <div
+        className="p-3 border-t"
+        style={{ borderColor: 'var(--border)' }}
+      >
+        {!collapsed ? (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1">
+              <button
+                onClick={toggleTheme}
+                className="p-2 rounded-lg transition-colors"
+                style={{ color: 'var(--text-muted)' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'color-mix(in srgb, var(--border) 40%, transparent)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                aria-label="تبديل الثيم"
+              >
+                {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              </button>
+              <button
+                onClick={() => navigate('/settings')}
+                className="p-2 rounded-lg transition-colors"
+                style={{ color: 'var(--text-muted)' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'color-mix(in srgb, var(--border) 40%, transparent)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                aria-label="الإعدادات"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+            </div>
+            <button
+              onClick={onToggle}
+              className="p-2 rounded-lg transition-colors"
+              style={{ color: 'var(--text-muted)' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'color-mix(in srgb, var(--border) 40%, transparent)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              aria-label="طي القائمة"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-1">
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded-lg transition-colors"
+              style={{ color: 'var(--text-muted)' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'color-mix(in srgb, var(--border) 40%, transparent)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              aria-label="تبديل الثيم"
+            >
+              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
+            <button
+              onClick={onToggle}
+              className="p-2 rounded-lg transition-colors"
+              style={{ color: 'var(--text-muted)' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'color-mix(in srgb, var(--border) 40%, transparent)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              aria-label="توسيع القائمة"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
     </aside>
   );

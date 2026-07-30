@@ -56,7 +56,7 @@ export default function LoginPage() {
    };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-surface-950 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden" data-theme="dark" style={{ background: 'var(--surface-950)' }}>
       {/* Language Switcher */}
       <div className="absolute top-6 left-6 z-30">
         <LanguageSwitcher />
