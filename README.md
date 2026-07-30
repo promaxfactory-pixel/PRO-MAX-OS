@@ -536,7 +536,20 @@ For technical support, feature requests, or licensing inquiries:
 
 ## Changelog
 
-### v2.1.0 (Current) — Hardened Security & Production Release
+### v2.1.1 (Current) — Patch: RTL/LTR Support, i18n Fixes, Login Overhaul
+- Rewrote LoginPage.tsx with proper i18n keys (eliminated mojibake Arabic text corruption)
+- Fixed stale hardcoded password hint → now directs users to check console
+- Added `data-theme` initialization in `main.tsx` (eliminates theme flash on first load)
+- Added RTL/LTR direction support throughout: AppLayout, Sidebar, Topbar, Toast, SearchBar
+- Fixed HTML `dir` attribute to be dynamic based on stored language preference
+- Fixed Sidebar positioning for both RTL (right-0) and LTR (left-0) modes
+- Fixed Topbar search icon, user menu dropdown, notification dot positioning
+- Added missing i18n translation keys (lightMode, darkMode, notifications, loginError, etc.)
+- Fixed Arabic locale version strings (2.0.0 → 2.1.0)
+- Added CSS RTL direction logic in `index.css`
+
+### v2.1.0 — Hardened Security & Production Release
+- Comprehensive security audit: 70+ issues resolved
 - Comprehensive security audit: 70+ issues resolved
 - RBAC on 20+ financial mutation commands via `require_role()`
 - Random 16-char admin password (no hardcoded defaults)
