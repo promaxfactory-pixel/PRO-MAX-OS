@@ -211,14 +211,14 @@ export default function LoginPage() {
               type="submit"
               disabled={loading || !username || !password}
               className="w-full mt-8 py-4 rounded-2xl font-bold text-pure-white text-base relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
-              style={{
-                background: loading
-                  ? 'linear-gradient(to left, #4c1d95, #312e81)'
-                  : 'linear-gradient(to left, #d4af37, #b8860b)',
-                boxShadow: loading
-                  ? '0 4px 20px rgba(76,29,149,0.3)'
-                  : '0 4px 20px rgba(212,175,55,0.3)',
-              }}
+               style={{
+                 background: loading
+                   ? 'linear-gradient(to left, var(--brand-800), var(--brand-900))'
+                   : 'linear-gradient(to left, var(--brand-gold), var(--gold-600))',
+                 boxShadow: loading
+                   ? '0 4px 20px rgba(76,29,149,0.3)'
+                   : '0 4px 20px rgba(212,175,55,0.3)',
+               }}
               whileHover={!loading ? { scale: 1.01, boxShadow: '0 6px 30px rgba(212,175,55,0.4)' } : undefined}
               whileTap={!loading ? { scale: 0.98 } : undefined}
             >

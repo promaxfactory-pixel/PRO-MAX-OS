@@ -1,5 +1,5 @@
-import { Suspense, lazy } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Suspense, lazy, useState, useEffect } from "react";
+import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { useAuthStore } from "./stores/authStore";
 import LicenseGate from "./components/layout/LicenseGate";
 import AppLayout from "./components/layout/AppLayout";
@@ -88,8 +88,27 @@ const BarterExchangePage = lazy(() => import("./pages/barter/BarterExchangePage"
 const InstallmentTrackingPage = lazy(() => import("./pages/installments/InstallmentTrackingPage"));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuthStore();
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  const { isAuthenticated, validateToken } = useAuthStore();
+  const [tokenValid, setTokenValid] = useState(true);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setTokenValid(false);
+      return;
+    }
+    validateToken().then((valid) => {
+      if (!valid) {
+        setTokenValid(false);
+        navigate("/login", { replace: true });
+      }
+    }).catch(() => {
+      setTokenValid(false);
+      navigate("/login", { replace: true });
+    });
+  }, [isAuthenticated, validateToken, navigate]);
+
+  if (!isAuthenticated || !tokenValid) return <Navigate to="/login" replace />;
   return <AppLayout>{children}</AppLayout>;
 }
 

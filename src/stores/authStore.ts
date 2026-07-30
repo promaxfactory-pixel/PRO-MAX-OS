@@ -10,6 +10,7 @@ interface AuthState {
   logout: () => void;
   setUser: (user: User) => void;
   clearError: () => void;
+  validateToken: () => Promise<boolean>;
 }
 
 function isTokenExpired(): boolean {
@@ -19,7 +20,6 @@ function isTokenExpired(): boolean {
     const payload = JSON.parse(atob(token.split('.')[1]));
     return payload.exp ? Date.now() >= payload.exp * 1000 : false;
   } catch {
-    // If token can't be parsed, treat as expired
     localStorage.removeItem('auth_token');
     localStorage.removeItem('auth_user');
     return true;
@@ -32,7 +32,6 @@ export const useAuthStore = create<AuthState>((set) => {
   const initialUser = storedUser ? JSON.parse(storedUser) : null;
   const tokenExpired = storedToken ? isTokenExpired() : true;
 
-  // Clear expired tokens on init
   if (tokenExpired && storedToken) {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('auth_user');
@@ -68,6 +67,25 @@ export const useAuthStore = create<AuthState>((set) => {
       set({ user, isAuthenticated: !!token && !isTokenExpired() });
     },
     clearError: () => set({ error: null }),
+    validateToken: async () => {
+      try {
+        const token = localStorage.getItem('auth_token');
+        if (!token) return false;
+        if (isTokenExpired()) {
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('auth_user');
+          set({ user: null, isAuthenticated: false });
+          return false;
+        }
+        const { invoke } = await import("@tauri-apps/api/core");
+        await invoke("validate_token", { token });
+        return true;
+      } catch {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('auth_user');
+        set({ user: null, isAuthenticated: false });
+        return false;
+      }
+    },
   };
 });
-
