@@ -25,7 +25,7 @@ function Particle({ index }: { index: number }) {
 }
 
 export default function LoginPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -33,7 +33,14 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const navigate = useNavigate();
-  const { login } = useAuthStore();
+  const { login, isAuthenticated } = useAuthStore();
+  const isRtl = i18n.language === "ar" || i18n.language === "ur";
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate("/", { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   const particles = useMemo(() => Array.from({ length: 30 }, (_, i) => i), []);
 
@@ -49,7 +56,7 @@ export default function LoginPage() {
          navigate("/");
        }
      } catch (err: unknown) {
-       setError(err instanceof Error ? err.message : String(err) || "ط®ط·ط£ ظپظٹ طھط³ط¬ظٹظ„ ط§ظ„ط¯ط®ظˆظ„");
+       setError(err instanceof Error ? err.message : String(err) || t("auth.loginError"));
      } finally {
        setLoading(false);
      }
@@ -57,12 +64,10 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden" data-theme="dark" style={{ background: 'var(--surface-950)' }}>
-      {/* Language Switcher */}
-      <div className="absolute top-6 right-6 z-30">
+      <div className={`absolute top-6 ${isRtl ? 'left-6' : 'right-6'} z-30`}>
         <LanguageSwitcher />
       </div>
 
-      {/* Animated gradient background */}
       <div className="absolute inset-0">
         <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-brand-950 via-surface-950 to-brand-950" />
         <div className="absolute top-1/3 right-1/4 w-[500px] h-[500px] bg-brand-800/15 rounded-full blur-[150px] animate-pulse-slow" />
@@ -70,27 +75,23 @@ export default function LoginPage() {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-brand-700/8 rounded-full blur-[200px] animate-pulse-slow" style={{ animationDelay: '4s' }} />
       </div>
 
-      {/* Floating particles */}
       <div className="absolute inset-0 overflow-hidden">
         {particles.map((i) => (
           <Particle key={i} index={i} />
         ))}
       </div>
 
-      {/* Grid pattern */}
       <div className="absolute inset-0 opacity-[0.02]" style={{
         backgroundImage: `linear-gradient(rgba(212,175,55,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(212,175,55,0.3) 1px, transparent 1px)`,
         backgroundSize: '80px 80px'
       }} />
 
-      {/* Main content */}
       <motion.div
         className="relative z-20 w-full max-w-md mx-auto px-6"
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
       >
-        {/* Logo Section */}
         <motion.div
           className="text-center mb-12"
           initial={{ opacity: 0, scale: 0.8 }}
@@ -102,15 +103,13 @@ export default function LoginPage() {
             whileHover={{ scale: 1.05 }}
             transition={{ duration: 0.3 }}
           >
-            {/* Outer glow ring */}
             <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-gold-400/20 via-brand-500/10 to-gold-400/20 blur-xl animate-pulse-slow" />
-            {/* Logo container */}
             <div className="relative w-full h-full rounded-3xl bg-gradient-to-br from-brand-700 via-brand-800 to-brand-900 flex items-center justify-center border border-gold-400/20 shadow-[0_0_40px_rgba(212,175,55,0.15)]">
               <Factory className="w-12 h-12 text-gold-400" />
             </div>
           </motion.div>
-          
-          <motion.h1 
+
+          <motion.h1
             className="text-4xl font-bold font-display text-white mb-3 tracking-tight"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -118,7 +117,7 @@ export default function LoginPage() {
           >
             PRO <span className="gradient-text">MAX</span> OS
           </motion.h1>
-          <motion.p 
+          <motion.p
             className="text-gold-400/80 font-medium text-base"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -128,32 +127,27 @@ export default function LoginPage() {
           </motion.p>
         </motion.div>
 
-        {/* Login Card */}
         <motion.div
           className="relative"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
         >
-          {/* Card glow effect */}
           <div className="absolute -inset-1 bg-gradient-to-r from-brand-500/20 via-gold-400/10 to-brand-500/20 rounded-[2rem] blur-xl opacity-50" />
-          
+
           <form
             onSubmit={handleSubmit}
             className="relative bg-surface-800/70 backdrop-blur-2xl border border-surface-600/30 rounded-[2rem] p-8 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.5)]"
           >
-            {/* Header */}
             <div className="mb-8">
               <h2 className="text-2xl font-bold text-white mb-1">{t("auth.login")}</h2>
-              <p className="text-sm text-surface-400">ط£ط¯ط®ظ„ ط¨ظٹط§ظ†ط§طھظƒ ظ„ظ„ظˆطµظˆظ„ ط¥ظ„ظ‰ ط§ظ„ظ†ط¸ط§ظ…</p>
+              <p className="text-sm text-surface-400">{t("auth.enterCredentials")}</p>
             </div>
 
-            {/* First-time setup hint */}
             <div className="mb-4 p-3 bg-gold-400/10 border border-gold-400/20 rounded-2xl text-gold-400 text-xs text-center">
-              ط£ظˆظ„ ظ…ط±ط©طں ط§ط³طھط®ط¯ظ…: <span className="font-bold">admin</span> / <span className="font-bold">Aa@8888444400</span>
+              {t("auth.firstTimeHint")}: <span className="font-bold">admin</span> / <span className="font-bold">{t("auth.checkConsoleForPassword")}</span>
             </div>
 
-            {/* Error */}
             <AnimatePresence>
               {error && (
                 <motion.div
@@ -171,14 +165,13 @@ export default function LoginPage() {
             </AnimatePresence>
 
             <div className="space-y-5">
-              {/* Username field */}
               <div className="relative">
                 <label className="input-label mb-1.5 block">{t("auth.username")}</label>
                 <input
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="ط£ط¯ط®ظ„ ط§ط³ظ… ط§ظ„ظ…ط³طھط®ط¯ظ…"
+                  placeholder={t("auth.usernamePlaceholder")}
                   className={`w-full transition-all duration-300 ${focusedField === 'username' ? 'border-gold-400/50 shadow-[0_0_0_3px_rgba(212,175,55,0.1)]' : ''}`}
                   required
                   autoFocus
@@ -188,7 +181,6 @@ export default function LoginPage() {
                 />
               </div>
 
-              {/* Password field */}
               <div className="relative">
                 <label className="input-label mb-1.5 block">{t("auth.password")}</label>
                 <div className="relative">
@@ -196,7 +188,7 @@ export default function LoginPage() {
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="ط£ط¯ط®ظ„ ظƒظ„ظ…ط© ط§ظ„ظ…ط±ظˆط±"
+                    placeholder={t("auth.passwordPlaceholder")}
                     className={`w-full pr-12 transition-all duration-300 ${focusedField === 'password' ? 'border-gold-400/50 shadow-[0_0_0_3px_rgba(212,175,55,0.1)]' : ''}`}
                     required
                     onFocus={() => setFocusedField('password')}
@@ -207,7 +199,7 @@ export default function LoginPage() {
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-400 hover:text-gold-400 transition-colors p-1"
-                    aria-label={showPassword ? "ط¥ط®ظپط§ط، ظƒظ„ظ…ط© ط§ظ„ظ…ط±ظˆط±" : "ط¥ط¸ظ‡ط§ط± ظƒظ„ظ…ط© ط§ظ„ظ…ط±ظˆط±"}
+                    aria-label={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -215,17 +207,16 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Submit Button */}
             <motion.button
               type="submit"
               disabled={loading || !username || !password}
               className="w-full mt-8 py-4 rounded-2xl font-bold text-pure-white text-base relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
               style={{
-                background: loading 
-                  ? 'linear-gradient(to left, #4c1d95, #312e81)' 
+                background: loading
+                  ? 'linear-gradient(to left, #4c1d95, #312e81)'
                   : 'linear-gradient(to left, #d4af37, #b8860b)',
-                boxShadow: loading 
-                  ? '0 4px 20px rgba(76,29,149,0.3)' 
+                boxShadow: loading
+                  ? '0 4px 20px rgba(76,29,149,0.3)'
                   : '0 4px 20px rgba(212,175,55,0.3)',
               }}
               whileHover={!loading ? { scale: 1.01, boxShadow: '0 6px 30px rgba(212,175,55,0.4)' } : undefined}
@@ -234,8 +225,7 @@ export default function LoginPage() {
               {loading ? (
                 <>
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span className="text-surface-200">ط¬ط§ط±ظٹ ط§ظ„طھط­ظ‚ظ‚...</span>
-                  {/* Shimmer effect */}
+                  <span className="text-surface-200">{t("auth.verifying")}</span>
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-slide-in-left" />
                 </>
               ) : (
@@ -247,7 +237,6 @@ export default function LoginPage() {
               )}
             </motion.button>
 
-            {/* Footer */}
             <div className="mt-8 pt-6 border-t border-surface-700/50">
               <div className="flex items-center justify-between">
                 <motion.p
@@ -256,7 +245,7 @@ export default function LoginPage() {
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.8 }}
                 >
-                  PRO MAX OS v2.0.0
+                  PRO MAX OS v2.1.0
                 </motion.p>
                 <motion.div
                   className="flex items-center gap-1.5"
@@ -265,14 +254,13 @@ export default function LoginPage() {
                   transition={{ delay: 0.9 }}
                 >
                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="text-[10px] text-surface-500 font-medium"> ظ†ط¸ط§ظ… ط¢ظ…ظ†</span>
+                  <span className="text-[10px] text-surface-500 font-medium">{t("auth.secureSystem")}</span>
                 </motion.div>
               </div>
             </div>
           </form>
         </motion.div>
 
-        {/* Copyright */}
         <motion.p
           className="text-center text-[11px] text-surface-600 mt-8"
           initial={{ opacity: 0 }}
@@ -285,4 +273,3 @@ export default function LoginPage() {
     </div>
   );
 }
-

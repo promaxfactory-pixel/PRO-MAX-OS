@@ -140,6 +140,8 @@
   *::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
   html { direction: rtl; }
+  html[dir="ltr"] { direction: ltr; }
+  html[dir="ltr"] body { font-family: 'Inter', system-ui, sans-serif; }
   body {
     background: var(--surface-bg);
     color: var(--text-primary);

@@ -1,5 +1,5 @@
 {
-  "app": { "name": "PRO MAX OS", "tagline": "نظام إدارة المؤسسات المتكامل", "version": "الإصدار 2.0.0" },
+  "app": { "name": "PRO MAX OS", "tagline": "نظام إدارة المؤسسات المتكامل", "version": "الإصدار 2.1.0" },
   "nav": {
     "dashboard": "لوحة التحكم", "sales": "المبيعات", "customers": "العملاء",
     "invoices": "الفواتير", "inventory": "المخزون", "products": "المنتجات",
@@ -22,14 +22,25 @@
     "fromDate": "من تاريخ", "toDate": "إلى تاريخ", "notes": "ملاحظات",
     "total": "المجموع", "subtotal": "المجموع الفرعي", "discount": "الخصم",
     "vat": "الضريبة", "paid": "مدفوع", "remaining": "المتبقي",
-    "active": "نشط", "inactive": "غير نشط", "all": "الكل"
+    "active": "نشط", "inactive": "غير نشط", "all": "الكل",
+    "notifications": "الإشعارات"
   },
   "auth": {
     "login": "تسجيل الدخول", "username": "اسم المستخدم", "password": "كلمة المرور",
     "rememberMe": "تذكرني", "forgotPassword": "نسيت كلمة المرور؟",
     "loginBtn": "دخول", "loggingIn": "جاري تسجيل الدخول...",
     "changePassword": "تغيير كلمة المرور", "currentPassword": "كلمة المرور الحالية",
-    "newPassword": "كلمة المرور الجديدة", "confirmPassword": "تأكيد كلمة المرور"
+    "newPassword": "كلمة المرور الجديدة", "confirmPassword": "تأكيد كلمة المرور",
+    "enterCredentials": "أدخل بياناتك للوصول إلى النظام",
+    "firstTimeHint": "أول مرة؟ استخدم",
+    "checkConsoleForPassword": "شاهد نافذة الأوامر لكلمة المرور",
+    "usernamePlaceholder": "أدخل اسم المستخدم",
+    "passwordPlaceholder": "أدخل كلمة المرور",
+    "hidePassword": "إخفاء كلمة المرور",
+    "showPassword": "إظهار كلمة المرور",
+    "verifying": "جاري التحقق...",
+    "secureSystem": "نظام آمن",
+    "loginError": "خطأ في تسجيل الدخول"
   },
   "dashboard": {
     "title": "لوحة التحكم", "dailyBrief": "الموجز اليومي",
@@ -116,6 +127,10 @@
     "enterprise": "مؤسسة", "contactSupport": "لم تحصل على المفتاح؟ تواصل مع الدعم"
   },
   "language": { "ar": "العربية", "en": "English", "hi": "हिन्दी", "ur": "اردو" },
+  "settings": {
+    "lightMode": "الوضع الفاتح",
+    "darkMode": "الوضع الداكن"
+  },
   "mode": {
     "title": "وضع العمل", "subtitle": "اختر الوضع المناسب لمهامك",
     "power": "القوة", "stability": "الثبات", "focus": "التركيز",

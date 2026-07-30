@@ -1,5 +1,5 @@
 {
-  "app": { "name": "PRO MAX OS", "tagline": "Enterprise Resource Planning System", "version": "Version 2.0.0" },
+  "app": { "name": "PRO MAX OS", "tagline": "Enterprise Resource Planning System", "version": "Version 2.1.0" },
   "nav": {
     "dashboard": "Dashboard", "sales": "Sales", "customers": "Customers",
     "invoices": "Invoices", "inventory": "Inventory", "products": "Products",
@@ -22,14 +22,25 @@
     "fromDate": "From Date", "toDate": "To Date", "notes": "Notes",
     "total": "Total", "subtotal": "Subtotal", "discount": "Discount",
     "vat": "VAT", "paid": "Paid", "remaining": "Remaining",
-    "active": "Active", "inactive": "Inactive", "all": "All"
+    "active": "Active", "inactive": "Inactive", "all": "All",
+    "notifications": "Notifications"
   },
   "auth": {
     "login": "Login", "username": "Username", "password": "Password",
     "rememberMe": "Remember me", "forgotPassword": "Forgot password?",
     "loginBtn": "Sign In", "loggingIn": "Signing in...",
     "changePassword": "Change Password", "currentPassword": "Current Password",
-    "newPassword": "New Password", "confirmPassword": "Confirm Password"
+    "newPassword": "New Password", "confirmPassword": "Confirm Password",
+    "enterCredentials": "Enter your credentials to access the system",
+    "firstTimeHint": "First time? Use",
+    "checkConsoleForPassword": "check console for password",
+    "usernamePlaceholder": "Enter username",
+    "passwordPlaceholder": "Enter password",
+    "hidePassword": "Hide password",
+    "showPassword": "Show password",
+    "verifying": "Verifying...",
+    "secureSystem": "Secure System",
+    "loginError": "Login error"
   },
   "dashboard": {
     "title": "Dashboard", "dailyBrief": "Daily Brief",
@@ -116,6 +127,10 @@
     "enterprise": "Enterprise", "contactSupport": "No key? Contact support"
   },
   "language": { "ar": "العربية", "en": "English", "hi": "हिन्दी", "ur": "اردو" },
+  "settings": {
+    "lightMode": "Light mode",
+    "darkMode": "Dark mode"
+  },
   "mode": {
     "title": "Work Mode", "subtitle": "Choose the mode that suits your tasks",
     "power": "Power", "stability": "Stability", "focus": "Focus",

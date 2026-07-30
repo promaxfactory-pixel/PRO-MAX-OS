@@ -150,8 +150,11 @@ const menuSections = (t: (key: string) => string) => [
 
 const Sidebar = memo(function Sidebar({ collapsed, onToggle, currentPath }: SidebarProps) {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  const isRtl = i18n.language === "ar" || i18n.language === "ur";
+
+  const sidebarPosition = isRtl ? "right-0 border-l" : "left-0 border-r";
 
   const isActive = (path: string) => {
     if (path === '/dashboard' && (currentPath === '/' || currentPath === '/dashboard')) return true;
@@ -169,7 +172,7 @@ const Sidebar = memo(function Sidebar({ collapsed, onToggle, currentPath }: Side
     <aside
       role="navigation"
       aria-label="القائمة الرئيسية"
-      className="fixed right-0 top-0 h-full z-40 flex flex-col border-l"
+      className={`fixed top-0 h-full z-40 flex flex-col ${sidebarPosition}`}
       style={{
         width: collapsed ? 'var(--sidebar-collapsed-width)' : 'var(--sidebar-width)',
         background: 'var(--surface-sidebar)',
@@ -254,7 +257,7 @@ const Sidebar = memo(function Sidebar({ collapsed, onToggle, currentPath }: Side
                         <Icon className="w-[18px] h-[18px] flex-shrink-0" aria-hidden="true" />
                       </button>
                       <div
-                        className="absolute right-full mr-2 top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-lg text-xs whitespace-nowrap pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50"
+                        className={`absolute top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-lg text-xs whitespace-nowrap pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50 ${isRtl ? 'right-full mr-2' : 'left-full ml-2'}`}
                         style={{
                           background: 'var(--surface-elevated)',
                           color: 'var(--text-primary)',
@@ -285,7 +288,7 @@ const Sidebar = memo(function Sidebar({ collapsed, onToggle, currentPath }: Side
                     <span className="truncate">{item.label}</span>
                     {active && (
                       <span
-                        className="w-1.5 h-1.5 rounded-full mr-auto"
+                        className={`w-1.5 h-1.5 rounded-full ${isRtl ? 'mr-auto' : 'ml-auto'}`}
                         style={{ background: 'var(--brand-500)', boxShadow: '0 0 6px var(--brand-500)' }}
                       />
                     )}
@@ -333,7 +336,7 @@ const Sidebar = memo(function Sidebar({ collapsed, onToggle, currentPath }: Side
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               aria-label="طي القائمة"
             >
-              <ChevronRight className="w-4 h-4" />
+               <ChevronRight className={`w-4 h-4 ${isRtl ? '' : 'rotate-180'}`} />
             </button>
           </div>
         ) : (
@@ -356,7 +359,7 @@ const Sidebar = memo(function Sidebar({ collapsed, onToggle, currentPath }: Side
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               aria-label="توسيع القائمة"
             >
-              <ChevronLeft className="w-4 h-4" />
+               <ChevronLeft className={`w-4 h-4 ${isRtl ? '' : 'rotate-180'}`} />
             </button>
           </div>
         )}

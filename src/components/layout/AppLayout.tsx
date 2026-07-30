@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
+import { useTranslation } from "react-i18next";
 import { useAuthStore } from "@/stores/authStore";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
@@ -16,6 +17,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const { i18n } = useTranslation();
+  const isRtl = i18n.language === "ar" || i18n.language === "ur";
+
+  const sidebarWidth = sidebarCollapsed ? 'var(--sidebar-collapsed-width)' : 'var(--sidebar-width)';
+  const marginProp = isRtl ? { marginRight: sidebarWidth } : { marginLeft: sidebarWidth };
+  const marginTransition = 'margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1), margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
 
   useEffect(() => {
     localStorage.setItem('promax-sidebar-collapsed', String(sidebarCollapsed));
@@ -43,14 +50,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const sidebarWidth = sidebarCollapsed ? 'var(--sidebar-collapsed-width)' : 'var(--sidebar-width)';
-
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: 'var(--surface-bg)' }}>
-      <Toast />
+      <Toast isRtl={isRtl} />
       <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
       <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} currentPath={location.pathname} />
-      <div className="flex-1 flex flex-col overflow-hidden" style={{ marginRight: sidebarWidth, transition: 'margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1)' }}>
+      <div className="flex-1 flex flex-col overflow-hidden" style={{ ...marginProp, transition: marginTransition }}>
         <Topbar />
         <main className="flex-1 overflow-y-auto p-6 pb-20">
           <div className="max-w-[1600px] mx-auto">

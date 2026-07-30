@@ -1,4 +1,5 @@
 ﻿import { memo, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useUIStore } from "@/stores/uiStore";
 import { CheckCircle, XCircle, AlertTriangle, Info, X } from "lucide-react";
 
@@ -16,16 +17,11 @@ const styles = {
   info: { border: '1px solid color-mix(in srgb, #3b82f6 40%, transparent)', background: 'color-mix(in srgb, #3b82f6 10%, transparent)', color: '#3b82f6' },
 } as const;
 
-const typeLabels = {
-  success: "ظ†ط¬ط§ط­",
-  error: "ط®ط·ط£",
-  warning: "طھط­ط°ظٹط±",
-  info: "ظ…ط¹ظ„ظˆظ…ط©",
-} as const;
-
-const Toast = memo(function Toast() {
+const Toast = memo(function Toast({ isRtl }: { isRtl?: boolean }) {
+  const { t } = useTranslation();
   const notifications = useUIStore((s) => s.notifications);
   const removeNotification = useUIStore((s) => s.removeNotification);
+  const positionClass = isRtl ? "right-4" : "left-4";
 
   useEffect(() => {
     const timers: ReturnType<typeof setTimeout>[] = [];
@@ -38,11 +34,11 @@ const Toast = memo(function Toast() {
   }, [notifications, removeNotification]);
 
   return (
-    <div className="fixed top-4 right-4 z-[100] flex flex-col gap-3 pointer-events-none" role="region" aria-label="ط§ظ„ط¥ط´ط¹ط§ط±ط§طھ" aria-live="polite" aria-relevant="additions removals">
+    <div className={`fixed top-4 ${positionClass} z-[100] flex flex-col gap-3 pointer-events-none`} role="region" aria-label={t("common.notifications")} aria-live="polite" aria-relevant="additions removals">
       {notifications.map((n) => {
         const Icon = icons[n.type] ?? Info;
         const colorStyle = styles[n.type] ?? styles.info;
-        const typeLabel = typeLabels[n.type] ?? "ظ…ط¹ظ„ظˆظ…ط©";
+        const typeLabel = n.type ? t(`common.${n.type}`) : t("common.info");
 
         return (
           <div
@@ -65,7 +61,7 @@ const Toast = memo(function Toast() {
             </div>
             <button
               onClick={() => n.id && removeNotification(n.id)}
-              aria-label="ط¥ط؛ظ„ط§ظ‚ ط§ظ„ط¥ط´ط¹ط§ط±"
+              aria-label={t("common.close")}
               className="shrink-0 rounded-lg p-1 transition-colors"
               style={{ color: 'var(--text-muted)' }}
               onMouseEnter={e => e.currentTarget.style.background = 'color-mix(in srgb, var(--border) 40%, transparent)'}
@@ -81,4 +77,3 @@ const Toast = memo(function Toast() {
 });
 
 export default Toast;
-
