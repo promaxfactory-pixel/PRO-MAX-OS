@@ -175,8 +175,9 @@ pub fn get_purchase_lines(purchase_id: i64, state: State<'_, DbState>) -> Result
 }
 
 #[tauri::command]
-pub fn create_purchase(input: CreatePurchaseInput, state: State<'_, DbState>) -> Result<i64, AppError> {
+pub fn create_purchase(input: CreatePurchaseInput, state: State<'_, DbState>, user_id: i64) -> Result<i64, AppError> {
     let mut conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     let tx = conn.transaction()?;
 
     let year: String = tx
@@ -271,8 +272,9 @@ pub fn list_suppliers_for_select(state: State<'_, DbState>) -> Result<Vec<serde_
 }
 
 #[tauri::command]
-pub fn create_supplier_payment(input: CreateSupplierPaymentInput, state: State<'_, DbState>) -> Result<i64, AppError> {
+pub fn create_supplier_payment(input: CreateSupplierPaymentInput, state: State<'_, DbState>, user_id: i64) -> Result<i64, AppError> {
     let mut conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     let tx = conn.transaction()?;
 
     tx.execute(

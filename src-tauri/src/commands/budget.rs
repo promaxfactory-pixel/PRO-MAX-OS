@@ -1,3 +1,4 @@
+use crate::commands::rbac;
 use crate::db::DbState;
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
@@ -132,8 +133,9 @@ pub fn get_budget_lines(state: State<'_, DbState>, budget_id: i64) -> Result<Vec
 }
 
 #[tauri::command]
-pub fn create_budget(state: State<'_, DbState>, input: CreateBudgetInput) -> Result<i64, AppError> {
+pub fn create_budget(state: State<'_, DbState>, user_id: i64, input: CreateBudgetInput) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
 
     let seq: i64 = conn.query_row("SELECT COALESCE(MAX(CAST(SUBSTR(budget_no, 5) AS INTEGER)), 0) + 1 FROM budgets", [], |r| r.get(0)).unwrap_or(1);
     let budget_no = format!("BUD-{}", seq);
@@ -158,8 +160,9 @@ pub fn create_budget(state: State<'_, DbState>, input: CreateBudgetInput) -> Res
 }
 
 #[tauri::command]
-pub fn approve_budget(state: State<'_, DbState>, id: i64, approved_by: String) -> Result<String, AppError> {
+pub fn approve_budget(state: State<'_, DbState>, user_id: i64, id: i64, approved_by: String) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     conn.execute(
         "UPDATE budgets SET status = 'Approved', approved_by = ?, approved_at = datetime('now') WHERE id = ? AND status = 'Draft'",
         rusqlite::params![approved_by, id],
@@ -168,8 +171,9 @@ pub fn approve_budget(state: State<'_, DbState>, id: i64, approved_by: String) -
 }
 
 #[tauri::command]
-pub fn update_budget_actuals(state: State<'_, DbState>, budget_id: i64) -> Result<String, AppError> {
+pub fn update_budget_actuals(state: State<'_, DbState>, user_id: i64, budget_id: i64) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
 
     let lines: Vec<(i64, i64)> = {
         let mut stmt = conn.prepare("SELECT id, planned_milli FROM budget_lines WHERE budget_id = ?")?;

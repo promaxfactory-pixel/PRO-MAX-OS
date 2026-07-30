@@ -80,6 +80,8 @@ const EnhancedOcrPage = lazy(() => import("./pages/tools/EnhancedOcrPage"));
 const ExcelImportPage = lazy(() => import("./pages/tools/ExcelImportPage"));
 const EInvoicePage = lazy(() => import("./pages/tools/EInvoicePage"));
 const BackupPage = lazy(() => import("./pages/tools/BackupPage"));
+const NotFoundPage = lazy(() => import("./pages/errors/NotFoundPage"));
+const ForbiddenPage = lazy(() => import("./pages/errors/ForbiddenPage"));
 const IntegrationsPage = lazy(() => import("./pages/tools/IntegrationsPage"));
 const ImportTrackingPage = lazy(() => import("./pages/imports/ImportTrackingPage"));
 const BarterExchangePage = lazy(() => import("./pages/barter/BarterExchangePage"));
@@ -219,7 +221,8 @@ export default function App() {
           <Route path="/tools/backup" element={<ProtectedRoute><BackupPage /></ProtectedRoute>} />
           <Route path="/tools/integrations" element={<ProtectedRoute><IntegrationsPage /></ProtectedRoute>} />
 
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="/403" element={<ProtectedRoute><ForbiddenPage /></ProtectedRoute>} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
         </Suspense>
       </LicenseGate>

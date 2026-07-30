@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+﻿import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { Search, X, User, Package, FileText, Truck, UserCog } from "lucide-react";
@@ -17,29 +17,29 @@ const typeMeta: Record<
   { label: string; icon: typeof User; route: (id: number) => string }
 > = {
   customer: {
-    label: "العملاء",
+    label: "ط§ظ„ط¹ظ…ظ„ط§ط،",
     icon: User,
     route: (id) => `/customers/${id}`,
   },
   product: {
-    label: "المنتجات",
+    label: "ط§ظ„ظ…ظ†طھط¬ط§طھ",
     icon: Package,
     route: (id) => `/products/${id}`,
   },
   invoice: {
-    label: "الفواتير",
+    label: "ط§ظ„ظپظˆط§طھظٹط±",
     icon: FileText,
     route: (id) => `/invoices/${id}`,
   },
   supplier: {
-    label: "الموردين",
+    label: "ط§ظ„ظ…ظˆط±ط¯ظٹظ†",
     icon: Truck,
     route: (id) => `/suppliers/${id}`,
   },
   employee: {
-    label: "الموظفين",
+    label: "ط§ظ„ظ…ظˆط¸ظپظٹظ†",
     icon: UserCog,
-    route: (id) => `/employees/${id}`,
+    route: (id) => `/hr/employees/${id}`,
   },
 };
 
@@ -177,7 +177,7 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
         setResults(all);
       } catch {
         setResults([]);
-        addNotification({ type: "error", title: "خطأ", message: "فشل البحث" });
+        addNotification({ type: "error", title: "ط®ط·ط£", message: "ظپط´ظ„ ط§ظ„ط¨ط­ط«" });
       } finally {
         setLoading(false);
       }
@@ -220,7 +220,7 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="بحث..."
+            placeholder="ط¨ط­ط«..."
             className="flex-1 bg-transparent text-sm outline-none"
             style={{ color: 'var(--text-primary)' }}
           />
@@ -240,22 +240,22 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
           )}
         </div>
 
-        <div className="max-h-[400px] overflow-y-auto p-2">
+        <div className="max-h-[400px] overflow-y-auto p-2" role="listbox">
           {!query && (
             <div className="flex flex-col items-center justify-center py-12" style={{ color: 'var(--text-muted)' }}>
               <Search className="h-10 w-10 mb-3 opacity-30" />
-              <p className="text-sm">اكتب للبحث...</p>
+              <p className="text-sm">ط§ظƒطھط¨ ظ„ظ„ط¨ط­ط«...</p>
             </div>
           )}
 
           {query && !loading && results.length === 0 && (
             <div className="py-12 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
-              لا توجد نتائج لـ &quot;{query}&quot;
+              ظ„ط§ طھظˆط¬ط¯ ظ†طھط§ط¦ط¬ ظ„ظ€ &quot;{query}&quot;
             </div>
           )}
 
           {loading && (
-            <div className="py-12 text-center text-sm" style={{ color: 'var(--text-muted)' }}>جاري البحث...</div>
+            <div className="py-12 text-center text-sm" style={{ color: 'var(--text-muted)' }}>ط¬ط§ط±ظٹ ط§ظ„ط¨ط­ط«...</div>
           )}
 
           {Object.entries(groupedResults).map(([type, items]) => {
@@ -297,3 +297,5 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
     </div>
   );
 }
+
+

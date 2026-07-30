@@ -36,13 +36,9 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_mcp_help() {
-        // MCP server can be invoked with --help to show usage
         let _args = vec!["promax-mcp".to_string(), "--help".to_string()];
-        // Just verify the binary compiles
         assert!(true);
     }
 }

@@ -47,9 +47,11 @@ pub fn list_cashbank_accounts(
 #[tauri::command]
 pub fn create_cashbank_account(
     state: State<'_, DbState>,
+    user_id: i64,
     input: CreateCashbankInput,
 ) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant"])?;
 
     conn.execute(
         "INSERT INTO cashbank_accounts(code, name, atype, balance_milli, active) VALUES(?,?,?,0,1)",

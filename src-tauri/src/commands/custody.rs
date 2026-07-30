@@ -6,6 +6,25 @@ use crate::commands::rbac;
 use crate::db::DbState;
 use crate::error::AppError;
 
+#[derive(Debug, Deserialize)]
+pub struct UpdateSpendInput {
+    pub txn_id: i64,
+    pub amount_milli: Option<i64>,
+    pub category: Option<String>,
+    pub reference: Option<String>,
+    pub notes: Option<String>,
+    pub date: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateFundInput {
+    pub petty_id: i64,
+    pub name: Option<String>,
+    pub responsible: Option<String>,
+    pub spending_limit_milli: Option<i64>,
+    pub notes: Option<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CustodyAccount {
     pub id: i64,
@@ -52,6 +71,7 @@ pub struct CreateSpendInput {
     pub category: Option<String>,
     pub reference: Option<String>,
     pub notes: Option<String>,
+    pub date: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -124,9 +144,11 @@ pub fn get_custody_account(
 #[tauri::command]
 pub fn create_custody_fund(
     state: State<'_, DbState>,
+    user_id: i64,
     input: CreateFundInput,
 ) -> Result<CustodyAccount, AppError> {
     let mut conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant"])?;
 
     let seq: i64 = conn
         .query_row(
@@ -176,9 +198,11 @@ pub fn create_custody_fund(
 #[tauri::command]
 pub fn create_custody_spend(
     state: State<'_, DbState>,
+    user_id: i64,
     input: CreateSpendInput,
 ) -> Result<CustodyAccount, AppError> {
     let mut conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant"])?;
     let tx = conn.transaction()?;
 
     let current_balance: i64 = tx
@@ -199,10 +223,12 @@ pub fn create_custody_spend(
         params![new_balance, input.petty_id],
     )?;
 
+    let ts = input.date.unwrap_or_else(|| chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string());
     tx.execute(
         "INSERT INTO petty_cash_transactions (ts, petty_id, ttype, debit_milli, credit_milli, balance_milli, category, reference, notes)
-         VALUES (datetime('now'), ?1, 'Spend', 0, ?2, ?3, ?4, ?5, ?6)",
+         VALUES (?1, ?2, 'Spend', 0, ?3, ?4, ?5, ?6, ?7)",
         params![
+            ts,
             input.petty_id,
             input.amount_milli,
             new_balance,
@@ -225,9 +251,11 @@ pub fn create_custody_spend(
 #[tauri::command]
 pub fn create_custody_transfer(
     state: State<'_, DbState>,
+    user_id: i64,
     input: CreateTransferInput,
 ) -> Result<Vec<CustodyAccount>, AppError> {
     let mut conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant"])?;
     let tx = conn.transaction()?;
 
     let from_balance: i64 = tx
@@ -304,16 +332,29 @@ pub fn create_custody_transfer(
 pub fn get_custody_statement(
     state: State<'_, DbState>,
     petty_id: i64,
+    date_from: Option<String>,
+    date_to: Option<String>,
 ) -> Result<Vec<CustodyTransaction>, AppError> {
     let conn = state.0.lock()?;
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, ts, petty_id, ttype, debit_milli, credit_milli, balance_milli, category, reference, notes, journal_id
-             FROM petty_cash_transactions WHERE petty_id = ?1 ORDER BY id DESC",
-        )?;
+    let mut sql = String::from(
+        "SELECT id, ts, petty_id, ttype, debit_milli, credit_milli, balance_milli, category, reference, notes, journal_id
+         FROM petty_cash_transactions WHERE petty_id = ?1"
+    );
+    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(petty_id)];
+    if let Some(ref d) = date_from {
+        sql.push_str(" AND ts >= ?");
+        param_values.push(Box::new(format!("{} 00:00:00", d)));
+    }
+    if let Some(ref d) = date_to {
+        sql.push_str(" AND ts <= ?");
+        param_values.push(Box::new(format!("{} 23:59:59", d)));
+    }
+    sql.push_str(" ORDER BY ts ASC, id ASC");
 
+    let mut stmt = conn.prepare(&sql)?;
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
     let rows = stmt
-        .query_map(params![petty_id], |row| {
+        .query_map(param_refs.as_slice(), |row| {
             Ok(CustodyTransaction {
                 id: row.get(0)?,
                 ts: row.get(1)?,
@@ -334,4 +375,49 @@ pub fn get_custody_statement(
         txns.push(row?);
     }
     Ok(txns)
+}
+
+#[tauri::command]
+pub fn update_custody_spend(
+    state: State<'_, DbState>,
+    user_id: i64,
+    input: UpdateSpendInput,
+) -> Result<(), AppError> {
+    let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant"])?;
+    if let Some(ref date) = input.date {
+        conn.execute(
+            "UPDATE petty_cash_transactions SET ts = ?1, category = COALESCE(?2, category), reference = COALESCE(?3, reference), notes = COALESCE(?4, notes) WHERE id = ?5",
+            params![date, input.category, input.reference, input.notes, input.txn_id],
+        )?;
+    } else {
+        conn.execute(
+            "UPDATE petty_cash_transactions SET category = COALESCE(?1, category), reference = COALESCE(?2, reference), notes = COALESCE(?3, notes) WHERE id = ?4",
+            params![input.category, input.reference, input.notes, input.txn_id],
+        )?;
+    }
+    if let Some(amt) = input.amount_milli {
+        conn.execute(
+            "UPDATE petty_cash_transactions SET credit_milli = ?1 WHERE id = ?2",
+            params![amt, input.txn_id],
+        )?;
+    }
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "update_custody_spend", "petty_cash_transactions", Some(input.txn_id), None, None, None);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn update_custody_fund(
+    state: State<'_, DbState>,
+    user_id: i64,
+    input: UpdateFundInput,
+) -> Result<(), AppError> {
+    let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant"])?;
+    conn.execute(
+        "UPDATE petty_cash_accounts SET name = COALESCE(?1, name), responsible = COALESCE(?2, responsible), spending_limit_milli = COALESCE(?3, spending_limit_milli), notes = COALESCE(?4, notes) WHERE id = ?5",
+        params![input.name, input.responsible, input.spending_limit_milli, input.notes, input.petty_id],
+    )?;
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "update_custody_fund", "petty_cash_accounts", Some(input.petty_id), None, None, None);
+    Ok(())
 }

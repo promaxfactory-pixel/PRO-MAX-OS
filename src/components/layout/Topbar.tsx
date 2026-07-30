@@ -1,4 +1,4 @@
-import { memo, useState, useRef, useEffect } from "react";
+﻿import { memo, useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { Search, Bell, LogOut, Settings, Moon, Sun } from "lucide-react";
@@ -72,8 +72,8 @@ const Topbar = memo(function Topbar() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="بحث... Ctrl+K"
-              aria-label="بحث سريع"
+              placeholder="ط¨ط­ط«... Ctrl+K"
+              aria-label="ط¨ط­ط« ط³ط±ظٹط¹"
               className="w-80 rounded-xl pr-10 pl-4 py-2 text-sm"
               style={{
                 background: 'color-mix(in srgb, var(--surface-card) 70%, var(--surface-bg))',
@@ -84,9 +84,9 @@ const Topbar = memo(function Topbar() {
             />
           </div>
         ) : (
-          <button onClick={() => setSearchOpen(true)} className="btn-ghost flex items-center gap-2 text-sm" aria-label="فتح البحث السريع">
+          <button onClick={() => setSearchOpen(true)} className="btn-ghost flex items-center gap-2 text-sm" aria-label="ظپطھط­ ط§ظ„ط¨ط­ط« ط§ظ„ط³ط±ظٹط¹">
             <Search className="w-4 h-4" aria-hidden="true" />
-            <span>بحث</span>
+            <span>ط¨ط­ط«</span>
             <kbd
               className="text-[10px] rounded px-1.5 py-0.5 font-mono"
               style={{
@@ -108,15 +108,15 @@ const Topbar = memo(function Topbar() {
         <button
           onClick={toggleTheme}
           className="btn-ghost p-2"
-          aria-label={isDark ? "الوضع النهاري" : "الوضع الليلي"}
+          aria-label={isDark ? "ط§ظ„ظˆط¶ط¹ ط§ظ„ظ†ظ‡ط§ط±ظٹ" : "ط§ظ„ظˆط¶ط¹ ط§ظ„ظ„ظٹظ„ظٹ"}
         >
           {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </button>
 
-        <button className="btn-ghost relative p-2" aria-label="الإشعارات">
+        <button className="btn-ghost relative p-2" aria-label="ط§ظ„ط¥ط´ط¹ط§ط±ط§طھ">
           <Bell className="w-5 h-5" aria-hidden="true" />
           <span
-            className="absolute top-1 left-1 w-2 h-2 rounded-full"
+            className="absolute top-1 right-1 w-2 h-2 rounded-full"
             style={{ background: 'var(--brand-gold)' }}
             aria-hidden="true"
           />
@@ -127,7 +127,7 @@ const Topbar = memo(function Topbar() {
             onClick={() => setUserMenuOpen(!userMenuOpen)}
             aria-haspopup="true"
             aria-expanded={userMenuOpen}
-            aria-label="قائمة المستخدم"
+            aria-label="ظ‚ط§ط¦ظ…ط© ط§ظ„ظ…ط³طھط®ط¯ظ…"
             className="flex items-center gap-2 px-3 py-1.5 rounded-xl transition-colors"
             onMouseEnter={e => e.currentTarget.style.background = 'color-mix(in srgb, var(--border) 40%, transparent)'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
@@ -147,8 +147,8 @@ const Topbar = memo(function Topbar() {
           {userMenuOpen && (
             <div
               role="menu"
-              aria-label="خيارات المستخدم"
-              className="absolute left-0 top-full mt-2 w-48 rounded-xl overflow-hidden animate-scale-in"
+              aria-label="ط®ظٹط§ط±ط§طھ ط§ظ„ظ…ط³طھط®ط¯ظ…"
+              className="absolute right-0 top-full mt-2 w-48 rounded-xl overflow-hidden animate-scale-in"
               style={{
                 background: 'var(--surface-card)',
                 border: '1px solid var(--border)',
@@ -163,7 +163,7 @@ const Topbar = memo(function Topbar() {
                 onMouseEnter={e => e.currentTarget.style.background = 'color-mix(in srgb, var(--border) 40%, transparent)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >
-                <Settings className="w-4 h-4" /> الإعدادات
+                <Settings className="w-4 h-4" /> ط§ظ„ط¥ط¹ط¯ط§ط¯ط§طھ
               </button>
               <hr style={{ borderColor: 'var(--border)' }} />
               <button
@@ -174,7 +174,7 @@ const Topbar = memo(function Topbar() {
                 onMouseEnter={e => e.currentTarget.style.background = 'color-mix(in srgb, var(--danger) 10%, transparent)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >
-                <LogOut className="w-4 h-4" /> تسجيل الخروج
+                <LogOut className="w-4 h-4" /> طھط³ط¬ظٹظ„ ط§ظ„ط®ط±ظˆط¬
               </button>
             </div>
           )}
@@ -185,3 +185,4 @@ const Topbar = memo(function Topbar() {
 });
 
 export default Topbar;
+

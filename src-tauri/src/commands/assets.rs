@@ -1,3 +1,4 @@
+use crate::commands::rbac;
 use crate::db::DbState;
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
@@ -119,8 +120,9 @@ pub fn get_asset(state: State<'_, DbState>, id: i64) -> Result<Asset, AppError> 
 }
 
 #[tauri::command]
-pub fn create_asset(state: State<'_, DbState>, input: CreateAssetInput) -> Result<i64, AppError> {
+pub fn create_asset(state: State<'_, DbState>, user_id: i64, input: CreateAssetInput) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant"])?;
     let seq: i64 = conn.query_row("SELECT COALESCE(MAX(CAST(SUBSTR(asset_no, 5) AS INTEGER)), 0) + 1 FROM fixed_assets", [], |r| r.get(0)).unwrap_or(1);
     let asset_no = format!("AST-{}", seq);
     let dep_method = input.depreciation_method.unwrap_or_else(|| "straight_line".to_string());
@@ -151,8 +153,9 @@ pub fn list_asset_maintenance(state: State<'_, DbState>, asset_id: i64) -> Resul
 }
 
 #[tauri::command]
-pub fn create_asset_maintenance(state: State<'_, DbState>, input: CreateMaintenanceInput) -> Result<i64, AppError> {
+pub fn create_asset_maintenance(state: State<'_, DbState>, user_id: i64, input: CreateMaintenanceInput) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant"])?;
     conn.execute(
         "INSERT INTO asset_maintenance_logs (asset_id, maintenance_type, date, description, cost_milli, performed_by, next_due, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         rusqlite::params![input.asset_id, input.maintenance_type, input.date, input.description, input.cost_milli, input.performed_by, input.next_due, input.notes],

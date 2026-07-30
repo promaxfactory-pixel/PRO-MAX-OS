@@ -178,7 +178,7 @@ export default function ChangePasswordPage() {
               <motion.button
                 type="submit"
                 disabled={loading}
-                className="w-full mt-6 py-4 rounded-2xl font-bold text-white text-base relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+                className="w-full mt-6 py-4 rounded-2xl font-bold text-pure-white text-base relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
                 style={{
                   background: loading
                     ? "linear-gradient(to left, #4c1d95, #312e81)"

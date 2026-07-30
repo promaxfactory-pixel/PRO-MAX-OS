@@ -1,8 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicholasoxford/tauri-v2-docs/main/schemas/tauri.conf.schema.json",
   "productName": "PRO MAX OS",
-  "version": "2.0.0",
-  "identifier": "com.promaxos.app",
+  "version": "2.1.0",
+  "identifier": "com.promaxos.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -44,6 +44,13 @@
   "plugins": {
     "shell": {
       "open": false
+    },
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://releases.promaxos.com/update/{{target}}/{{current_version}}"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY1QkNDQjI5N0U2MjcwNzkKUldSNWNHSitLY3U4WlpPY3RoVDJLTk4wV3JrbUtEbjFNUS9yVUZnUFRUWW9YSEhqeGpibjFFUWkK"
     }
   }
 }

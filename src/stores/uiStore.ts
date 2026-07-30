@@ -1,19 +1,13 @@
-import { create } from 'zustand';
+﻿import { create } from 'zustand';
 
 export type WorkMode = 'power' | 'stability' | 'focus' | 'creative' | 'night' | 'professional';
 
 interface UIState {
   sidebarOpen: boolean;
-  sidebarCollapsed: boolean;
-  currentModule: string;
-  searchQuery: string;
   notifications: Notification[];
   workMode: WorkMode;
   setWorkMode: (mode: WorkMode) => void;
   toggleSidebar: () => void;
-  collapseSidebar: () => void;
-  setCurrentModule: (module: string) => void;
-  setSearchQuery: (query: string) => void;
   addNotification: (n: Notification) => void;
   removeNotification: (id: string) => void;
 }
@@ -38,9 +32,6 @@ const getInitialMode = (): WorkMode => {
 
 export const useUIStore = create<UIState>((set) => ({
   sidebarOpen: true,
-  sidebarCollapsed: false,
-  currentModule: 'dashboard',
-  searchQuery: '',
   notifications: [],
   workMode: getInitialMode(),
   setWorkMode: (mode) => {
@@ -49,9 +40,7 @@ export const useUIStore = create<UIState>((set) => ({
     set({ workMode: mode });
   },
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
-  collapseSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
-  setCurrentModule: (module) => set({ currentModule: module }),
-  setSearchQuery: (query) => set({ searchQuery: query }),
   addNotification: (n) => set((s) => ({ notifications: [...s.notifications, { ...n, id: n.id || crypto.randomUUID() }] })),
   removeNotification: (id) => set((s) => ({ notifications: s.notifications.filter((n) => n.id !== id) })),
 }));
+

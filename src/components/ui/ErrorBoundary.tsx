@@ -33,7 +33,7 @@ export default class ErrorBoundary extends React.Component<Props, State> {
             <p className="text-gray-600 mb-6">نأسف للإزعاج. يرجى إعادة المحاولة أو الاتصال بالدعم الفني.</p>
             <button
               onClick={() => { this.setState({ hasError: false, error: null }); window.location.href = "/"; }}
-              className="px-6 py-3 bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-colors font-semibold"
+              className="px-6 py-3 bg-brand-500 text-pure-white rounded-lg hover:bg-brand-600 transition-colors font-semibold"
             >
               العودة للرئيسية
             </button>

@@ -15,9 +15,9 @@ interface ConfirmDialogProps {
 }
 
 const variantStyles = {
-  danger: "bg-red-500 hover:bg-red-600 text-white",
-  warning: "bg-amber-500 hover:bg-amber-600 text-white",
-  info: "bg-brand-500 hover:bg-brand-600 text-white",
+  danger: "bg-red-500 hover:bg-red-600 text-pure-white",
+  warning: "bg-amber-500 hover:bg-amber-600 text-pure-white",
+  info: "bg-brand-500 hover:bg-brand-600 text-pure-white",
 } as const;
 
 const variantIcons = {

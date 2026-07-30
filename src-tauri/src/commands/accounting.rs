@@ -1,3 +1,4 @@
+use crate::commands::rbac;
 use crate::db::DbState;
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
@@ -127,8 +128,9 @@ pub fn get_account(state: State<'_, DbState>, code: String) -> Result<Account, A
 }
 
 #[tauri::command]
-pub fn create_account(state: State<'_, DbState>, input: CreateAccountInput) -> Result<String, AppError> {
+pub fn create_account(state: State<'_, DbState>, user_id: i64, input: CreateAccountInput) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant"])?;
     conn.execute(
         "INSERT INTO accounts(code, name_ar, name_en, type, parent, is_system) VALUES(?,?,?,?,?,?)",
         rusqlite::params![
@@ -190,9 +192,11 @@ pub fn get_journal_entry_lines(
 #[tauri::command]
 pub fn create_journal_entry(
     state: State<'_, DbState>,
+    user_id: i64,
     input: CreateJournalEntryInput,
 ) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant"])?;
     let year = chrono::Utc::now().format("%Y").to_string();
 
     let seq: i64 = conn

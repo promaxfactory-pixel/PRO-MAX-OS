@@ -126,7 +126,7 @@ export default function LicenseActivationPage() {
 
                 <button
                   onClick={() => navigate("/login")}
-                  className="mt-6 w-full py-3 bg-gradient-to-r from-brand-800 to-brand-900 text-white font-bold rounded-xl hover:from-brand-700 hover:to-brand-800 border border-brand-700 transition-all"
+                  className="mt-6 w-full py-3 bg-gradient-to-r from-brand-800 to-brand-900 text-pure-white font-bold rounded-xl hover:from-brand-700 hover:to-brand-800 border border-brand-700 transition-all"
                 >
                   الدخول إلى البرنامج
                 </button>

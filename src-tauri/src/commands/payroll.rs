@@ -73,9 +73,11 @@ pub fn list_payroll_runs(state: State<'_, DbState>) -> Result<Vec<PayrollRun>, A
 #[tauri::command]
 pub fn create_payroll_run(
     state: State<'_, DbState>,
+    user_id: i64,
     input: CreatePayrollRunInput,
 ) -> Result<i64, AppError> {
     let mut conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "hr", "manager"])?;
     let tx = conn.transaction()?;
     let year = chrono::Utc::now().format("%Y").to_string();
 
@@ -136,9 +138,11 @@ pub fn list_employee_advances(
 #[tauri::command]
 pub fn create_employee_advance(
     state: State<'_, DbState>,
+    user_id: i64,
     input: CreateAdvanceInput,
 ) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "hr", "manager"])?;
     let deduction = input.deduction_per_payroll_milli.unwrap_or(0);
 
     conn.execute(

@@ -294,22 +294,6 @@ fn find_column(map: &HashMap<String, usize>, candidates: &[&str]) -> Option<usiz
     None
 }
 
-fn ensure_import_history_table(conn: &rusqlite::Connection) -> Result<(), AppError> {
-    conn.execute_batch(
-        "CREATE TABLE IF NOT EXISTS import_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            import_type TEXT NOT NULL,
-            file_name TEXT NOT NULL,
-            total_rows INTEGER NOT NULL DEFAULT 0,
-            imported INTEGER NOT NULL DEFAULT 0,
-            skipped INTEGER NOT NULL DEFAULT 0,
-            status TEXT NOT NULL DEFAULT 'completed',
-            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-            created_by TEXT NOT NULL DEFAULT 'system'
-        );",
-    ).map_err(|e| AppError::migration(format!("Failed to create import_history table: {}", e)))
-}
-
 fn insert_import_history(
     conn: &rusqlite::Connection,
     import_type: &str,
@@ -535,7 +519,6 @@ pub fn excel_import_journal(
     }
 
     let conn = state.0.lock()?;
-    ensure_import_history_table(&conn)?;
 
     for (date, indices) in &entry_groups {
         let mut total_debit = 0.0f64;
@@ -725,7 +708,6 @@ pub fn excel_import_customers(
     let code_col = find_column(&hmap, &["code", "customer code", "الرمز", "رمز العميل", "customer_code"]);
 
     let conn = state.0.lock()?;
-    ensure_import_history_table(&conn)?;
 
     // Load existing customer names for duplicate check
     let mut existing_names: std::collections::HashSet<String> = std::collections::HashSet::new();
@@ -864,7 +846,6 @@ pub fn excel_import_products(
     let barcode_col = find_column(&hmap, &["barcode", "الباركود", "bar code", "upc"]);
 
     let conn = state.0.lock()?;
-    ensure_import_history_table(&conn)?;
 
     let mut existing_codes: std::collections::HashSet<String> = std::collections::HashSet::new();
     if let Ok(mut stmt) = conn.prepare("SELECT code FROM products") {
@@ -1017,7 +998,6 @@ pub fn excel_import_inventory(
     let max_col = find_column(&hmap, &["max stock", "max", "الحد الأقصى", "maximum", "max_stock"]);
 
     let conn = state.0.lock()?;
-    ensure_import_history_table(&conn)?;
 
     let mut existing_codes: std::collections::HashSet<String> = std::collections::HashSet::new();
     if let Ok(mut stmt) = conn.prepare("SELECT code FROM inventory_items") {
@@ -1254,7 +1234,6 @@ pub fn excel_analyze_data(
 
     // Validate against import type expectations
     let conn = state.0.lock()?;
-    ensure_import_history_table(&conn)?;
     drop(conn);
 
     match input.import_type.as_str() {
@@ -1438,7 +1417,6 @@ pub fn excel_get_import_history(
     state: State<'_, DbState>,
 ) -> Result<Vec<ImportHistory>, AppError> {
     let conn = state.0.lock()?;
-    ensure_import_history_table(&conn)?;
 
     let mut stmt = conn
         .prepare(

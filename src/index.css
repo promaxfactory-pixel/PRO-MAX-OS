@@ -59,6 +59,7 @@
     --text-primary: #1a1a2e;
     --text-secondary: #64748b;
     --text-muted: #94a3b8;
+    --text-white: var(--text-primary);
     --border: #e2e8f0;
     --border-light: #f1f5f9;
     --success: #10b981;
@@ -107,6 +108,7 @@
     --text-primary: #ededf2;
     --text-secondary: #8a8aa0;
     --text-muted: #5c5c72;
+    --text-white: #ffffff;
     --border: #23233a;
     --border-light: #1a1a2e;
     --shadow-card: 0 1px 3px rgba(0,0,0,0.2), 0 4px 16px rgba(0,0,0,0.15);
@@ -169,6 +171,8 @@
   }
 
   body .text-adaptive { color: var(--text-primary); }
+  .text-white { color: var(--text-white, #fff); }
+  .text-pure-white { color: #fff; }
 }
 
 @layer components {

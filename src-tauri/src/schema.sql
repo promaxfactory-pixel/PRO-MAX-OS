@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS users (
     role                 TEXT NOT NULL DEFAULT 'manager',
     active               INTEGER NOT NULL DEFAULT 1,
     must_change_password INTEGER NOT NULL DEFAULT 1,
+    reset_token          TEXT,
+    reset_token_expiry   TEXT,
     created_at           TEXT
 );
 
@@ -74,7 +76,7 @@ CREATE TABLE IF NOT EXISTS products (
 CREATE TABLE IF NOT EXISTS product_prices (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     product_id  INTEGER NOT NULL REFERENCES products(id),
-    customer_id INTEGER,
+    customer_id INTEGER REFERENCES customers(id),
     price_milli INTEGER NOT NULL,
     note        TEXT
 );
@@ -87,9 +89,9 @@ CREATE TABLE IF NOT EXISTS inventory_items (
     uom             TEXT NOT NULL DEFAULT 'pcs',
     product_id      INTEGER REFERENCES products(id),
     qty_on_hand     REAL NOT NULL DEFAULT 0,
-    avg_cost_milli  REAL NOT NULL DEFAULT 0,
+    avg_cost_milli  INTEGER NOT NULL DEFAULT 0,
     reorder_level   REAL NOT NULL DEFAULT 0,
-    supplier_id     INTEGER,
+    supplier_id     INTEGER REFERENCES suppliers(id),
     notes           TEXT,
     active          INTEGER NOT NULL DEFAULT 1
 );
@@ -103,7 +105,7 @@ CREATE TABLE IF NOT EXISTS inventory_movements (
     qty_out         REAL NOT NULL DEFAULT 0,
     unit_cost_milli INTEGER NOT NULL DEFAULT 0,
     ref_type        TEXT, ref_id INTEGER,
-    location        TEXT, user_id INTEGER, notes TEXT
+    location        TEXT, user_id INTEGER REFERENCES users(id), notes TEXT
 );
 
 CREATE TABLE IF NOT EXISTS customers (
@@ -158,12 +160,12 @@ CREATE INDEX IF NOT EXISTS idx_bom_item ON bom(item_id);
 
 CREATE TABLE IF NOT EXISTS production_orders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    prod_no TEXT, date TEXT NOT NULL, shift TEXT, machine_id INTEGER,
+    prod_no TEXT, date TEXT NOT NULL, shift TEXT, machine_id INTEGER REFERENCES machines(id),
     operator TEXT, supervisor TEXT,
     run_minutes INTEGER DEFAULT 0, downtime_minutes INTEGER DEFAULT 0, downtime_reason TEXT,
     status TEXT NOT NULL DEFAULT 'Draft',
     notes TEXT, approved_by TEXT, approved_at TEXT,
-    created_by TEXT, created_at TEXT, journal_id INTEGER
+    created_by TEXT, created_at TEXT, journal_id INTEGER REFERENCES journal_entries(id)
 );
 
 CREATE TABLE IF NOT EXISTS production_lines (
@@ -178,7 +180,7 @@ CREATE TABLE IF NOT EXISTS production_lines (
     unit_cost_milli INTEGER NOT NULL DEFAULT 0,
     worker TEXT,
     brand_type TEXT NOT NULL DEFAULT 'factory',
-    customer_id INTEGER,
+    customer_id INTEGER REFERENCES customers(id),
     customer_brand_name TEXT,
     batch_no TEXT,
     quality_status TEXT,
@@ -191,7 +193,7 @@ CREATE TABLE IF NOT EXISTS operations_daily_sheets (
     supervisor_name TEXT, worker_name TEXT, attendance TEXT,
     start_time TEXT, end_time TEXT, normal_hours REAL DEFAULT 0,
     overtime_hours REAL DEFAULT 0, overtime_reason TEXT, overtime_approved INTEGER DEFAULT 0,
-    product_id INTEGER, customer_brand_name TEXT,
+    product_id INTEGER REFERENCES products(id), customer_brand_name TEXT,
     cartons_produced REAL DEFAULT 0, cups_per_carton INTEGER DEFAULT 1000,
     total_cups REAL DEFAULT 0, waste_cartons REAL DEFAULT 0, waste_cups REAL DEFAULT 0,
     cups_quality TEXT, carton_quality TEXT, packing_quality TEXT, cleaning_quality TEXT,
@@ -204,7 +206,7 @@ CREATE TABLE IF NOT EXISTS operations_daily_sheets (
 CREATE TABLE IF NOT EXISTS maintenance_daily_sheets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sheet_no TEXT, date TEXT NOT NULL, shift TEXT,
-    maintenance_supervisor TEXT, machine_id INTEGER, area TEXT,
+    maintenance_supervisor TEXT, machine_id INTEGER REFERENCES machines(id), area TEXT,
     fault_title TEXT, fault_description TEXT, severity TEXT,
     machine_stopped INTEGER DEFAULT 0,
     downtime_start TEXT, downtime_end TEXT, downtime_minutes INTEGER DEFAULT 0,
@@ -227,8 +229,8 @@ CREATE TABLE IF NOT EXISTS sales_invoices (
     discount_reason TEXT,
     cogs_milli INTEGER DEFAULT 0, paid_milli INTEGER DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'Draft',
-    cashbank_id INTEGER, delivery TEXT, notes TEXT,
-    created_by TEXT, created_at TEXT, journal_id INTEGER
+    cashbank_id INTEGER REFERENCES cashbank_accounts(id), delivery TEXT, notes TEXT,
+    created_by TEXT, created_at TEXT, journal_id INTEGER REFERENCES journal_entries(id)
 );
 
 CREATE TABLE IF NOT EXISTS sales_invoice_lines (
@@ -253,8 +255,8 @@ CREATE TABLE IF NOT EXISTS customer_payments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     rec_no TEXT, date TEXT NOT NULL, customer_id INTEGER NOT NULL REFERENCES customers(id),
     amount_milli INTEGER NOT NULL DEFAULT 0, method TEXT DEFAULT 'cash',
-    cashbank_id INTEGER, reference TEXT, notes TEXT,
-    created_by TEXT, created_at TEXT, journal_id INTEGER
+    cashbank_id INTEGER REFERENCES cashbank_accounts(id), reference TEXT, notes TEXT,
+    created_by TEXT, created_at TEXT, journal_id INTEGER REFERENCES journal_entries(id)
 );
 
 CREATE TABLE IF NOT EXISTS payment_allocations (
@@ -271,7 +273,7 @@ CREATE TABLE IF NOT EXISTS purchases (
     net_milli INTEGER DEFAULT 0, vat_milli INTEGER DEFAULT 0,
     total_milli INTEGER DEFAULT 0, paid_milli INTEGER DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'Draft',
-    notes TEXT, created_by TEXT, created_at TEXT, journal_id INTEGER
+    notes TEXT, created_by TEXT, created_at TEXT, journal_id INTEGER REFERENCES journal_entries(id)
 );
 
 CREATE TABLE IF NOT EXISTS purchase_lines (
@@ -289,18 +291,18 @@ CREATE TABLE IF NOT EXISTS supplier_payments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     pay_no TEXT, date TEXT NOT NULL, supplier_id INTEGER NOT NULL REFERENCES suppliers(id),
     amount_milli INTEGER NOT NULL DEFAULT 0, method TEXT DEFAULT 'cash',
-    cashbank_id INTEGER, reference TEXT, notes TEXT,
-    created_by TEXT, created_at TEXT, journal_id INTEGER
+    cashbank_id INTEGER REFERENCES cashbank_accounts(id), reference TEXT, notes TEXT,
+    created_by TEXT, created_at TEXT, journal_id INTEGER REFERENCES journal_entries(id)
 );
 
 CREATE TABLE IF NOT EXISTS expenses (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    exp_no TEXT, date TEXT NOT NULL, category TEXT, account_code TEXT,
+    exp_no TEXT, date TEXT NOT NULL, category TEXT, account_code TEXT REFERENCES accounts(code),
     amount_milli INTEGER NOT NULL DEFAULT 0, vat_milli INTEGER DEFAULT 0,
-    method TEXT DEFAULT 'cash', paid_from_source TEXT, cashbank_id INTEGER, petty_id INTEGER,
+    method TEXT DEFAULT 'cash', paid_from_source TEXT, cashbank_id INTEGER REFERENCES cashbank_accounts(id), petty_id INTEGER REFERENCES petty_cash_accounts(id),
     vendor TEXT, reference TEXT, notes TEXT,
     attachment_required INTEGER DEFAULT 0, approval_status TEXT DEFAULT 'posted',
-    created_by TEXT, created_at TEXT, journal_id INTEGER
+    created_by TEXT, created_at TEXT, journal_id INTEGER REFERENCES journal_entries(id)
 );
 
 CREATE TABLE IF NOT EXISTS cashbank_accounts (
@@ -336,72 +338,72 @@ CREATE TABLE IF NOT EXISTS cheques (
 
 CREATE TABLE IF NOT EXISTS audit_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    ts TEXT NOT NULL, user_id INTEGER, username TEXT,
+    ts TEXT NOT NULL, user_id INTEGER REFERENCES users(id), username TEXT,
     action TEXT, entity TEXT, entity_id INTEGER,
     old_value TEXT, new_value TEXT, reason TEXT
 );
 
 CREATE TABLE IF NOT EXISTS payroll_payments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    run_id INTEGER NOT NULL,
+    run_id INTEGER NOT NULL REFERENCES payroll_runs(id),
     payment_date TEXT NOT NULL,
     source_type TEXT NOT NULL,
     source_id INTEGER,
     amount_milli INTEGER NOT NULL,
-    journal_id INTEGER,
+    journal_id INTEGER REFERENCES journal_entries(id),
     reversed INTEGER DEFAULT 0,
-    reversal_journal_id INTEGER,
+    reversal_journal_id INTEGER REFERENCES journal_entries(id),
     reversed_by TEXT, reversed_at TEXT,
     paid_by TEXT, paid_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS cashbank_transactions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    ts TEXT NOT NULL, cashbank_id INTEGER NOT NULL,
+    ts TEXT NOT NULL, cashbank_id INTEGER NOT NULL REFERENCES cashbank_accounts(id),
     debit_milli INTEGER DEFAULT 0, credit_milli INTEGER DEFAULT 0,
     balance_milli INTEGER DEFAULT 0,
-    method TEXT, ref_type TEXT, ref_id INTEGER, journal_id INTEGER,
-    notes TEXT, user_id INTEGER
+    method TEXT, ref_type TEXT, ref_id INTEGER, journal_id INTEGER REFERENCES journal_entries(id),
+    notes TEXT, user_id INTEGER REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS document_status_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ts TEXT NOT NULL, entity_type TEXT, entity_id INTEGER,
-    old_status TEXT, new_status TEXT, user_id INTEGER, username TEXT, reason TEXT
+    old_status TEXT, new_status TEXT, user_id INTEGER REFERENCES users(id), username TEXT, reason TEXT
 );
 
 CREATE TABLE IF NOT EXISTS document_voids (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ts TEXT NOT NULL, entity_type TEXT, entity_id INTEGER,
-    reversal_journal_id INTEGER, user_id INTEGER, username TEXT, reason TEXT
+    reversal_journal_id INTEGER REFERENCES journal_entries(id), user_id INTEGER REFERENCES users(id), username TEXT, reason TEXT
 );
 
 CREATE TABLE IF NOT EXISTS credit_notes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    cn_no TEXT, date TEXT, customer_id INTEGER, invoice_id INTEGER,
+    cn_no TEXT, date TEXT, customer_id INTEGER REFERENCES customers(id), invoice_id INTEGER REFERENCES sales_invoices(id),
     net_milli INTEGER DEFAULT 0, vat_milli INTEGER DEFAULT 0, total_milli INTEGER DEFAULT 0,
     cogs_milli INTEGER DEFAULT 0, reason TEXT, status TEXT DEFAULT 'Posted',
-    journal_id INTEGER, created_by TEXT, created_at TEXT
+    journal_id INTEGER REFERENCES journal_entries(id), created_by TEXT, created_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS credit_note_lines (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    cn_id INTEGER, product_id INTEGER, cartons REAL, cups_per_carton INTEGER,
+    cn_id INTEGER REFERENCES credit_notes(id), product_id INTEGER REFERENCES products(id), cartons REAL, cups_per_carton INTEGER,
     qty_cups REAL, unit_price_milli INTEGER, line_net_milli INTEGER,
     vat_pct REAL, vat_milli INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS inventory_adjustments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    adj_no TEXT, date TEXT, item_id INTEGER, direction TEXT, qty REAL,
+    adj_no TEXT, date TEXT, item_id INTEGER REFERENCES inventory_items(id), direction TEXT, qty REAL,
     unit_cost_milli INTEGER DEFAULT 0, reason TEXT, status TEXT DEFAULT 'Draft',
-    approved_by TEXT, approved_at TEXT, journal_id INTEGER,
+    approved_by TEXT, approved_at TEXT, journal_id INTEGER REFERENCES journal_entries(id),
     created_by TEXT, created_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS petty_cash_accounts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    code TEXT, name TEXT NOT NULL, responsible TEXT, role TEXT, employee_id INTEGER,
+    code TEXT, name TEXT NOT NULL, responsible TEXT, role TEXT, employee_id INTEGER REFERENCES employees(id),
     spending_limit_milli INTEGER DEFAULT 0, requires_approval INTEGER DEFAULT 0,
     balance_milli INTEGER DEFAULT 0, status TEXT DEFAULT 'open',
     active INTEGER DEFAULT 1, notes TEXT, created_at TEXT
@@ -409,11 +411,11 @@ CREATE TABLE IF NOT EXISTS petty_cash_accounts (
 
 CREATE TABLE IF NOT EXISTS petty_cash_transactions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    ts TEXT NOT NULL, petty_id INTEGER NOT NULL, ttype TEXT,
+    ts TEXT NOT NULL, petty_id INTEGER NOT NULL REFERENCES petty_cash_accounts(id), ttype TEXT,
     debit_milli INTEGER DEFAULT 0, credit_milli INTEGER DEFAULT 0, balance_milli INTEGER DEFAULT 0,
-    category TEXT, account_code TEXT, cashbank_id INTEGER, counter_petty_id INTEGER,
-    expense_id INTEGER, attachment_status TEXT DEFAULT 'not_required',
-    reference TEXT, notes TEXT, journal_id INTEGER, user_id INTEGER
+    category TEXT, account_code TEXT REFERENCES accounts(code), cashbank_id INTEGER REFERENCES cashbank_accounts(id), counter_petty_id INTEGER REFERENCES petty_cash_accounts(id),
+    expense_id INTEGER REFERENCES expenses(id), attachment_status TEXT DEFAULT 'not_required',
+    reference TEXT, notes TEXT, journal_id INTEGER REFERENCES journal_entries(id), user_id INTEGER REFERENCES users(id)
 );
 
 -- ============================================================
@@ -460,7 +462,7 @@ CREATE TABLE IF NOT EXISTS advance_transactions (
     ttype TEXT NOT NULL,  -- disburse, spend, receipt, return, adjustment, close
     amount_milli INTEGER NOT NULL,
     balance_after_milli INTEGER NOT NULL,
-    account_code TEXT,  -- GL account affected
+    account_code TEXT REFERENCES accounts(code),  -- GL account affected
     category TEXT,  -- expense category for spend/receipt
     vendor_name TEXT,
     invoice_no TEXT,
@@ -468,7 +470,7 @@ CREATE TABLE IF NOT EXISTS advance_transactions (
     reference TEXT,
     notes TEXT,
     attachment_ids TEXT,  -- comma-separated attachment IDs
-    journal_id INTEGER,
+    journal_id INTEGER REFERENCES journal_entries(id),
     created_by TEXT NOT NULL,
     FOREIGN KEY (advance_id) REFERENCES operating_advances(id)
 );
@@ -521,11 +523,11 @@ CREATE TABLE IF NOT EXISTS permissions (
     id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT UNIQUE, name TEXT
 );
 CREATE TABLE IF NOT EXISTS role_permissions (role_code TEXT NOT NULL, perm_code TEXT NOT NULL, PRIMARY KEY (role_code, perm_code));
-CREATE TABLE IF NOT EXISTS user_roles (user_id INTEGER NOT NULL, role_code TEXT NOT NULL, PRIMARY KEY (user_id, role_code));
+CREATE TABLE IF NOT EXISTS user_roles (user_id INTEGER NOT NULL REFERENCES users(id), role_code TEXT NOT NULL, PRIMARY KEY (user_id, role_code));
 
 CREATE TABLE IF NOT EXISTS customer_price_lists (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    customer_id INTEGER, product_id INTEGER, price_milli INTEGER, active INTEGER DEFAULT 1
+    customer_id INTEGER REFERENCES customers(id), product_id INTEGER REFERENCES products(id), price_milli INTEGER, active INTEGER DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS attachments (
@@ -536,17 +538,17 @@ CREATE TABLE IF NOT EXISTS attachments (
 
 CREATE TABLE IF NOT EXISTS import_shipments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    shipment_no TEXT, supplier_id INTEGER, currency TEXT DEFAULT 'USD',
+    shipment_no TEXT, supplier_id INTEGER REFERENCES suppliers(id), currency TEXT DEFAULT 'USD',
     exchange_rate REAL DEFAULT 1, status TEXT DEFAULT 'Ordered',
     notes TEXT, created_by TEXT, created_at TEXT
 );
 CREATE TABLE IF NOT EXISTS import_shipment_costs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    shipment_id INTEGER, cost_type TEXT, amount_milli INTEGER DEFAULT 0
+    shipment_id INTEGER REFERENCES import_shipments(id), cost_type TEXT, amount_milli INTEGER DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS import_shipment_allocations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    shipment_id INTEGER, item_id INTEGER, qty REAL, allocated_cost_milli INTEGER DEFAULT 0
+    shipment_id INTEGER REFERENCES import_shipments(id), item_id INTEGER REFERENCES inventory_items(id), qty REAL, allocated_cost_milli INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS worker_sheet_templates (
@@ -554,26 +556,27 @@ CREATE TABLE IF NOT EXISTS worker_sheet_templates (
 );
 CREATE TABLE IF NOT EXISTS worker_sheets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    template_id INTEGER, worker TEXT, date TEXT, lang TEXT,
+    template_id INTEGER REFERENCES worker_sheet_templates(id), worker TEXT, date TEXT, lang TEXT,
     status TEXT DEFAULT 'generated', notes TEXT, created_by TEXT, created_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS login_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT, ts REAL, ok INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS customer_aliases (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    customer_id INTEGER NOT NULL, alias TEXT NOT NULL, source TEXT, notes TEXT
+    customer_id INTEGER NOT NULL REFERENCES customers(id), alias TEXT NOT NULL, source TEXT, notes TEXT
 );
 CREATE TABLE IF NOT EXISTS product_price_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    product_id INTEGER NOT NULL, price_milli INTEGER, effective_date TEXT,
+    product_id INTEGER NOT NULL REFERENCES products(id), price_milli INTEGER, effective_date TEXT,
     changed_by TEXT, note TEXT
 );
 CREATE TABLE IF NOT EXISTS supplier_price_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    supplier_id INTEGER, item_id INTEGER, cost_milli INTEGER, effective_date TEXT,
+    supplier_id INTEGER REFERENCES suppliers(id), item_id INTEGER REFERENCES inventory_items(id), cost_milli INTEGER, effective_date TEXT,
     changed_by TEXT, note TEXT
 );
 CREATE TABLE IF NOT EXISTS product_families (
@@ -588,12 +591,12 @@ CREATE TABLE IF NOT EXISTS payroll_runs (
     total_net_milli INTEGER DEFAULT 0,
     created_by TEXT, created_at TEXT, processed_by TEXT, processed_at TEXT,
     approved_by TEXT, approved_at TEXT, paid_by TEXT, paid_at TEXT,
-    accrual_journal_id INTEGER, journal_id INTEGER
+    accrual_journal_id INTEGER REFERENCES journal_entries(id), journal_id INTEGER REFERENCES journal_entries(id)
 );
 
 CREATE TABLE IF NOT EXISTS payroll_run_lines (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    run_id INTEGER NOT NULL, employee_id INTEGER NOT NULL,
+    run_id INTEGER NOT NULL REFERENCES payroll_runs(id), employee_id INTEGER NOT NULL REFERENCES employees(id),
     basic_milli INTEGER DEFAULT 0, allowance_milli INTEGER DEFAULT 0,
     overtime_milli INTEGER DEFAULT 0, bonus_milli INTEGER DEFAULT 0,
     deduction_milli INTEGER DEFAULT 0, advance_deduction_milli INTEGER DEFAULT 0,
@@ -603,31 +606,31 @@ CREATE TABLE IF NOT EXISTS payroll_run_lines (
 
 CREATE TABLE IF NOT EXISTS employee_advances (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    employee_id INTEGER NOT NULL, amount_milli INTEGER NOT NULL,
+    employee_id INTEGER NOT NULL REFERENCES employees(id), amount_milli INTEGER NOT NULL,
     date TEXT NOT NULL, reason TEXT, status TEXT DEFAULT 'open',
     remaining_milli INTEGER NOT NULL DEFAULT 0,
     deduction_per_payroll_milli INTEGER DEFAULT 0,
-    journal_id INTEGER, source_type TEXT, source_id INTEGER,
+    journal_id INTEGER REFERENCES journal_entries(id), source_type TEXT, source_id INTEGER,
     created_by TEXT, created_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS bank_statement_lines (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    account_id INTEGER NOT NULL, date TEXT NOT NULL,
+    account_id INTEGER NOT NULL REFERENCES cashbank_accounts(id), date TEXT NOT NULL,
     description TEXT, debit_milli INTEGER DEFAULT 0, credit_milli INTEGER DEFAULT 0,
     matched_to_type TEXT, matched_to_id INTEGER, notes TEXT
 );
 
 CREATE TABLE IF NOT EXISTS bank_reconciliation_sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    account_id INTEGER NOT NULL, statement_date TEXT, statement_balance_milli INTEGER DEFAULT 0,
+    account_id INTEGER NOT NULL REFERENCES cashbank_accounts(id), statement_date TEXT, statement_balance_milli INTEGER DEFAULT 0,
     reconciled_balance_milli INTEGER DEFAULT 0, status TEXT DEFAULT 'Open',
     notes TEXT, created_by TEXT, created_at TEXT, completed_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS quality_inspections (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    production_line_id INTEGER, date TEXT, inspector TEXT,
+    production_line_id INTEGER REFERENCES production_lines(id), date TEXT, inspector TEXT,
     result TEXT, defect_type TEXT, defect_qty INTEGER DEFAULT 0,
     notes TEXT, status TEXT DEFAULT 'Pending'
 );
@@ -640,8 +643,8 @@ CREATE TABLE IF NOT EXISTS multi_warehouse (
 
 CREATE TABLE IF NOT EXISTS stock_transfers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    transfer_no TEXT, from_warehouse_id INTEGER, to_warehouse_id INTEGER,
-    item_id INTEGER, qty REAL NOT NULL DEFAULT 0,
+    transfer_no TEXT, from_warehouse_id INTEGER REFERENCES multi_warehouse(id), to_warehouse_id INTEGER REFERENCES multi_warehouse(id),
+    item_id INTEGER REFERENCES inventory_items(id), qty REAL NOT NULL DEFAULT 0,
     status TEXT DEFAULT 'Draft', notes TEXT,
     created_by TEXT, created_at TEXT, completed_at TEXT
 );
@@ -677,7 +680,7 @@ CREATE INDEX IF NOT EXISTS idx_psl_date ON production_shift_lines(ts);
 -- ============================================================
 CREATE TABLE IF NOT EXISTS e_invoices (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    invoice_id INTEGER NOT NULL,
+    invoice_id INTEGER NOT NULL REFERENCES sales_invoices(id),
     xml_content TEXT,
     qr_code TEXT,
     status TEXT DEFAULT 'Draft',
@@ -930,7 +933,7 @@ CREATE TABLE IF NOT EXISTS budget_lines (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     budget_id INTEGER NOT NULL,
     category TEXT NOT NULL,
-    account_code TEXT,
+    account_code TEXT REFERENCES accounts(code),
     description TEXT,
     planned_milli INTEGER NOT NULL DEFAULT 0,
     actual_milli INTEGER NOT NULL DEFAULT 0,
@@ -1010,3 +1013,23 @@ CREATE INDEX IF NOT EXISTS idx_notif_read ON notifications(read_status);
 CREATE INDEX IF NOT EXISTS idx_notif_type ON notifications(notification_type);
 CREATE INDEX IF NOT EXISTS idx_notif_severity ON notifications(severity);
 CREATE INDEX IF NOT EXISTS idx_notif_created ON notifications(created_at);
+
+-- Critical missing indexes for query performance
+CREATE INDEX IF NOT EXISTS idx_accounts_code ON accounts(code);
+CREATE INDEX IF NOT EXISTS idx_app_settings_key ON app_settings(key);
+CREATE INDEX IF NOT EXISTS idx_dsh_entity ON document_status_history(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_dv_entity ON document_voids(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_cnl_cn ON credit_note_lines(cn_id);
+CREATE INDEX IF NOT EXISTS idx_ia_item ON inventory_adjustments(item_id);
+CREATE INDEX IF NOT EXISTS idx_imp_supplier ON import_shipments(supplier_id);
+CREATE INDEX IF NOT EXISTS idx_imp_created ON import_shipments(created_at);
+CREATE INDEX IF NOT EXISTS idx_impcost_shipment ON import_shipment_costs(shipment_id);
+CREATE INDEX IF NOT EXISTS idx_impalloc_shipment ON import_shipment_allocations(shipment_id);
+CREATE INDEX IF NOT EXISTS idx_roles_code ON roles(code);
+CREATE INDEX IF NOT EXISTS idx_user_roles_user ON user_roles(user_id);
+CREATE INDEX IF NOT EXISTS idx_emp_adv_employee ON employee_advances(employee_id);
+CREATE INDEX IF NOT EXISTS idx_pr_period ON payroll_runs(period_start);
+CREATE INDEX IF NOT EXISTS idx_st_created ON stock_transfers(created_at);
+CREATE INDEX IF NOT EXISTS idx_df_entity ON docflow_documents(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_qi_date ON quality_inspections(date);
+CREATE INDEX IF NOT EXISTS idx_dc_date ON daily_closings(date);

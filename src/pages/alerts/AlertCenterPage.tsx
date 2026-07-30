@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+﻿import { useState, useEffect, useCallback } from "react";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
+import { useUIStore } from "@/stores/uiStore";
 import {
   AlertTriangle,
   Bell,
@@ -25,7 +26,7 @@ interface AlertsData {
 const sectionConfig = [
   {
     key: "expiry" as const,
-    title: "انتهاء صلاحية",
+    title: "ط§ظ†طھظ‡ط§ط، طµظ„ط§ط­ظٹط©",
     icon: Clock,
     borderColor: "border-l-red-500",
     iconColor: "text-red-400",
@@ -33,7 +34,7 @@ const sectionConfig = [
   },
   {
     key: "overdue_orders" as const,
-    title: "أوامر إنتاج متأخرة",
+    title: "ط£ظˆط§ظ…ط± ط¥ظ†طھط§ط¬ ظ…طھط£ط®ط±ط©",
     icon: FileWarning,
     borderColor: "border-l-yellow-500",
     iconColor: "text-yellow-400",
@@ -41,7 +42,7 @@ const sectionConfig = [
   },
   {
     key: "low_stock" as const,
-    title: "مخزون منخفض",
+    title: "ظ…ط®ط²ظˆظ† ظ…ظ†ط®ظپط¶",
     icon: AlertTriangle,
     borderColor: "border-l-amber-500",
     iconColor: "text-amber-400",
@@ -49,7 +50,7 @@ const sectionConfig = [
   },
   {
     key: "overdue_invoices" as const,
-    title: "فواتير متأخرة",
+    title: "ظپظˆط§طھظٹط± ظ…طھط£ط®ط±ط©",
     icon: FileWarning,
     borderColor: "border-l-red-500",
     iconColor: "text-red-400",
@@ -57,7 +58,7 @@ const sectionConfig = [
   },
   {
     key: "quality_pending" as const,
-    title: "جودة معلقة",
+    title: "ط¬ظˆط¯ط© ظ…ط¹ظ„ظ‚ط©",
     icon: Shield,
     borderColor: "border-l-blue-500",
     iconColor: "text-blue-400",
@@ -66,6 +67,7 @@ const sectionConfig = [
 ] as const;
 
 export default function AlertCenterPage() {
+  const addNotification = useUIStore((s) => s.addNotification);
   const [alerts, setAlerts] = useState<AlertsData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -76,6 +78,7 @@ export default function AlertCenterPage() {
       setAlerts(data);
     } catch {
       setAlerts(null);
+      addNotification({ id: crypto.randomUUID(), type: 'error', title: 'خطأ', message: 'فشل تحميل التنبيهات' });
     } finally {
       setLoading(false);
     }
@@ -108,8 +111,8 @@ export default function AlertCenterPage() {
             <Bell className="h-6 w-6 text-amber-400" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white">مركز التنبيهات</h1>
-            <p className="text-sm text-surface-400">مراقبة جميع التنبيهات والإشعارات</p>
+            <h1 className="text-xl font-bold text-white">ظ…ط±ظƒط² ط§ظ„طھظ†ط¨ظٹظ‡ط§طھ</h1>
+            <p className="text-sm text-surface-400">ظ…ط±ط§ظ‚ط¨ط© ط¬ظ…ظٹط¹ ط§ظ„طھظ†ط¨ظٹظ‡ط§طھ ظˆط§ظ„ط¥ط´ط¹ط§ط±ط§طھ</p>
           </div>
         </div>
         <Button
@@ -119,7 +122,7 @@ export default function AlertCenterPage() {
           className="border-surface-700 text-surface-400 hover:text-white"
         >
           <RefreshCw className={`h-4 w-4 ml-2 ${loading ? "animate-spin" : ""}`} />
-          تحديث
+          طھط­ط¯ظٹط«
         </Button>
       </div>
 
@@ -130,7 +133,7 @@ export default function AlertCenterPage() {
           </div>
           <div>
             <p className="text-2xl font-bold text-white">{counts.total}</p>
-            <p className="text-xs text-surface-400">إجمالي التنبيهات</p>
+            <p className="text-xs text-surface-400">ط¥ط¬ظ…ط§ظ„ظٹ ط§ظ„طھظ†ط¨ظٹظ‡ط§طھ</p>
           </div>
         </div>
         <div className="bg-surface-800 border border-surface-700 rounded-xl p-4 flex items-center gap-3">
@@ -139,7 +142,7 @@ export default function AlertCenterPage() {
           </div>
           <div>
             <p className="text-2xl font-bold text-white">{counts.critical}</p>
-            <p className="text-xs text-surface-400">حرجة</p>
+            <p className="text-xs text-surface-400">ط­ط±ط¬ط©</p>
           </div>
         </div>
         <div className="bg-surface-800 border border-surface-700 rounded-xl p-4 flex items-center gap-3">
@@ -148,7 +151,7 @@ export default function AlertCenterPage() {
           </div>
           <div>
             <p className="text-2xl font-bold text-white">{counts.info}</p>
-            <p className="text-xs text-surface-400">معلوماتية</p>
+            <p className="text-xs text-surface-400">ظ…ط¹ظ„ظˆظ…ط§طھظٹط©</p>
           </div>
         </div>
       </div>
@@ -162,8 +165,8 @@ export default function AlertCenterPage() {
       {isEmpty && (
         <div className="flex flex-col items-center justify-center py-20 text-surface-400">
           <CheckCircle className="h-16 w-16 mb-4 text-emerald-500 opacity-50" />
-          <p className="text-lg font-semibold text-white">لا توجد تنبيهات حالياً</p>
-          <p className="text-sm mt-1">كل شيء يعمل بشكل طبيعي</p>
+          <p className="text-lg font-semibold text-white">ظ„ط§ طھظˆط¬ط¯ طھظ†ط¨ظٹظ‡ط§طھ ط­ط§ظ„ظٹط§ظ‹</p>
+          <p className="text-sm mt-1">ظƒظ„ ط´ظٹط، ظٹط¹ظ…ظ„ ط¨ط´ظƒظ„ ط·ط¨ظٹط¹ظٹ</p>
         </div>
       )}
 
@@ -254,3 +257,5 @@ export default function AlertCenterPage() {
     </div>
   );
 }
+
+

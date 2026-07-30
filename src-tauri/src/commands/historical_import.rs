@@ -901,7 +901,7 @@ pub fn execute_import(
                 let notes = find_value_in_row(row, &input.mappings, "notes", &headers_from_mappings(&input.mappings)).unwrap_or_default();
 
                 let qty_val: f64 = qty.trim().parse().unwrap_or(0.0);
-                let cost_val: f64 = parse_amount_to_f64(&cost) * 1000.0;
+                let cost_val: i64 = (parse_amount_to_f64(&cost) * 1000.0).round() as i64;
                 let reorder: f64 = reorder_level.trim().parse().unwrap_or(0.0);
                 let item_code = if code.trim().is_empty() {
                     auto_generate_code(&conn, "INV")?
@@ -1256,7 +1256,7 @@ pub fn execute_import(
                     }
                 } else if entity_lower.contains("صنف") || entity_lower.contains("مخزون") || entity_lower == "inventory" || entity_lower == "inventories" {
                     let qty_val: f64 = qty_str.trim().parse().unwrap_or(0.0);
-                    let cost_val: f64 = parse_amount_to_f64(&cost_str) * 1000.0;
+                    let cost_val: i64 = (parse_amount_to_f64(&cost_str) * 1000.0).round() as i64;
                     let found = if code.trim().is_empty() { {
                         conn.query_row("SELECT id FROM inventory_items WHERE name_ar=? AND active=1", [name.trim()], |r| r.get::<_, i64>(0))
                     } } else { {

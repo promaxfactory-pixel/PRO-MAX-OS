@@ -13,6 +13,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let app_handle = app.handle().clone();
             let db_path = {
@@ -98,6 +99,8 @@ pub fn run() {
             commands::custody::create_custody_spend,
             commands::custody::create_custody_transfer,
             commands::custody::get_custody_statement,
+            commands::custody::update_custody_spend,
+            commands::custody::update_custody_fund,
             // HR
             commands::hr::list_employees,
             commands::hr::get_employee,

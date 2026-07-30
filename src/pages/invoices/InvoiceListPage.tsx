@@ -4,6 +4,7 @@ import DataTable, { Column } from "@/components/ui/DataTable";
 import { StatusBadge } from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, FileText, Download, Filter } from "lucide-react";
@@ -15,18 +16,24 @@ export default function InvoiceListPage() {
   const addNotification = useUIStore((s) => s.addNotification);
   const [invoices, setInvoices] = useState<SalesInvoice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
 
   const loadInvoices = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const data = await invoke("list_invoices");
       setInvoices(data as SalesInvoice[]);
-    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
+    } catch (err) { setError(err instanceof Error ? err.message : String(err)); addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
   }, [addNotification]);
 
   useEffect(() => { loadInvoices(); }, [loadInvoices]);
+
+  if (error) return <div className="flex flex-col items-center py-16"><div className="text-6xl mb-4 text-red-400">⚠️</div><h3 className="text-lg font-semibold text-[var(--text-primary)] mb-2">حدث خطأ</h3><p className="text-[var(--text-secondary)] mb-4">{error}</p><button onClick={loadInvoices} className="px-6 py-2.5 bg-brand-500 text-pure-white rounded-xl">إعادة المحاولة</button></div>;
+
+  if (loading) return <div className="flex items-center justify-center py-16"><LoadingSpinner /></div>;
 
   const filtered = statusFilter === "all" ? invoices : invoices.filter(i => i.status?.toLowerCase() === statusFilter);
 

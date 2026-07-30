@@ -103,8 +103,9 @@ pub fn list_expenses(state: State<'_, DbState>) -> Result<Vec<Expense>, AppError
 }
 
 #[tauri::command]
-pub fn create_expense(input: CreateExpenseInput, state: State<'_, DbState>) -> Result<i64, AppError> {
+pub fn create_expense(input: CreateExpenseInput, state: State<'_, DbState>, user_id: i64) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     let year: String = conn
         .query_row("SELECT substr(?1, 1, 4)", [&input.date], |row| row.get(0))?;
     let next_num: i64 = conn
@@ -167,8 +168,9 @@ pub fn create_expense(input: CreateExpenseInput, state: State<'_, DbState>) -> R
 }
 
 #[tauri::command]
-pub fn reimburse_expense(state: State<'_, DbState>, expense_id: i64, reimbursed_by: String) -> Result<String, AppError> {
+pub fn reimburse_expense(state: State<'_, DbState>, user_id: i64, expense_id: i64, reimbursed_by: String) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     conn.execute(
         "UPDATE expenses SET reimbursement_status='reimbursed', reimbursement_date=date('now'), reimbursed_by=?1 WHERE id=?2 AND reimbursement_status='pending'",
         rusqlite::params![reimbursed_by, expense_id],
@@ -178,8 +180,9 @@ pub fn reimburse_expense(state: State<'_, DbState>, expense_id: i64, reimbursed_
 }
 
 #[tauri::command]
-pub fn approve_expense(state: State<'_, DbState>, expense_id: i64) -> Result<String, AppError> {
+pub fn approve_expense(state: State<'_, DbState>, user_id: i64, expense_id: i64) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     conn.execute(
         "UPDATE expenses SET approval_status='approved' WHERE id=?1",
         [expense_id],

@@ -62,8 +62,9 @@ pub fn list_petty_cash_accounts(state: State<'_, DbState>) -> Result<Vec<PettyCa
 }
 
 #[tauri::command]
-pub fn create_petty_cash_account(input: CreatePettyCashInput, state: State<'_, DbState>) -> Result<i64, AppError> {
+pub fn create_petty_cash_account(state: State<'_, DbState>, user_id: i64, input: CreatePettyCashInput) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant"])?;
 
     conn.execute(
         "INSERT INTO petty_cash_accounts(code, name, responsible, role, spending_limit_milli, balance_milli, status, active, notes)

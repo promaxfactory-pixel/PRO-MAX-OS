@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+﻿import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTranslation } from "react-i18next";
@@ -49,7 +49,7 @@ export default function LoginPage() {
          navigate("/");
        }
      } catch (err: unknown) {
-       setError(err instanceof Error ? err.message : String(err) || "خطأ في تسجيل الدخول");
+       setError(err instanceof Error ? err.message : String(err) || "ط®ط·ط£ ظپظٹ طھط³ط¬ظٹظ„ ط§ظ„ط¯ط®ظˆظ„");
      } finally {
        setLoading(false);
      }
@@ -58,7 +58,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden" data-theme="dark" style={{ background: 'var(--surface-950)' }}>
       {/* Language Switcher */}
-      <div className="absolute top-6 left-6 z-30">
+      <div className="absolute top-6 right-6 z-30">
         <LanguageSwitcher />
       </div>
 
@@ -145,12 +145,12 @@ export default function LoginPage() {
             {/* Header */}
             <div className="mb-8">
               <h2 className="text-2xl font-bold text-white mb-1">{t("auth.login")}</h2>
-              <p className="text-sm text-surface-400">أدخل بياناتك للوصول إلى النظام</p>
+              <p className="text-sm text-surface-400">ط£ط¯ط®ظ„ ط¨ظٹط§ظ†ط§طھظƒ ظ„ظ„ظˆطµظˆظ„ ط¥ظ„ظ‰ ط§ظ„ظ†ط¸ط§ظ…</p>
             </div>
 
             {/* First-time setup hint */}
             <div className="mb-4 p-3 bg-gold-400/10 border border-gold-400/20 rounded-2xl text-gold-400 text-xs text-center">
-              أول مرة؟ استخدم: <span className="font-bold">admin</span> / <span className="font-bold">Aa@8888444400</span>
+              ط£ظˆظ„ ظ…ط±ط©طں ط§ط³طھط®ط¯ظ…: <span className="font-bold">admin</span> / <span className="font-bold">Aa@8888444400</span>
             </div>
 
             {/* Error */}
@@ -178,7 +178,7 @@ export default function LoginPage() {
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="أدخل اسم المستخدم"
+                  placeholder="ط£ط¯ط®ظ„ ط§ط³ظ… ط§ظ„ظ…ط³طھط®ط¯ظ…"
                   className={`w-full transition-all duration-300 ${focusedField === 'username' ? 'border-gold-400/50 shadow-[0_0_0_3px_rgba(212,175,55,0.1)]' : ''}`}
                   required
                   autoFocus
@@ -196,8 +196,8 @@ export default function LoginPage() {
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="أدخل كلمة المرور"
-                    className={`w-full pl-12 transition-all duration-300 ${focusedField === 'password' ? 'border-gold-400/50 shadow-[0_0_0_3px_rgba(212,175,55,0.1)]' : ''}`}
+                    placeholder="ط£ط¯ط®ظ„ ظƒظ„ظ…ط© ط§ظ„ظ…ط±ظˆط±"
+                    className={`w-full pr-12 transition-all duration-300 ${focusedField === 'password' ? 'border-gold-400/50 shadow-[0_0_0_3px_rgba(212,175,55,0.1)]' : ''}`}
                     required
                     onFocus={() => setFocusedField('password')}
                     onBlur={() => setFocusedField(null)}
@@ -206,8 +206,8 @@ export default function LoginPage() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 hover:text-gold-400 transition-colors p-1"
-                    aria-label={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-400 hover:text-gold-400 transition-colors p-1"
+                    aria-label={showPassword ? "ط¥ط®ظپط§ط، ظƒظ„ظ…ط© ط§ظ„ظ…ط±ظˆط±" : "ط¥ط¸ظ‡ط§ط± ظƒظ„ظ…ط© ط§ظ„ظ…ط±ظˆط±"}
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -219,7 +219,7 @@ export default function LoginPage() {
             <motion.button
               type="submit"
               disabled={loading || !username || !password}
-              className="w-full mt-8 py-4 rounded-2xl font-bold text-white text-base relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+              className="w-full mt-8 py-4 rounded-2xl font-bold text-pure-white text-base relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
               style={{
                 background: loading 
                   ? 'linear-gradient(to left, #4c1d95, #312e81)' 
@@ -234,7 +234,7 @@ export default function LoginPage() {
               {loading ? (
                 <>
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span className="text-surface-200">جاري التحقق...</span>
+                  <span className="text-surface-200">ط¬ط§ط±ظٹ ط§ظ„طھط­ظ‚ظ‚...</span>
                   {/* Shimmer effect */}
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-slide-in-left" />
                 </>
@@ -265,7 +265,7 @@ export default function LoginPage() {
                   transition={{ delay: 0.9 }}
                 >
                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="text-[10px] text-surface-500 font-medium"> نظام آمن</span>
+                  <span className="text-[10px] text-surface-500 font-medium"> ظ†ط¸ط§ظ… ط¢ظ…ظ†</span>
                 </motion.div>
               </div>
             </div>
@@ -285,3 +285,4 @@ export default function LoginPage() {
     </div>
   );
 }
+

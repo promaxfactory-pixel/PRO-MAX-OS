@@ -59,6 +59,7 @@ pub fn list_notifications(state: State<'_, DbState>, filter: Option<Notification
             params.push(Box::new(nt.clone()));
         }
         if let Some(lim) = f.limit {
+            let lim = lim.clamp(1, 500);
             sql.push_str(&format!(" LIMIT {}", lim));
         }
     } else {

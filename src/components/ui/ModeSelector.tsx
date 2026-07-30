@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+﻿import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useUIStore, type WorkMode } from "@/stores/uiStore";
 import { Zap, Anchor, Crosshair, Sparkles, Moon, Briefcase } from "lucide-react";
@@ -38,7 +38,7 @@ export default function ModeSelector({ showLabel = false }: { showLabel?: boolea
 
       {open && (
         <div
-          className="absolute left-0 top-full mt-2 w-64 rounded-2xl overflow-hidden animate-scale-in z-50"
+          className="absolute right-0 top-full mt-2 w-64 rounded-2xl overflow-hidden animate-scale-in z-50"
           style={{
             background: 'var(--surface-card)',
             border: '1px solid var(--border)',
@@ -92,3 +92,4 @@ export default function ModeSelector({ showLabel = false }: { showLabel?: boolea
     </div>
   );
 }
+

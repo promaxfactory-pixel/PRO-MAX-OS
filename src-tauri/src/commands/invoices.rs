@@ -136,8 +136,9 @@ pub fn get_invoice_lines(state: State<'_, DbState>, invoice_id: i64) -> Result<V
 }
 
 #[tauri::command]
-pub fn create_invoice(state: State<'_, DbState>, input: CreateInvoiceInput) -> Result<i64, AppError> {
+pub fn create_invoice(state: State<'_, DbState>, user_id: i64, input: CreateInvoiceInput) -> Result<i64, AppError> {
     let mut conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     let tx = conn.transaction()?;
     let now = chrono::Utc::now().format("%Y-%m-%d").to_string();
     let year = chrono::Utc::now().format("%Y").to_string();
@@ -205,8 +206,9 @@ pub fn create_invoice(state: State<'_, DbState>, input: CreateInvoiceInput) -> R
 }
 
 #[tauri::command]
-pub fn post_invoice(state: State<'_, DbState>, id: i64) -> Result<String, AppError> {
+pub fn post_invoice(state: State<'_, DbState>, user_id: i64, id: i64) -> Result<String, AppError> {
     let mut conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     let tx = conn.transaction()?;
 
     let current_status: String = tx
@@ -232,9 +234,9 @@ pub fn post_invoice(state: State<'_, DbState>, id: i64) -> Result<String, AppErr
 
     let mut total_cogs: i64 = 0;
     for (product_id, cartons, _unit_price) in &lines {
-        let inv_items: Vec<(i64, f64, f64)> = {
+        let inv_items: Vec<(i64, f64, i64)> = {
             let mut stmt = tx
-                .prepare("SELECT id, qty_on_hand, avg_cost_milli FROM inventory_items WHERE product_id=? AND active=1 ORDER BY kind DESC LIMIT 1")
+                .prepare("SELECT id, qty_on_hand, CAST(avg_cost_milli AS INTEGER) FROM inventory_items WHERE product_id=? AND active=1 ORDER BY kind DESC LIMIT 1")
                 ?;
             let rows = stmt
                 .query_map([product_id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
@@ -247,7 +249,7 @@ pub fn post_invoice(state: State<'_, DbState>, id: i64) -> Result<String, AppErr
         };
         for (inv_id, _qty_on_hand, avg_cost) in &inv_items {
             let qty_to_deduct = *cartons;
-            let cost_milli = (qty_to_deduct * avg_cost * 1000.0).round() as i64;
+            let cost_milli = (qty_to_deduct * *avg_cost as f64 * 1000.0).round() as i64;
             total_cogs += cost_milli;
 
             tx.execute(
@@ -259,7 +261,7 @@ pub fn post_invoice(state: State<'_, DbState>, id: i64) -> Result<String, AppErr
             tx.execute(
                 "INSERT INTO inventory_movements(ts, item_id, mtype, qty_in, qty_out, unit_cost_milli, ref_type, ref_id, notes)
                  VALUES(datetime('now'), ?1, 'sale', 0, ?2, ?3, 'invoice', ?4, 'فاتورة مبيعات')",
-                rusqlite::params![inv_id, qty_to_deduct, (avg_cost * 1000.0).round() as i64, id],
+                rusqlite::params![inv_id, qty_to_deduct, (*avg_cost as f64 * 1000.0).round() as i64, id],
             )
             ?;
         }
@@ -278,8 +280,9 @@ pub fn post_invoice(state: State<'_, DbState>, id: i64) -> Result<String, AppErr
 }
 
 #[tauri::command]
-pub fn void_invoice(state: State<'_, DbState>, id: i64, reason: Option<String>) -> Result<String, AppError> {
+pub fn void_invoice(state: State<'_, DbState>, user_id: i64, id: i64, reason: Option<String>) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
 
     let status: String = conn.query_row(
         "SELECT status FROM sales_invoices WHERE id=?",
@@ -306,8 +309,9 @@ pub fn void_invoice(state: State<'_, DbState>, id: i64, reason: Option<String>) 
 }
 
 #[tauri::command]
-pub fn duplicate_invoice(state: State<'_, DbState>, id: i64) -> Result<i64, AppError> {
+pub fn duplicate_invoice(state: State<'_, DbState>, user_id: i64, id: i64) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     
     let inv: SalesInvoice = conn.query_row(
         "SELECT si.id, si.inv_no, si.date, si.customer_id, c.name, si.payment_type, si.vat_enabled, si.net_milli, si.vat_milli, si.discount_milli, si.total_milli, si.discount_reason, si.cogs_milli, si.paid_milli, si.status, si.notes, si.created_by, si.created_at FROM sales_invoices si LEFT JOIN customers c ON si.customer_id=c.id WHERE si.id=?",
@@ -391,8 +395,9 @@ pub fn duplicate_invoice(state: State<'_, DbState>, id: i64) -> Result<i64, AppE
 }
 
 #[tauri::command]
-pub fn update_invoice(state: State<'_, DbState>, id: i64, notes: Option<String>) -> Result<String, AppError> {
+pub fn update_invoice(state: State<'_, DbState>, user_id: i64, id: i64, notes: Option<String>) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     if let Some(n) = notes {
         conn.execute("UPDATE sales_invoices SET notes=? WHERE id=?", rusqlite::params![n, id])?;
     }

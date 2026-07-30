@@ -55,9 +55,11 @@ pub fn list_cheques(state: State<'_, DbState>) -> Result<Vec<Cheque>, AppError> 
 #[tauri::command]
 pub fn create_cheque(
     state: State<'_, DbState>,
+    user_id: i64,
     input: CreateChequeInput,
 ) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant"])?;
 
     conn.execute(
         "INSERT INTO cheques(kind, cheque_no, bank, party, amount_milli, due_date, status, notes) VALUES(?,?,?,?,?,?,'issued',?)",

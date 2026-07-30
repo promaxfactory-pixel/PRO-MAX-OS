@@ -1,4 +1,4 @@
-import { memo, useEffect } from "react";
+﻿import { memo, useEffect } from "react";
 import { useUIStore } from "@/stores/uiStore";
 import { CheckCircle, XCircle, AlertTriangle, Info, X } from "lucide-react";
 
@@ -17,10 +17,10 @@ const styles = {
 } as const;
 
 const typeLabels = {
-  success: "نجاح",
-  error: "خطأ",
-  warning: "تحذير",
-  info: "معلومة",
+  success: "ظ†ط¬ط§ط­",
+  error: "ط®ط·ط£",
+  warning: "طھط­ط°ظٹط±",
+  info: "ظ…ط¹ظ„ظˆظ…ط©",
 } as const;
 
 const Toast = memo(function Toast() {
@@ -38,11 +38,11 @@ const Toast = memo(function Toast() {
   }, [notifications, removeNotification]);
 
   return (
-    <div className="fixed top-4 left-4 z-[100] flex flex-col gap-3 pointer-events-none" role="region" aria-label="الإشعارات" aria-live="polite" aria-relevant="additions removals">
+    <div className="fixed top-4 right-4 z-[100] flex flex-col gap-3 pointer-events-none" role="region" aria-label="ط§ظ„ط¥ط´ط¹ط§ط±ط§طھ" aria-live="polite" aria-relevant="additions removals">
       {notifications.map((n) => {
         const Icon = icons[n.type] ?? Info;
         const colorStyle = styles[n.type] ?? styles.info;
-        const typeLabel = typeLabels[n.type] ?? "معلومة";
+        const typeLabel = typeLabels[n.type] ?? "ظ…ط¹ظ„ظˆظ…ط©";
 
         return (
           <div
@@ -65,7 +65,7 @@ const Toast = memo(function Toast() {
             </div>
             <button
               onClick={() => n.id && removeNotification(n.id)}
-              aria-label="إغلاق الإشعار"
+              aria-label="ط¥ط؛ظ„ط§ظ‚ ط§ظ„ط¥ط´ط¹ط§ط±"
               className="shrink-0 rounded-lg p-1 transition-colors"
               style={{ color: 'var(--text-muted)' }}
               onMouseEnter={e => e.currentTarget.style.background = 'color-mix(in srgb, var(--border) 40%, transparent)'}
@@ -81,3 +81,4 @@ const Toast = memo(function Toast() {
 });
 
 export default Toast;
+

@@ -30,22 +30,27 @@ fn ensure_admin_user(conn: &Connection) -> Result<()> {
         .unwrap_or(0) > 0;
 
     if !admin_exists {
-        let default_password = "Aa@8888444400";
-        let hash = crate::crypto::hash_password(default_password)
+        use rand::Rng;
+        let temp_password: String = rand::thread_rng()
+            .sample_iter(&rand::distributions::Alphanumeric)
+            .take(16)
+            .map(char::from)
+            .collect();
+        let temp_password = format!("{}Aa1!", temp_password);
+        let hash = crate::crypto::hash_password(&temp_password)
             .unwrap_or_else(|_| "argon2id$v=19$m=19456,t=2,p=1$FALLBACK".into());
-        
+
         conn.execute(
             "INSERT INTO users(username, full_name, password_hash, salt, role, active, must_change_password, created_at)
              VALUES('admin', 'مدير النظام', ?, '', 'admin', 1, 1, datetime('now'))",
             [&hash],
         )?;
 
-        // Log the temporary password to stderr/stout so it appears in Tauri console
         eprintln!("========================================");
         eprintln!("   PRO MAX OS - FIRST TIME SETUP");
         eprintln!("========================================");
         eprintln!("  Admin username: admin");
-        eprintln!("  Admin password: Aa@8888444400");
+        eprintln!("  Admin password: {}", temp_password);
         eprintln!("  ** CHANGE THIS PASSWORD ON FIRST LOGIN **");
         eprintln!("========================================");
     }
@@ -56,7 +61,7 @@ fn ensure_admin_user(conn: &Connection) -> Result<()> {
 mod migrations {
     use rusqlite::{Connection, Result};
     
-    const SCHEMA_VERSION: i32 = 23;
+    pub(crate) const SCHEMA_VERSION: i32 = 28;
     
     pub fn run(conn: &Connection) -> Result<()> {
         let current: i32 = conn
@@ -620,7 +625,6 @@ mod migrations {
                 conn.execute_batch(
                     "
                     -- MIGRATION 23: Missing FK indexes + composite reporting indexes
-                    -- See complete schema audit in db.rs documentation
 
                     -- FK indexes (14 missing foreign key columns)
                     CREATE INDEX IF NOT EXISTS idx_pp_product ON product_prices(product_id);
@@ -648,6 +652,97 @@ mod migrations {
                     CREATE INDEX IF NOT EXISTS idx_jel_entry_account ON journal_entry_lines(entry_id, account_code);
                     "
                 ).ok();
+            }
+            24 => {
+                conn.execute_batch(
+                    "
+                    -- MIGRATION 24: Fix login_attempts table + additional indexes
+
+                    -- Fix login_attempts: add id PK (recreate table)
+                    CREATE TABLE IF NOT EXISTS login_attempts_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        username TEXT,
+                        ts REAL,
+                        ok INTEGER
+                    );
+                    INSERT INTO login_attempts_new (username, ts, ok) SELECT username, ts, ok FROM login_attempts;
+                    DROP TABLE IF EXISTS login_attempts;
+                    ALTER TABLE login_attempts_new RENAME TO login_attempts;
+                    CREATE INDEX IF NOT EXISTS idx_login_attempts_uname ON login_attempts(username);
+
+                    -- FK indexes for existing columns
+                    CREATE INDEX IF NOT EXISTS idx_si_created_by ON sales_invoices(created_by);
+                    CREATE INDEX IF NOT EXISTS idx_pur_created_by ON purchases(created_by);
+                    CREATE INDEX IF NOT EXISTS idx_po_created_by ON production_orders(created_by);
+                    CREATE INDEX IF NOT EXISTS idx_je_created_by ON journal_entries(created_by);
+                    "
+                ).map_err(|e| {
+                    eprintln!("Migration 24 failed: {}", e);
+                    e
+                })?;
+            }
+            25 => {
+                conn.execute_batch(
+                    "
+                    -- MIGRATION 25: Missing indexes for 18 untables tables
+                    CREATE INDEX IF NOT EXISTS idx_accounts_code ON accounts(code);
+                    CREATE INDEX IF NOT EXISTS idx_app_settings_key ON app_settings(key);
+                    CREATE INDEX IF NOT EXISTS idx_dsh_entity ON document_status_history(entity_type, entity_id);
+                    CREATE INDEX IF NOT EXISTS idx_dv_entity ON document_voids(entity_type, entity_id);
+                    CREATE INDEX IF NOT EXISTS idx_cnl_cn ON credit_note_lines(cn_id);
+                    CREATE INDEX IF NOT EXISTS idx_ia_item ON inventory_adjustments(item_id);
+                    CREATE INDEX IF NOT EXISTS idx_imp_supplier ON import_shipments(supplier_id);
+                    CREATE INDEX IF NOT EXISTS idx_imp_created ON import_shipments(created_at);
+                    CREATE INDEX IF NOT EXISTS idx_impcost_shipment ON import_shipment_costs(shipment_id);
+                    CREATE INDEX IF NOT EXISTS idx_impalloc_shipment ON import_shipment_allocations(shipment_id);
+                    CREATE INDEX IF NOT EXISTS idx_roles_code ON roles(code);
+                    CREATE INDEX IF NOT EXISTS idx_user_roles_user ON user_roles(user_id);
+                    CREATE INDEX IF NOT EXISTS idx_emp_adv_employee ON employee_advances(employee_id);
+                    CREATE INDEX IF NOT EXISTS idx_pr_period ON payroll_runs(period_start);
+                    CREATE INDEX IF NOT EXISTS idx_st_created ON stock_transfers(created_at);
+                    CREATE INDEX IF NOT EXISTS idx_df_entity ON docflow_documents(entity_type, entity_id);
+                    CREATE INDEX IF NOT EXISTS idx_qi_date ON quality_inspections(date);
+                    CREATE INDEX IF NOT EXISTS idx_dc_date ON daily_closings(date);
+                    "
+                ).map_err(|e| {
+                    eprintln!("Migration 25 failed: {}", e);
+                    e
+                })?;
+            }
+            26 => {
+                conn.execute_batch(
+                    "CREATE TABLE IF NOT EXISTS import_history (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        import_type TEXT NOT NULL,
+                        file_name TEXT NOT NULL,
+                        total_rows INTEGER NOT NULL DEFAULT 0,
+                        imported INTEGER NOT NULL DEFAULT 0,
+                        skipped INTEGER NOT NULL DEFAULT 0,
+                        status TEXT NOT NULL DEFAULT 'completed',
+                        created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+                        created_by TEXT NOT NULL DEFAULT 'system'
+                    );"
+                ).map_err(|e| {
+                    eprintln!("Migration 26 failed: {}", e);
+                    e
+                })?;
+            }
+            27 => {
+                conn.execute_batch(
+                    "ALTER TABLE users ADD COLUMN reset_token TEXT;
+                     ALTER TABLE users ADD COLUMN reset_token_expiry TEXT;"
+                ).ok();
+            }
+            28 => {
+                conn.execute_batch(
+                    "ALTER TABLE inventory_items ADD COLUMN avg_cost_milli_int INTEGER DEFAULT 0;
+                     UPDATE inventory_items SET avg_cost_milli_int = CAST(avg_cost_milli AS INTEGER);
+                     ALTER TABLE inventory_items DROP COLUMN avg_cost_milli;
+                     ALTER TABLE inventory_items RENAME COLUMN avg_cost_milli_int TO avg_cost_milli;"
+                ).map_err(|e| {
+                    eprintln!("Migration 28 failed: {}", e);
+                    e
+                })?;
             }
             _ => {}
         }
@@ -683,6 +778,7 @@ mod tests {
         conn
     }
 
+    #[allow(dead_code)]
     fn cleanup_db(path: &std::path::Path) {
         let _ = std::fs::remove_file(path);
         let _ = std::fs::remove_file(path.with_extension("db-wal"));
@@ -725,7 +821,7 @@ mod tests {
     }
 
     #[test]
-    fn test_schema_version_is_23() {
+    fn test_schema_version_is_current() {
         let conn = test_conn();
         let version: i32 = conn
             .query_row(
@@ -734,7 +830,7 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap_or(0);
-        assert_eq!(version, 23, "Schema version should be 23");
+        assert_eq!(version, migrations::SCHEMA_VERSION, "Schema version should match SCHEMA_VERSION constant");
     }
 
     #[test]
@@ -1151,6 +1247,10 @@ mod tests {
             [],
         ).unwrap();
         let budget_id: i64 = conn.last_insert_rowid();
+
+        // Ensure accounts exist for FK references
+        conn.execute("INSERT OR IGNORE INTO accounts(code, name_ar, type) VALUES ('4100', 'إيرادات المبيعات', 'revenue')", []).unwrap();
+        conn.execute("INSERT OR IGNORE INTO accounts(code, name_ar, type) VALUES ('4200', 'إيرادات أخرى', 'revenue')", []).unwrap();
 
         // Create budget lines (must include required `category` column)
         conn.execute("INSERT INTO budget_lines (budget_id, category, account_code, planned_milli, actual_milli) VALUES (?, 'revenue', '4100', 3000000, 0)", [budget_id]).unwrap();

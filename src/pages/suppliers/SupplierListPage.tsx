@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, Search, Truck } from "lucide-react";
@@ -13,18 +14,22 @@ export default function SupplierListPage() {
   const addNotification = useUIStore((s) => s.addNotification);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
   const loadSuppliers = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const data = await invoke("list_suppliers");
       setSuppliers(data as Supplier[]);
-    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
+    } catch (err) { setError(err instanceof Error ? err.message : String(err)); addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
   }, [addNotification]);
 
   useEffect(() => { loadSuppliers(); }, [loadSuppliers]);
+
+  if (error) return <div className="flex flex-col items-center py-16"><div className="text-6xl mb-4 text-red-400">⚠️</div><h3 className="text-lg font-semibold text-[var(--text-primary)] mb-2">حدث خطأ</h3><p className="text-[var(--text-secondary)] mb-4">{error}</p><button onClick={loadSuppliers} className="px-6 py-2.5 bg-brand-500 text-pure-white rounded-xl">إعادة المحاولة</button></div>;
 
   const filtered = suppliers.filter((s) =>
     !search || s.name.includes(search) || (s.code && s.code.includes(search)) || (s.phone && s.phone.includes(search))
@@ -46,7 +51,7 @@ export default function SupplierListPage() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center h-64"><div className="w-12 h-12 border-2 border-brand-800 border-t-gold-400 rounded-full animate-spin" /></div>
+        <LoadingSpinner size="lg" />
       ) : (
         <div className="grid grid-cols-3 gap-4">
           {filtered.map((supplier) => (

@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import Badge from "@/components/ui/Badge";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Database, AlertTriangle } from "lucide-react";
@@ -11,9 +12,22 @@ export default function InventoryListPage() {
   const { addNotification } = useUIStore();
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [kindFilter, setKindFilter] = useState("all");
 
-  useEffect(() => { invoke("list_inventory_items").then((d) => setItems(d as InventoryItem[])).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false)); }, []);
+  const loadItems = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try { const d = await invoke("list_inventory_items"); setItems(d as InventoryItem[]); }
+    catch (err) { setError(err instanceof Error ? err.message : String(err)); addNotification({ title: 'خطأ', message: String(err), type: 'error' }); }
+    finally { setLoading(false); }
+  }, [addNotification]);
+
+  useEffect(() => { loadItems(); }, [loadItems]);
+
+  if (error) return <div className="flex flex-col items-center py-16"><div className="text-6xl mb-4 text-red-400">⚠️</div><h3 className="text-lg font-semibold text-[var(--text-primary)] mb-2">حدث خطأ</h3><p className="text-[var(--text-secondary)] mb-4">{error}</p><button onClick={loadItems} className="px-6 py-2.5 bg-brand-500 text-pure-white rounded-xl">إعادة المحاولة</button></div>;
+
+  if (loading) return <div className="flex items-center justify-center py-16"><LoadingSpinner /></div>;
 
   const filtered = kindFilter === "all" ? items : items.filter(i => i.kind === kindFilter);
   const lowStock = items.filter(i => i.reorder_level > 0 && i.qty_on_hand <= i.reorder_level);
