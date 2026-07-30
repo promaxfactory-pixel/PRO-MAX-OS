@@ -16,15 +16,15 @@
 
 PRO MAX OS is a full-featured Enterprise Resource Planning (ERP) solution purpose-built for paper cup and carton manufacturing factories operating in the Sultanate of Oman. It streamlines every aspect of factory operations — from production tracking and inventory management to HR compliance, invoicing, and supplier logistics — all within a single, unified platform.
 
-Built with **Tauri 2** (Rust backend + React 19/TypeScript frontend), PRO MAX OS delivers a lightweight, high-performance desktop application with a premium dual-themed UI (light + dark) featuring gold and purple accents. It features glassmorphism design, 6 visual modes, dynamic CSS variable theming, and runs natively on Windows, macOS, and Linux.
+Built with **Tauri 2** (Rust backend + React 18/TypeScript frontend), PRO MAX OS delivers a lightweight, high-performance desktop application with a premium dual-themed UI (light + dark) featuring gold and purple accents. It features glassmorphism design, 6 visual modes, dynamic CSS variable theming, and runs natively on Windows, macOS, and Linux.
 
 | Attribute | Detail |
 |---|---|
-| **Version** | 2.1.0 |
+| **Version** | 2.1.1 |
 | **Target Industry** | Paper Cup & Carton Manufacturing |
 | **Region** | Oman (Omani Labor Law Compliant) |
 | **License** | B2B Commercial |
-| **Tech Stack** | Tauri 2.11, Rust, React 19, TypeScript, Tailwind CSS, SQLite (WAL), Recharts, Framer Motion |
+| **Tech Stack** | Tauri 2.11, Rust, React 18, TypeScript, Tailwind CSS, SQLite (WAL), Recharts, Framer Motion |
 | **Database** | SQLite (WAL mode, 28 migrations, 100 tables, 195+ indexes) |
 | **Authentication** | Argon2id + AES-256-GCM + JWT with RBAC |
 | **Auto-Updater** | Tauri updater plugin with minisign signing |
@@ -159,7 +159,7 @@ Built with **Tauri 2** (Rust backend + React 19/TypeScript frontend), PRO MAX OS
 |---|---|---|---|
 | **Desktop Framework** | Tauri 2.11 | Native desktop app shell with Rust backend |
 | **Backend** | Rust (edition 2021) | High-performance system-level logic |
-| **Frontend** | React 19 + TypeScript | Component-based UI with type safety |
+| **Frontend** | React 18 + TypeScript | Component-based UI with type safety |
 | **Styling** | Tailwind CSS | Utility-first responsive design |
 | **Database** | SQLite (rusqlite 0.31) | Embedded, serverless relational database (WAL mode) |
 | **Visualization** | Recharts | Interactive charts and dashboards |
@@ -203,7 +203,7 @@ D:\PRO MAX OS\
 │   │   └── crypto.rs        Argon2id + AES-256-GCM + JWT
 │   ├── Cargo.toml           Rust dependencies
 │   └── tauri.conf.json      Tauri configuration (updater, CSP, identifier)
-├── src\                     React 19 frontend
+├── src\                     React 18 frontend
 │   ├── components\          Reusable UI components
 │   │   ├── layout\          Sidebar, Topbar, AppLayout
 │   │   └── ui\              13 modern components (Button, DataTable, Modal, Toast, etc.)
@@ -433,8 +433,8 @@ Production builds produce the following artifacts in `src-tauri/target/release/b
 
 | Format | File | Size |
 |---|---|---|
-| **MSI** | `PRO MAX OS_2.1.0_x64_en-US.msi` | ~15 MB |
-| **NSIS** | `PRO MAX OS_2.1.0_x64-setup.exe` | ~9.2 MB |
+| **MSI** | `PRO MAX OS_2.1.1_x64_en-US.msi` | ~15 MB |
+| **NSIS** | `PRO MAX OS_2.1.1_x64-setup.exe` | ~9.2 MB |
 | **Portable** | `promax-os.exe` | Optimized release binary |
 
 Build with signing:
