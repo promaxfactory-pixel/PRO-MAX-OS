@@ -1,6 +1,6 @@
 # PRO MAX OS
 
-[![Version](https://img.shields.io/badge/Version-2.1.0-blue.svg)](https://github.com/promaxfactory-pixel/PRO-MAX-OS)
+[![Version](https://img.shields.io/badge/Version-2.1.1-blue.svg)](https://github.com/promaxfactory-pixel/PRO-MAX-OS/releases/tag/v2.1.1)
 [![License](https://img.shields.io/badge/License-B2B%20Commercial-red.svg)](LICENSE)
 [![Tech Stack](https://img.shields.io/badge/Tech-Tauri%202%20%7C%20React%2019%20%7C%20TypeScript%20%7C%20SQLite-6366F1.svg)](https://github.com/promaxfactory-pixel/PRO-MAX-OS)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](https://github.com/promaxfactory-pixel/PRO-MAX-OS)
