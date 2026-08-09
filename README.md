@@ -1,6 +1,6 @@
 # PRO MAX OS
 
-[![Version](https://img.shields.io/badge/Version-2.1.1-blue.svg)](https://github.com/promaxfactory-pixel/PRO-MAX-OS/releases/tag/v2.1.1)
+[![Version](https://img.shields.io/badge/Version-2.2.0-blue.svg)](https://github.com/promaxfactory-pixel/PRO-MAX-OS/releases/tag/v2.2.0)
 [![License](https://img.shields.io/badge/License-B2B%20Commercial-red.svg)](LICENSE)
 [![Tech Stack](https://img.shields.io/badge/Tech-Tauri%202%20%7C%20React%2019%20%7C%20TypeScript%20%7C%20SQLite-6366F1.svg)](https://github.com/promaxfactory-pixel/PRO-MAX-OS)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](https://github.com/promaxfactory-pixel/PRO-MAX-OS)
@@ -20,15 +20,16 @@ Built with **Tauri 2** (Rust backend + React 18/TypeScript frontend), PRO MAX OS
 
 | Attribute | Detail |
 |---|---|
-| **Version** | 2.1.1 |
+| **Version** | 2.2.0 |
 | **Target Industry** | Paper Cup & Carton Manufacturing |
 | **Region** | Oman (Omani Labor Law Compliant) |
 | **License** | B2B Commercial |
 | **Tech Stack** | Tauri 2.11, Rust, React 18, TypeScript, Tailwind CSS, SQLite (WAL), Recharts, Framer Motion |
-| **Database** | SQLite (WAL mode, 28 migrations, 100 tables, 195+ indexes) |
+| **Database** | SQLite (WAL mode, 29 migrations, 100 tables, 195+ indexes) |
 | **Authentication** | Argon2id + AES-256-GCM + JWT with RBAC |
 | **Auto-Updater** | Tauri updater plugin with minisign signing |
-| **4 Binaries** | `promax-os` (GUI), `promax-mcp` (MCP stdio), `promax-api` (Actix-Web REST), `promax-mobile` (React Native) |
+| **3 Binaries** | `promax-os` (GUI), `promax-mcp` (MCP stdio), `promax-api` (Actix-Web REST) |
+| **Mobile** | Progressive Web App (PWA) served by `promax-api` |
 
 ---
 
@@ -123,6 +124,19 @@ Built with **Tauri 2** (Rust backend + React 18/TypeScript frontend), PRO MAX OS
 - Manual review and correction workflow
 - Receipt-to-voucher matching for accounts
 
+### AI Any-File Import
+- Drag-and-drop import of any document type (PDF, images, Excel, Word) into structured data
+- AI-powered extraction with per-file provider selection and live status tracking
+- Manual review, editing, and duplicate detection before committing
+- Optional OCR extraction layer (Tesseract.js) for scanned documents
+- Provider-level settings, catalog listing, and test connectivity from within the app
+
+### Mobile PWA
+- Mobile-first Progressive Web App installable from the browser (add-to-home-screen)
+- Same ERP backend over the REST API (stock in/out, sales, customer lookup)
+- Service worker caching for offline-first startup and offline-capable reads
+- Served statically by the `promax-api` binary (no separate mobile toolchain needed)
+
 ### Excel Import with Smart Detection
 - Drag-and-drop Excel (.xlsx / .xls) import for bulk data entry
 - Auto-detection of column mappings (smart header recognition)
@@ -181,7 +195,7 @@ Built with **Tauri 2** (Rust backend + React 18/TypeScript frontend), PRO MAX OS
 D:\PRO MAX OS\
 ├── src-tauri\               Rust backend (Tauri 2.11)
 │   ├── src\                 Rust source files
-│   │   ├── commands\        50 command modules (287+ commands)
+│   │   ├── commands\        52 command modules (304+ commands)
 │   │   │   ├── rbac.rs      RBAC require_role() enforcement
 │   │   │   ├── invoices.rs  Invoice lifecycle (5 commands with RBAC)
 │   │   │   ├── purchases.rs Purchase management
@@ -192,10 +206,13 @@ D:\PRO MAX OS\
 │   │   │   ├── accounting.rs GL, journal, trial balance
 │   │   │   ├── assets.rs    Fixed asset management
 │   │   │   ├── budget.rs    Budget planning & actuals
+│   │   │   ├── ai_assistant.rs  AI chat, models, failover
+│   │   │   ├── ai_providers.rs  Provider catalog, config, test
+│   │   │   ├── ai_file_import.rs AI any-file extraction & commit
 │   │   │   ├── ...          40+ more modules
-│   │   ├── db.rs            Database (SCHEMA_VERSION=28, 28 migrations)
+│   │   ├── db.rs            Database (SCHEMA_VERSION=29, 29 migrations)
 │   │   ├── schema.sql       100 tables, 195+ indexes, 71 FK constraints
-│   │   ├── lib.rs           All 287+ commands registered
+│   │   ├── lib.rs           All 304+ commands registered
 │   │   ├── main.rs          Desktop binary entrypoint
 │   │   ├── bin/
 │   │   │   ├── mcp_server.rs   MCP stdio server binary
@@ -216,6 +233,12 @@ D:\PRO MAX OS\
 │   ├── types\               TypeScript type definitions
 │   ├── index.css            CSS Design System (50+ variables, 12 themes)
 │   └── App.tsx              Router with lazy-loaded pages
+├── mobile\                  Progressive Web App (served by promax-api)
+│   ├── index.html           PWA entry point
+│   ├── app.js               PWA app logic (stock in/out, sales, customers)
+│   ├── styles.css           Mobile-first styles
+│   ├── sw.js                Service worker (offline-first caching)
+│   └── manifest.webmanifest PWA manifest (installable)
 ├── docs\                    Documentation (API.md, schema_documentation.md)
 ├── scripts\                 Build and development scripts
 ├── .env.example             Template environment variables
@@ -316,8 +339,8 @@ On first launch, the system auto-generates a unique developer PIN tied to the ma
 | Attribute | Detail |
 |---|---|
 | **Engine** | SQLite (rusqlite 0.31, bundled) |
-| **Schema Version** | 28 |
-| **Migration Files** | 28 (applied sequentially on startup) |
+| **Schema Version** | 29 |
+| **Migration Files** | 29 (applied sequentially on startup) |
 | **Tables** | 100 |
 | **Indexes** | 195+ (including 71 FK indexes + composite reporting indexes) |
 | **Foreign Keys** | 71 REFERENCES clauses across 39 tables |
@@ -336,7 +359,7 @@ All monetary values are stored in **milli** units (1/1000 of an OMR) as `INTEGER
 
 Conversion to display format divides by 1000 and formats to 3 decimal places.
 
-### Migrations (28 total)
+### Migrations (29 total)
 
 | # | Purpose |
 |---|---------|
@@ -346,6 +369,7 @@ Conversion to display format divides by 1000 and formats to 3 decimal places.
 | 26 | `import_history` table to managed schema; removed runtime `CREATE TABLE` |
 | 27 | `reset_token` + `reset_token_expiry` on `users` for password reset |
 | 28 | `avg_cost_milli` converted from `REAL` to `INTEGER` (money precision) |
+| 29 | `ai_extractions` table + indexes (AI any-file import) |
 
 Migrations are embedded in `src-tauri/src/db.rs` and applied automatically on application startup with proper error propagation.
 
@@ -370,7 +394,7 @@ PRO MAX OS v2.1.0 underwent a comprehensive security audit across Rust backend, 
 
 - **`require_role()`** function in `commands/rbac.rs` enforces role checks on 20+ financial mutation commands
 - Commands protected: invoices (create, post, void, duplicate, update), purchases (create, payment), expenses (create, reimburse, approve), accounting (journal entry), budget (plan, actual), assets (acquisition, depreciation, disposal), payroll (run), cashbank (transfer), cheques (issue), custody (spend, fund, transfer), petty_cash
-- 287+ commands all registered in `lib.rs` — complete coverage
+- 304+ commands all registered in `lib.rs` (52 modules) — complete coverage, including 31 AI commands
 
 ### Data Encryption
 
@@ -433,8 +457,8 @@ Production builds produce the following artifacts in `src-tauri/target/release/b
 
 | Format | File | Size |
 |---|---|---|
-| **MSI** | `PRO MAX OS_2.1.1_x64_en-US.msi` | ~15 MB |
-| **NSIS** | `PRO MAX OS_2.1.1_x64-setup.exe` | ~9.2 MB |
+| **MSI** | `PRO MAX OS_2.2.0_x64_en-US.msi` | ~15 MB |
+| **NSIS** | `PRO MAX OS_2.2.0_x64-setup.exe` | ~9.2 MB |
 | **Portable** | `promax-os.exe` | Optimized release binary |
 
 Build with signing:
@@ -444,7 +468,7 @@ $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "your-password"
 npx tauri build --bundles "msi,nsis"
 ```
 
-## 287+ Tauri Commands (50 Modules)
+## 304+ Tauri Commands (52 Modules)
 
 All commands are registered in `src-tauri/src/lib.rs` under the `generate_handler![]` macro. Key modules:
 
@@ -470,6 +494,9 @@ All commands are registered in `src-tauri/src/lib.rs` under the `generate_handle
 | **Excel Import** | `commands/excel_import.rs` | import_products, import_customers, import_employees |
 | **MCP Server** | `bin/mcp_server.rs` | stdio-based MCP protocol for AI integration |
 | **API Server** | `bin/api_server.rs` | Actix-Web REST API for external integrations |
+| **AI Assistant** | `commands/ai_assistant.rs` | ai_chat_with_provider, ai_get_available_models, ai_failover_chat |
+| **AI Providers** | `commands/ai_providers.rs` | ai_provider_catalog, ai_provider_statuses, ai_save_provider_config, ai_test_provider |
+| **AI File Import** | `commands/ai_file_import.rs` | ai_analyze_document, ai_list_extractions, ai_commit_extraction, ai_duplicate_check |
 
 ## License
 
@@ -536,7 +563,17 @@ For technical support, feature requests, or licensing inquiries:
 
 ## Changelog
 
-### v2.1.1 (Current) — Patch: RTL/LTR Support, i18n Fixes, Login Overhaul
+### v2.2.0 (Current) — AI Any-File Import, Mobile PWA, REST API v3
+- AI-powered any-file import (PDF, images, Excel, Word) with provider-level configuration
+- New AI command modules: `ai_providers.rs`, `ai_file_import.rs`; extended `ai_assistant.rs`
+- New `ai_extractions` database table (migration 29) with commit, review, and duplicate-detection workflow
+- `promax-api` upgraded to REST API v3: logout, change-password, KPIs, suppliers, purchases, expenses, approvals, notifications, alerts, activity, and company endpoints
+- `promax-api` now serves the mobile PWA statically — no separate mobile toolchain required
+- Mobile-first Progressive Web App (`mobile/`): offline-first service worker, installable, stock/sales/customer workflows over REST
+- AI provider API keys encrypted at rest via AES-256-GCM
+- Full i18n pass: merged remote/local locales (2,164 keys per language), fixed 16 missing keys across Arabic and English
+
+### v2.1.1 — Patch: RTL/LTR Support, i18n Fixes, Login Overhaul
 - Rewrote LoginPage.tsx with proper i18n keys (eliminated mojibake Arabic text corruption)
 - Fixed stale hardcoded password hint → now directs users to check console
 - Added `data-theme` initialization in `main.tsx` (eliminates theme flash on first load)
@@ -549,7 +586,6 @@ For technical support, feature requests, or licensing inquiries:
 - Added CSS RTL direction logic in `index.css`
 
 ### v2.1.0 — Hardened Security & Production Release
-- Comprehensive security audit: 70+ issues resolved
 - Comprehensive security audit: 70+ issues resolved
 - RBAC on 20+ financial mutation commands via `require_role()`
 - Random 16-char admin password (no hardcoded defaults)

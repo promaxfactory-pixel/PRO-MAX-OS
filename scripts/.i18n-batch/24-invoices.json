@@ -1,0 +1,33 @@
+{
+  "invoice": {
+    "subtitle": { "en": "{count} invoices", "ar": "{count} فاتورة" },
+    "empty": { "en": "No invoices", "ar": "لا توجد فواتير" },
+    "loadError": { "en": "An error occurred while loading data", "ar": "حدث خطأ أثناء تحميل البيانات" },
+    "createSubtitle": { "en": "Create a new sales invoice", "ar": "إنشاء فاتورة مبيعات جديدة" },
+    "saveDraft": { "en": "Save Draft", "ar": "حفظ مسودة" },
+    "selectCustomer": { "en": "Select customer", "ar": "اختر العميل" },
+    "itemsTitle": { "en": "Invoice Items", "ar": "بنود الفاتورة" },
+    "customsPrices": { "en": "Customs prices", "ar": "أسعار الجمارك" },
+    "addLine": { "en": "Add Line", "ar": "إضافة بند" },
+    "salePrice": { "en": "Sale price", "ar": "سعر البيع" },
+    "customsPrice": { "en": "Customs price", "ar": "سعر الجمارك" },
+    "addFirstLine": { "en": "+ Add the first item", "ar": "+ أضف بندًا أولًا" },
+    "summary": { "en": "Summary", "ar": "الملخص" },
+    "subtotal": { "en": "Subtotal", "ar": "الإجمالي قبل الضريبة" },
+    "vatLine": { "en": "VAT (5%)", "ar": "ضريبة القيمة المضافة (5%)" },
+    "notesPlaceholder": { "en": "Additional notes...", "ar": "ملاحظات إضافية..." },
+    "duplicate": { "en": "Duplicate", "ar": "نسخ" },
+    "postAction": { "en": "Post", "ar": "ترحيل" },
+    "voidAction": { "en": "Void", "ar": "إلغاء" },
+    "customsInvoice": { "en": "Customs Invoice", "ar": "فاتورة الجمارك" },
+    "customsStamp": { "en": "─── Customs Invoice (for customs purposes only) ───", "ar": "─── فاتورة الجمارك (للأغراض الجمركية فقط) ───" },
+    "lineTotal": { "en": "Total", "ar": "الإجمالي" },
+    "financialSummary": { "en": "Financial Summary", "ar": "الملخص المالي" },
+    "createdByLabel": { "en": "Created by:", "ar": "أنشأ:" },
+    "createdAtLabel": { "en": "Time:", "ar": "الوقت:" },
+    "postTitle": { "en": "Post Invoice", "ar": "ترحيل الفاتورة" },
+    "postConfirm": { "en": "Are you sure you want to post this invoice? This action cannot be undone.", "ar": "هل تريد ترحيل هذه الفاتورة؟ لن يمكن التراجع عن هذا الإجراء." },
+    "voidTitle": { "en": "Void Invoice", "ar": "إلغاء الفاتورة" },
+    "voidConfirm": { "en": "Are you sure you want to void this invoice?", "ar": "هل تريد إلغاء هذه الفاتورة؟" }
+  }
+}

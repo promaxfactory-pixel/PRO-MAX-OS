@@ -53,6 +53,7 @@ database/backups/
 releases/
 *.msi
 *.exe
+*.apk
 
 # Generated schemas
 src-tauri/gen/

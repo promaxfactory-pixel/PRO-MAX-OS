@@ -11,7 +11,7 @@ import {
   ClipboardCheck, Award, RefreshCw, Bell, Search,
   GitBranch, HandCoins, FileClock, FileWarning, Clock,
   Building2, ScrollText, IdCard, Globe,
-  Ship, ArrowLeftRight, Sun, Moon, LogOut
+  Ship, ArrowLeftRight, Sun, Moon, LogOut, Sparkles
 } from "lucide-react";
 import LanguageSwitcher from "./LanguageSwitcher";
 
@@ -130,6 +130,7 @@ const menuSections = (t: (key: string) => string) => [
     items: [
       { label: "مسح ضوئي", icon: FileSearch, path: '/tools/ocr' },
       { label: "مساعد الذكاء الاصطناعي", icon: TrendingUp, path: '/tools/ai' },
+      { label: "استيراد الملفات بالذكاء الاصطناعي", icon: Sparkles, path: '/tools/ai-file-import' },
       { label: "استيراد تاريخي", icon: Database, path: '/tools/historical-import' },
       { label: "استيراد Excel", icon: Database, path: '/tools/excel-import' },
       { label: "الفواتير الإلكترونية", icon: Receipt, path: '/tools/einvoice' },

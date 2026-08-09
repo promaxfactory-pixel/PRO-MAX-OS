@@ -76,6 +76,7 @@ const UsersPage = lazy(() => import("./pages/settings/UsersPage"));
 const ChangePasswordPage = lazy(() => import("./pages/settings/ChangePasswordPage"));
 const HistoricalImportPage = lazy(() => import("./pages/tools/HistoricalImportPage"));
 const AiAssistantPage = lazy(() => import("./pages/tools/AiAssistantPage"));
+const AiFileImportPage = lazy(() => import("./pages/tools/AiFileImportPage"));
 const EnhancedOcrPage = lazy(() => import("./pages/tools/EnhancedOcrPage"));
 const ExcelImportPage = lazy(() => import("./pages/tools/ExcelImportPage"));
 const EInvoicePage = lazy(() => import("./pages/tools/EInvoicePage"));
@@ -234,6 +235,7 @@ export default function App() {
           {/* Tools */}
           <Route path="/tools/ocr" element={<ProtectedRoute><EnhancedOcrPage /></ProtectedRoute>} />
           <Route path="/tools/ai" element={<ProtectedRoute><AiAssistantPage /></ProtectedRoute>} />
+          <Route path="/tools/ai-file-import" element={<ProtectedRoute><AiFileImportPage /></ProtectedRoute>} />
           <Route path="/tools/historical-import" element={<ProtectedRoute><HistoricalImportPage /></ProtectedRoute>} />
           <Route path="/tools/excel-import" element={<ProtectedRoute><ExcelImportPage /></ProtectedRoute>} />
           <Route path="/tools/einvoice" element={<ProtectedRoute><EInvoicePage /></ProtectedRoute>} />

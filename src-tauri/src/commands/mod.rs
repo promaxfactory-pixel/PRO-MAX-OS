@@ -35,6 +35,8 @@ pub mod stock_transfers;
 pub mod overtime;
 pub mod historical_import;
 pub mod ai_assistant;
+pub mod ai_providers;
+pub mod ai_file_import;
 pub mod device;
 pub mod production_shift;
 pub mod licensing;

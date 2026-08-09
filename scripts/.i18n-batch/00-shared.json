@@ -1,0 +1,134 @@
+﻿{
+  "nav": {
+    "employees": { "en": "Employees", "ar": "الموظفين" }
+  },
+  "common": {
+    "notifications": { "en": "Notifications", "ar": "الإشعارات" },
+    "closeNotification": { "en": "Close notification", "ar": "إغلاق الإشعار" },
+    "processing": { "en": "Processing...", "ar": "جاري..." },
+    "clearSearch": { "en": "Clear search", "ar": "مسح البحث" },
+    "userMenu": { "en": "User menu", "ar": "قائمة المستخدم" },
+    "userOptions": { "en": "User options", "ar": "خيارات المستخدم" },
+    "info": { "en": "Info", "ar": "معلومة" },
+    "start": { "en": "Start", "ar": "ابدأ" }
+  },
+  "modes": {
+    "default": { "en": "Default", "ar": "افتراضي" },
+    "power": { "en": "Power", "ar": "قوة" },
+    "stability": { "en": "Stability", "ar": "استقرار" },
+    "focus": { "en": "Focus", "ar": "تركيز" },
+    "creative": { "en": "Creative", "ar": "إبداعي" },
+    "night": { "en": "Night", "ar": "ليلي" },
+    "professional": { "en": "Professional", "ar": "احترافي" }
+  },
+  "mode": {
+    "default": { "en": "Default", "ar": "افتراضي" },
+    "defaultDesc": { "en": "Balanced interface for daily work", "ar": "واجهة متوازنة للعمل اليومي" }
+  },
+  "appearance": {
+    "title": { "en": "Appearance", "ar": "المظهر" },
+    "modes": { "en": "Modes", "ar": "الأوضاع" },
+    "density": { "en": "Density", "ar": "الكثافة" },
+    "densityComfortable": { "en": "Comfortable", "ar": "مريح" },
+    "densityCompact": { "en": "Compact", "ar": "مضغوط" },
+    "motion": { "en": "Motion", "ar": "الحركات" },
+    "motionFull": { "en": "Full", "ar": "كامل" },
+    "motionReduced": { "en": "Reduced", "ar": "مخفّض" },
+    "livePreview": { "en": "Applies instantly", "ar": "تطبيق فوري" }
+  },
+  "commandPalette": {
+    "placeholder": { "en": "Search for a command or navigate...", "ar": "ابحث عن أمر أو انتقل إلى..." },
+    "noResults": { "en": "No matching results", "ar": "لا توجد نتائج مطابقة" },
+    "tryDifferent": { "en": "Try different keywords", "ar": "جرب كلمات مختلفة" },
+    "mode": { "en": "Mode", "ar": "السمة" },
+    "sections": {
+      "navigation": { "en": "Navigation", "ar": "التنقل" },
+      "actions": { "en": "Actions", "ar": "الإجراءات" },
+      "settings": { "en": "Settings", "ar": "الإعدادات" }
+    }
+  },
+  "onboarding": {
+    "skip": { "en": "Skip tour", "ar": "تخطي الجولة" }
+  },
+  "badge": {
+    "draft": { "en": "Draft", "ar": "مسودة" },
+    "posted": { "en": "Posted", "ar": "مرحل" },
+    "open": { "en": "Open", "ar": "مفتوح" },
+    "closed": { "en": "Closed", "ar": "مغلق" },
+    "void": { "en": "Void", "ar": "ملغى" },
+    "cancelled": { "en": "Cancelled", "ar": "ملغى" },
+    "approved": { "en": "Approved", "ar": "معتمد" },
+    "completed": { "en": "Completed", "ar": "مكتمل" },
+    "pending": { "en": "Pending", "ar": "قيد الانتظار" },
+    "processing": { "en": "Processing", "ar": "قيد المعالجة" },
+    "submitted": { "en": "Submitted", "ar": "مقدم" },
+    "partial": { "en": "Partial", "ar": "جزئي" },
+    "rejected": { "en": "Rejected", "ar": "مرفوض" },
+    "ordered": { "en": "Ordered", "ar": "مطلوب" },
+    "generated": { "en": "Generated", "ar": "مُنشأ" }
+  },
+  "search": {
+    "quickSearch": { "en": "Quick search", "ar": "بحث سريع" },
+    "openQuickSearch": { "en": "Open quick search", "ar": "فتح البحث السريع" },
+    "searchFailed": { "en": "Search failed", "ar": "فشل البحث" },
+    "typeToSearch": { "en": "Start typing to search...", "ar": "اكتب للبحث..." },
+    "noResultsFor": { "en": "No results for \"{{query}}\"", "ar": "لا توجد نتائج لـ \"{{query}}\"" },
+    "searching": { "en": "Searching...", "ar": "جاري البحث..." }
+  },
+  "table": {
+    "label": { "en": "Data table", "ar": "جدول البيانات" }
+  },
+  "overtime": {
+    "pending": { "en": "Pending review", "ar": "قيد المراجعة" },
+    "approved": { "en": "Approved", "ar": "موافق عليه" },
+    "rejected": { "en": "Rejected", "ar": "مرفوض" },
+    "processing": { "en": "Processing", "ar": "قيد التنفيذ" }
+  },
+  "errorBoundary": {
+    "title": { "en": "An unexpected error occurred", "ar": "حدث خطأ غير متوقع" },
+    "message": { "en": "Sorry for the inconvenience. Please try again or contact technical support.", "ar": "نأسف للإزعاج. يرجى إعادة المحاولة أو الاتصال بالدعم الفني." },
+    "home": { "en": "Back to home", "ar": "العودة للرئيسية" },
+    "details": { "en": "Technical details", "ar": "تفاصيل تقنية" }
+  },
+  "temperatureMonitor": {
+    "title": { "en": "Machine Temperatures", "ar": "حرارة الماكينات" },
+    "highTemp": { "en": "High temperature", "ar": "حرارة عالية" },
+    "fetchFailed": { "en": "Failed to fetch machine temperatures", "ar": "فشل جلب حرارة الماكينات" }
+  },
+  "license": {
+    "checking": { "en": "Checking license...", "ar": "جاري التحقق من الترخيص..." },
+    "verifyFailed": { "en": "Unable to verify license", "ar": "تعذر التحقق من الترخيص" }
+  },
+  "validation": {
+    "required": { "en": "This field is required", "ar": "هذا الحقل مطلوب" },
+    "requiredPick": { "en": "Please select a value", "ar": "يرجى اختيار قيمة" },
+    "nonNegative": { "en": "Value must be 0 or greater", "ar": "القيمة يجب أن تكون 0 أو أكبر" },
+    "positive": { "en": "Value must be greater than zero", "ar": "القيمة يجب أن تكون أكبر من صفر" },
+    "email": { "en": "Invalid email address", "ar": "بريد إلكتروني غير صالح" },
+    "phone": { "en": "Invalid phone number", "ar": "رقم الهاتف غير صالح" }
+  },
+  "currency": {
+    "omrSuffix": { "en": "OMR", "ar": "ر.ع" }
+  },
+  "print": {
+    "title": { "en": "Print", "ar": "طباعة" },
+    "item": { "en": "Item", "ar": "البيان" },
+    "value": { "en": "Value", "ar": "القيمة" },
+    "invoiceSalesTitle": { "en": "Sales Invoice", "ar": "فاتورة مبيعات" },
+    "invoiceNoLabel": { "en": "No.:", "ar": "رقم:" },
+    "dateLabel": { "en": "Date:", "ar": "التاريخ:" },
+    "paid": { "en": "Paid", "ar": "مدفوعة" },
+    "unpaid": { "en": "Unpaid", "ar": "غير مدفوعة" },
+    "customerLabel": { "en": "Customer", "ar": "العميل" },
+    "cashLabel": { "en": "Cash", "ar": "نقداً" },
+    "productLabel": { "en": "Product", "ar": "المنتج" },
+    "cartons": { "en": "Cartons", "ar": "الكراتين" },
+    "cupsPerCarton": { "en": "Cups/Carton", "ar": "كوب/كرتون" },
+    "net": { "en": "Net", "ar": "الصافي" },
+    "vat5": { "en": "VAT (5%)", "ar": "الضريبة (5%)" },
+    "bankTransferLabel": { "en": "Bank transfer details", "ar": "بيانات التحويل" },
+    "signature": { "en": "Signature", "ar": "التوقيع" },
+    "companyStamp": { "en": "Company Stamp", "ar": "ختم الشركة" },
+    "printedFrom": { "en": "Printed from PRO MAX OS © {{year}} | Invoice No. {{invNo}}", "ar": "تمت الطباعة من PRO MAX OS © {{year}} | فاتورة رقم {{invNo}}" }
+  }
+}

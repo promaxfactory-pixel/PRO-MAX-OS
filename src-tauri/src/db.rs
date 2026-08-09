@@ -61,7 +61,7 @@ fn ensure_admin_user(conn: &Connection) -> Result<()> {
 mod migrations {
     use rusqlite::{Connection, Result};
     
-    pub(crate) const SCHEMA_VERSION: i32 = 28;
+    pub(crate) const SCHEMA_VERSION: i32 = 29;
     
     pub fn run(conn: &Connection) -> Result<()> {
         let current: i32 = conn
@@ -741,6 +741,38 @@ mod migrations {
                      ALTER TABLE inventory_items RENAME COLUMN avg_cost_milli_int TO avg_cost_milli;"
                 ).map_err(|e| {
                     eprintln!("Migration 28 failed: {}", e);
+                    e
+                })?;
+            }
+            29 => {
+                conn.execute_batch(
+                    "-- ============================================================
+                    -- MIGRATION 29: AI file extractions (any-file -> LLM -> structured)
+                    -- ============================================================
+
+                    CREATE TABLE IF NOT EXISTS ai_extractions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        file_path TEXT NOT NULL,
+                        file_name TEXT NOT NULL,
+                        file_type TEXT NOT NULL DEFAULT 'unknown',
+                        doc_type TEXT NOT NULL DEFAULT 'invoice',
+                        provider TEXT NOT NULL DEFAULT 'unknown',
+                        model TEXT NOT NULL DEFAULT '',
+                        raw_text TEXT,
+                        extracted_json TEXT NOT NULL,
+                        fields_json TEXT,
+                        confidence REAL NOT NULL DEFAULT 0,
+                        status TEXT NOT NULL DEFAULT 'draft',
+                        target_table TEXT,
+                        target_id INTEGER,
+                        created_by TEXT,
+                        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                        updated_at TEXT
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_ai_ext_status ON ai_extractions(status);
+                    CREATE INDEX IF NOT EXISTS idx_ai_ext_created ON ai_extractions(created_at);"
+                ).map_err(|e| {
+                    eprintln!("Migration 29 failed: {}", e);
                     e
                 })?;
             }

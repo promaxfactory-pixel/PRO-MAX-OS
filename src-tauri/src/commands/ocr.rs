@@ -134,7 +134,7 @@ fn try_run_tesseract(path: &str) -> Option<String> {
     None
 }
 
-fn extract_text_from_image(path: &str) -> (String, f64) {
+pub fn extract_text_from_image(path: &str) -> (String, f64) {
     if let Some(tesseract_text) = try_run_tesseract(path) {
         if tesseract_text.trim().len() > 20 {
             return (tesseract_text, 70.0);

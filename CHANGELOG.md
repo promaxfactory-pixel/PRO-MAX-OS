@@ -1,0 +1,87 @@
+# Changelog
+
+All notable changes to PRO MAX OS are documented in this file.
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [2.2.0] - 2026-08-09
+
+Unified release: the v2.0 AI/mobile line integrated onto the v2.1.1 line
+(multi-provider AI, any-file AI import, offline mobile PWA, REST API v3).
+
+### Added
+- **Mobile PWA** (`mobile/`): installable offline-first dashboard for phones
+  and tablets served directly by the REST API (`--mobile-dir`). Covers KPIs,
+  invoices, purchases, expenses, approvals, alerts, notifications, activity,
+  customers and products.
+- **REST API v3** (`promax-api`): static PWA serving, expense creation,
+  KPI/approval/notification/alert/activity/company endpoints, per-IP login and
+  API rate limiting, hardened security headers, and tunable server settings.
+- **AI provider layer** (`ai_providers`): OpenAI, Anthropic, Google Gemini,
+  Ollama, Groq, DeepSeek, Mistral — encrypted API keys, provider catalog,
+  status checks, model listing, and automatic failover chat.
+- **AI any-file import** (`ai_file_import`): analyze PDF/images/Excel/CSV/
+  DOCX/TXT/JSON/XML via the configured provider, structured field extraction,
+  duplicate detection, and one-click commit to invoices, purchases, customers,
+  products, suppliers or expenses. New `ai_extractions` table (migration 29).
+- **`ai_chat_with_provider`** command with provider selection and failover.
+- **Full i18n**: comprehensive en/ar translations (2164 keys/locale), batch
+  merge tooling (`scripts/merge-i18n-batches.mjs`, `check-i18n.mjs`).
+- **Docs/tooling**: `LICENSE`, `CHANGELOG.md`, project export packager
+  (`scripts/export-project.mjs`).
+
+### Fixed
+- API server now exposes the full dashboard/KPI surface to the mobile app.
+- Missing i18n keys on the 2.1.x line (password change flow, search clear)
+  are now translated in both en and ar.
+
+## [2.0.0] - 2026-08-09
+
+Baseline release of the v2 product line.
+
+### Added
+- **AI engine layer** (`ai_providers`): 7 providers (Ollama, Groq, Google Gemini,
+  DeepSeek, Mistral, OpenAI, Anthropic) with provider status catalog, settings,
+  connectivity tests, and automatic failover.
+- **AI any-file import** (`ai_file_import`): analyze, list, get, delete, update,
+  and commit flows that map documents into customers, suppliers, products,
+  inventory, invoices, purchases, and expenses — with duplicate detection.
+- **AI assistant**: provider-aware chat with per-provider configuration.
+- **AI dashboard** and dedicated import/assistant pages, wired to navigation.
+- **REST API server v3** (`promax-api`): JWT (Argon2id) auth, token blacklist,
+  RBAC roles, IP rate limiting, audit trail, security headers, and hardened
+  static serving of the mobile PWA with SPA fallback and path-traversal guards.
+- **Mobile manager**: self-contained Arabic RTL PWA (`mobile/`) — login, KPI
+  home, invoices/purchases/expenses, approvals (approve/reject), alerts and
+  notifications, products, customers, activity, company, change password, and
+  expense creation.
+- **Android packaging**: Android toolchain setup, `cargo-ndk` cross-compile,
+  Tauri Android project, and signed release APK (`mobile/PRO-MAX-OS.apk`).
+- **MCP server** (`promax-mcp`): JSON-RPC MCP interface exposing database tools
+  and resources.
+- **E-invoice module** (ZATCA/FATOORA-ready), OCR receipt scanning, Excel and
+  historical data import, import-shipment tracking, barter exchange,
+  operating advances, multi-warehouse stock transfers, production shift
+  tracking, government dashboard, and a 24-migration schema
+  (`SCHEMA_VERSION = 24`) including the `ai_extractions` table.
+- **Tooling**: `scripts/export-project.mjs` (Claude-ready project packager),
+  `scripts/check-i18n.mjs` (key parity guard), i18n batch merge tools, and a
+  GitHub Actions CI (cargo check/test/clippy, tsc, eslint, Windows build).
+
+### Changed
+- `reqwest` uses rustls with webpki roots (no OpenSSL dependency) for
+  cross-platform and Android builds.
+- PWA render loop refactored to a single-pass shell build (no double render).
+- Service worker rewritten with versioned cache and network-first core.
+- Static file IO in the API server moved off the actix worker pool (`web::block`).
+
+### Security
+- Password hashing via Argon2id; JWT with jti blacklist and logout revocation.
+- API rate limiting (10 login attempts / 15 minutes) and hardened HTTP headers.
+- Strict path-traversal rejection in the static file server.
+- Secrets kept out of the repository (`.env`, `*.secrets.json` ignored).
+
+### Notes
+- Database money amounts stored as integer milli (1/1000 OMR).
+- The seeded test database login used during development is not a default in
+  production builds; set `PROMAX_JWT_SECRET` and strong admin credentials.

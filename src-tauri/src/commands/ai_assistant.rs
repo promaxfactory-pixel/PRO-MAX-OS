@@ -62,7 +62,7 @@ fn now_str() -> String {
     chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string()
 }
 
-fn save_setting(conn: &rusqlite::Connection, key: &str, value: &str) -> Result<(), AppError> {
+pub fn save_setting(conn: &rusqlite::Connection, key: &str, value: &str) -> Result<(), AppError> {
     conn.execute(
         "INSERT INTO integrations_settings(key, value, updated_at) VALUES(?1, ?2, ?3)
          ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
@@ -72,7 +72,7 @@ fn save_setting(conn: &rusqlite::Connection, key: &str, value: &str) -> Result<(
     Ok(())
 }
 
-fn load_setting(conn: &rusqlite::Connection, key: &str) -> Result<Option<String>, AppError> {
+pub fn load_setting(conn: &rusqlite::Connection, key: &str) -> Result<Option<String>, AppError> {
     let result = conn.query_row(
         "SELECT value FROM integrations_settings WHERE key=?1",
         params![key],
@@ -1318,6 +1318,91 @@ pub async fn chat_with_ai(
         model,
         provider: provider.to_string(),
         token_estimate,
+    })
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ChatProviderResponse {
+    pub reply: String,
+    pub model: String,
+    pub provider: String,
+    pub provider_label: String,
+    pub used_fallback: bool,
+    pub attempts: Vec<String>,
+}
+
+#[tauri::command]
+pub async fn ai_chat_with_provider(
+    state: State<'_, DbState>,
+    message: String,
+    context_type: Option<String>,
+    provider: Option<String>,
+) -> Result<ChatProviderResponse, AppError> {
+    use crate::commands::ai_providers::{call_provider, chat_with_failover, load_provider_config, PROVIDER_CATALOG};
+
+    let (max_tokens, temperature, context_summary) = {
+        let conn = state.0.lock()?;
+        let max_tokens: i64 = load_setting(&conn, "ai_max_tokens")?
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(2048);
+        let temperature: f64 = load_setting(&conn, "ai_temperature")?
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0.7);
+        let context = match context_type.as_deref() {
+            Some("financial") => build_financial_context(&conn)?,
+            Some("production") => build_production_context(&conn)?,
+            Some("inventory") => build_inventory_context(&conn)?,
+            Some("hr") => build_hr_context(&conn)?,
+            _ => build_general_context(&conn)?,
+        };
+        (max_tokens, temperature, context.summary)
+    };
+
+    let system_prompt = format!(
+        "You are PRO MAX AI, an intelligent ERP assistant for PRO MAX OS manufacturing ERP system. \
+         You have access to the following company data:\n\n{}\n\n\
+         Rules:\n\
+         1. Answer in the same language as the user's question (Arabic, English, Hindi, or Urdu).\n\
+         2. Provide specific numbers, actionable recommendations, and data-driven insights.\n\
+         3. If data is insufficient, acknowledge it and suggest what data would help.\n\
+         4. Always consider the manufacturing industry context (paper cups, packaging, production).\n\
+         5. Be concise and professional. Use bullet points for clarity.\n\
+         6. For financial questions, reference specific amounts in OMR (Omani Rial).\n\
+         7. For production questions, consider machine efficiency, waste rates, and quality.",
+        context_summary
+    );
+
+    let selected = provider.as_deref().unwrap_or("auto");
+
+    if selected == "auto" {
+        let result = chat_with_failover(state, &system_prompt, &message, max_tokens, temperature, false).await?;
+        return Ok(ChatProviderResponse {
+            reply: result.text,
+            model: result.model,
+            provider: result.provider,
+            provider_label: result.provider_label,
+            used_fallback: result.used_fallback,
+            attempts: result.attempts,
+        });
+    }
+
+    let cfg = {
+        let conn = state.0.lock()?;
+        load_provider_config(&conn, selected)?
+    };
+    let resp = call_provider(&cfg, &system_prompt, &message, max_tokens, temperature, false).await?;
+    let provider_label = PROVIDER_CATALOG
+        .iter()
+        .find(|p| p.id == cfg.id)
+        .map(|p| p.label.to_string())
+        .unwrap_or_else(|| cfg.label.clone());
+    Ok(ChatProviderResponse {
+        reply: resp.text,
+        model: resp.model,
+        provider: resp.provider,
+        provider_label,
+        used_fallback: false,
+        attempts: vec![cfg.id.clone()],
     })
 }
 

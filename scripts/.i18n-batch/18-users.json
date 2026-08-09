@@ -1,0 +1,49 @@
+{
+  "users": {
+    "role": {
+      "admin": { "en": "Admin", "ar": "مدير" },
+      "accountant": { "en": "Accountant", "ar": "محاسب" },
+      "hr": { "en": "HR", "ar": "موارد بشرية" },
+      "operator": { "en": "Operator", "ar": "مشغل" },
+      "viewer": { "en": "Viewer", "ar": "مشاهد" }
+    },
+    "page": {
+      "success": { "en": "Done", "ar": "تم" },
+      "title": { "en": "User Management", "ar": "إدارة المستخدمين" },
+      "subtitle": { "en": "{{count}} user(s)", "ar": "{{count}} مستخدم" },
+      "newUser": { "en": "New User", "ar": "مستخدم جديد" },
+      "totalUsers": { "en": "Total Users", "ar": "إجمالي المستخدمين" },
+      "activeUsers": { "en": "Active Users", "ar": "مستخدم نشط" },
+      "disabledUsers": { "en": "Disabled Users", "ar": "مستخدم معطل" },
+      "empty": { "en": "No users", "ar": "لا يوجد مستخدمين" },
+      "usernameRequired": { "en": "Username is required", "ar": "اسم المستخدم مطلوب" },
+      "fullNameMin": { "en": "Full name must be at least 3 characters", "ar": "الاسم الكامل يجب أن يكون 3 أحرف على الأقل" },
+      "updateSuccess": { "en": "User updated successfully", "ar": "تم تحديث المستخدم بنجاح" },
+      "createSuccess": { "en": "User created successfully", "ar": "تم إنشاء المستخدم بنجاح" },
+      "passwordMin": { "en": "Password must be at least 8 characters", "ar": "كلمة المرور يجب أن تكون 8 أحرف على الأقل" },
+      "passwordMismatch": { "en": "Password confirmation does not match", "ar": "تأكيد كلمة المرور غير متطابق" },
+      "cannotDisableSelf": { "en": "You cannot disable your current account", "ar": "لا يمكنك تعطيل حسابك الحالي" },
+      "cannotDeleteSelf": { "en": "You cannot delete your current account", "ar": "لا يمكنك حذف حسابك الحالي" },
+      "userDisabled": { "en": "User disabled", "ar": "تم تعطيل المستخدم" },
+      "userEnabled": { "en": "User enabled", "ar": "تم تفعيل المستخدم" },
+      "deleteSuccess": { "en": "User deleted successfully", "ar": "تم حذف المستخدم بنجاح" },
+      "resetSuccess": { "en": "Password reset successfully", "ar": "تم إعادة تعيين كلمة المرور بنجاح" },
+      "deleteConfirm": { "en": "Are you sure you want to delete user \"{{username}}\"?", "ar": "هل أنت متأكد من حذف المستخدم \"{{username}}\"؟" },
+      "you": { "en": "you", "ar": "أنت" },
+      "fullName": { "en": "Full Name", "ar": "الاسم الكامل" },
+      "role": { "en": "Role", "ar": "الصلاحية" },
+      "active": { "en": "Active", "ar": "نشط" },
+      "disabled": { "en": "Disabled", "ar": "معطل" },
+      "createdAt": { "en": "Created At", "ar": "تاريخ الإنشاء" },
+      "activate": { "en": "Activate", "ar": "تفعيل" },
+      "deactivate": { "en": "Deactivate", "ar": "تعطيل" },
+      "resetPassword": { "en": "Reset Password", "ar": "إعادة تعيين كلمة المرور" },
+      "editUser": { "en": "Edit User", "ar": "تعديل مستخدم" },
+      "saveChanges": { "en": "Save Changes", "ar": "حفظ التعديلات" },
+      "passwordMinHint": { "en": "At least 8 characters", "ar": "8 أحرف على الأقل" },
+      "userLabel": { "en": "User", "ar": "المستخدم" },
+      "mustChangePassword": { "en": "The user will be required to change it at first login.", "ar": "سيتعين على المستخدم تغييرها عند أول تسجيل دخول." },
+      "reset": { "en": "Reset", "ar": "إعادة تعيين" }
+    }
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "nav": {
+    "cashBankAccounts": { "en": "Cash & Bank Accounts", "ar": "الحسابات النقدية والبنكية" },
+    "pettyCash": { "en": "Petty Cash", "ar": "الصرفات النثرية" },
+    "cheques": { "en": "Cheques", "ar": "الشيكات" },
+    "operatingAdvances": { "en": "Operating Advances", "ar": "العهد النثرية" },
+    "overtime": { "en": "Overtime", "ar": "العمل الإضافي" },
+    "employeeAdvances": { "en": "Employee Advances", "ar": "سلف الموظفين" },
+    "government": { "en": "Government", "ar": "الحكومة" },
+    "governmentPortal": { "en": "Government Portal", "ar": "بوابة الحكومة" },
+    "ministryOfLabour": { "en": "Ministry of Labour", "ar": "وزارة العمل" },
+    "residencyPassports": { "en": "Residency & Passports", "ar": "الإقامة والجوازات" },
+    "governmentIntegration": { "en": "Government Integration", "ar": "التكامل الحكومي" },
+    "imports": { "en": "Imports & Exchange", "ar": "الاستيراد والتعاملات" },
+    "shipmentTracking": { "en": "Shipment Tracking", "ar": "تتبع الشحنات" },
+    "barter": { "en": "Barter & Exchange", "ar": "المبادلة والمقايضة" },
+    "installments": { "en": "Installments & Loans", "ar": "الأقساط والقروض" },
+    "scan": { "en": "Scan", "ar": "مسح ضوئي" },
+    "aiAssistant": { "en": "AI Assistant", "ar": "مساعد الذكاء الاصطناعي" },
+    "aiFileImport": { "en": "AI File Import", "ar": "استيراد الملفات بالذكاء الاصطناعي" },
+    "historicalImport": { "en": "Historical Import", "ar": "استيراد تاريخي" },
+    "excelImport": { "en": "Excel Import", "ar": "استيراد Excel" },
+    "einvoice": { "en": "E-Invoices", "ar": "الفواتير الإلكترونية" },
+    "backup": { "en": "Backup", "ar": "النسخ الاحتياطي" },
+    "integrations": { "en": "Integrations", "ar": "التكاملات" },
+    "userManagement": { "en": "User Management", "ar": "إدارة المستخدمين" },
+    "renewals": { "en": "Renewals", "ar": "التجديدات" },
+    "auditLog": { "en": "Audit Log", "ar": "سجل التدقيق" }
+  },
+  "common": {
+    "mainMenu": { "en": "Main menu", "ar": "القائمة الرئيسية" },
+    "home": { "en": "Home", "ar": "الصفحة الرئيسية" },
+    "navigation": { "en": "Navigation", "ar": "التنقل" },
+    "expandMenu": { "en": "Expand menu", "ar": "توسيع القائمة" },
+    "collapseMenu": { "en": "Collapse menu", "ar": "طي القائمة" }
+  }
+}
