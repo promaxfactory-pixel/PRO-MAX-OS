@@ -40,6 +40,18 @@ pub struct CreateMaintenanceSheetInput {
     pub fault_description: Option<String>,
     pub severity: Option<String>,
     pub notes: Option<String>,
+    pub machine_stopped: Option<i64>,
+    pub downtime_start: Option<String>,
+    pub downtime_end: Option<String>,
+    pub downtime_minutes: Option<i64>,
+    pub repair_action: Option<String>,
+    pub parts_changed: Option<String>,
+    pub spare_parts_cost_milli: Option<i64>,
+    pub labor_cost_milli: Option<i64>,
+    pub other_cost_milli: Option<i64>,
+    pub root_cause: Option<String>,
+    pub preventive_action: Option<String>,
+    pub next_followup_date: Option<String>,
 }
 
 #[tauri::command]
@@ -136,9 +148,13 @@ pub fn create_maintenance_sheet(
         )?;
     let sheet_no = format!("MNT-{:04}", seq);
 
+    let spare = input.spare_parts_cost_milli.unwrap_or(0);
+    let labor = input.labor_cost_milli.unwrap_or(0);
+    let other = input.other_cost_milli.unwrap_or(0);
+
     conn.execute(
-        "INSERT INTO maintenance_daily_sheets (sheet_no, date, shift, maintenance_supervisor, machine_id, area, fault_title, fault_description, severity, notes, status, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'Open', datetime('now'))",
+        "INSERT INTO maintenance_daily_sheets (sheet_no, date, shift, maintenance_supervisor, machine_id, area, fault_title, fault_description, severity, notes, machine_stopped, downtime_start, downtime_end, downtime_minutes, repair_action, parts_changed, spare_parts_cost_milli, labor_cost_milli, other_cost_milli, total_repair_cost_milli, root_cause, preventive_action, next_followup_date, status, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, 'Open', datetime('now'))",
         params![
             sheet_no,
             input.date,
@@ -150,6 +166,19 @@ pub fn create_maintenance_sheet(
             input.fault_description,
             input.severity,
             input.notes,
+            input.machine_stopped.unwrap_or(0),
+            input.downtime_start,
+            input.downtime_end,
+            input.downtime_minutes.unwrap_or(0),
+            input.repair_action,
+            input.parts_changed,
+            spare,
+            labor,
+            other,
+            spare + labor + other,
+            input.root_cause,
+            input.preventive_action,
+            input.next_followup_date,
         ],
     )?;
 

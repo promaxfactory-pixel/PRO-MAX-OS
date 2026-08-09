@@ -47,3 +47,6 @@ pub mod budget;
 pub mod assets;
 pub mod notifications;
 pub mod operating_advance;
+pub mod integrations;
+pub mod ai_providers;
+pub mod ai_file_import;

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { invoke } from "@tauri-apps/api/core";
@@ -8,6 +9,7 @@ import { useUIStore } from "@/stores/uiStore";
 import type { Machine } from "@/types";
 
 export default function MachineFormPage() {
+  const { t } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
@@ -45,16 +47,16 @@ export default function MachineFormPage() {
             notes: d.notes || "",
           });
         })
-        .catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
+        .catch((e: unknown) => addNotification({ title: t("common.error"), message: String(e), type: 'error' }))
         .finally(() => setLoading(false));
     }
-  }, [id, isEdit]);
+  }, [id, isEdit, t]);
 
   const set = (key: string, val: string | number | boolean) => setForm((f) => ({ ...f, [key]: val }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim()) return addNotification({ id: crypto.randomUUID(), type: "warning", title: "تنبيه", message: "اسم الماكينة مطلوب" });
+    if (!form.name.trim()) return addNotification({ id: crypto.randomUUID(), type: "warning", title: t("common.warning"), message: t("machineForm.errors.nameRequired") });
     setSaving(true);
     try {
       if (isEdit) {
@@ -62,10 +64,10 @@ export default function MachineFormPage() {
       } else {
         await invoke("create_machine", { input: form });
       }
-      addNotification({ id: crypto.randomUUID(), type: "success", title: "تم بنجاح", message: "تم حفظ بيانات الماكينة بنجاح" });
+      addNotification({ id: crypto.randomUUID(), type: "success", title: t("common.success"), message: t("machineForm.notifications.saved") });
       navigate("/machines");
     } catch (err: unknown) {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "فشل في حفظ بيانات الماكينة" });
+      addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("machineForm.notifications.saveFailed") });
     } finally {
       setSaving(false);
     }
@@ -86,8 +88,8 @@ export default function MachineFormPage() {
             <ArrowRight className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="page-title">{isEdit ? "تعديل الماكينة" : "ماكينة جديدة"}</h1>
-            <p className="page-subtitle">{isEdit ? `تعديل ${form.name}` : "إضافة ماكينة جديدة"}</p>
+            <h1 className="page-title">{isEdit ? t("machineForm.titleEdit") : t("machineForm.titleNew")}</h1>
+            <p className="page-subtitle">{isEdit ? t("machineForm.subtitleEdit", { name: form.name }) : t("machineForm.subtitleNew")}</p>
           </div>
         </div>
       </div>
@@ -96,64 +98,64 @@ export default function MachineFormPage() {
         <Card>
           <div className="grid grid-cols-2 gap-6">
             <div className="input-group">
-              <label className="input-label">اسم الماكينة *</label>
-              <input className="input-field" value={form.name} onChange={(e) => set("name", e.target.value)} required aria-label="اسم الماكينة" />
+              <label className="input-label">{t("machineForm.name")} *</label>
+              <input className="input-field" value={form.name} onChange={(e) => set("name", e.target.value)} required aria-label={t("machineForm.name")} />
             </div>
             <div className="input-group">
-              <label className="input-label">الكود</label>
-              <input className="input-field" value={form.code} onChange={(e) => set("code", e.target.value)} aria-label="الكود" />
+              <label className="input-label">{t("machineForm.code")}</label>
+              <input className="input-field" value={form.code} onChange={(e) => set("code", e.target.value)} aria-label={t("machineForm.code")} />
             </div>
             <div className="input-group">
-              <label className="input-label">النوع</label>
-              <select className="input-field" value={form.mtype} onChange={(e) => set("mtype", e.target.value)} aria-label="النوع">
-                <option value="single_die">قالب مفرد</option>
-                <option value="multi_die">قالب متعدد</option>
-                <option value="punch">بنش</option>
-                <option value="printer">طباعة</option>
-                <option value="gluer">لصق</option>
-                <option value="other">أخرى</option>
+              <label className="input-label">{t("machineForm.type")}</label>
+              <select className="input-field" value={form.mtype} onChange={(e) => set("mtype", e.target.value)} aria-label={t("machineForm.type")}>
+                <option value="single_die">{t("machineForm.mtype.singleDie")}</option>
+                <option value="multi_die">{t("machineForm.mtype.multiDie")}</option>
+                <option value="punch">{t("machineForm.mtype.punch")}</option>
+                <option value="printer">{t("machineForm.mtype.printer")}</option>
+                <option value="gluer">{t("machineForm.mtype.gluer")}</option>
+                <option value="other">{t("machineForm.mtype.other")}</option>
               </select>
             </div>
             <div className="input-group">
-              <label className="input-label">المنتجات المدعومة</label>
-              <input className="input-field" value={form.supported_products} onChange={(e) => set("supported_products", e.target.value)} aria-label="المنتجات المدعومة" />
+              <label className="input-label">{t("machineForm.supportedProducts")}</label>
+              <input className="input-field" value={form.supported_products} onChange={(e) => set("supported_products", e.target.value)} aria-label={t("machineForm.supportedProducts")} />
             </div>
             <div className="input-group">
-              <label className="input-label">تاريخ الشراء</label>
-              <input className="input-field" type="date" value={form.purchase_date} onChange={(e) => set("purchase_date", e.target.value)} aria-label="تاريخ الشراء" />
+              <label className="input-label">{t("machineForm.purchaseDate")}</label>
+              <input className="input-field" type="date" value={form.purchase_date} onChange={(e) => set("purchase_date", e.target.value)} aria-label={t("machineForm.purchaseDate")} />
             </div>
             <div className="input-group">
-              <label className="input-label">المورد</label>
-              <input className="input-field" value={form.supplier} onChange={(e) => set("supplier", e.target.value)} aria-label="المورد" />
+              <label className="input-label">{t("machineForm.supplier")}</label>
+              <input className="input-field" value={form.supplier} onChange={(e) => set("supplier", e.target.value)} aria-label={t("machineForm.supplier")} />
             </div>
             <div className="input-group">
-              <label className="input-label">التكلفة (مليار)</label>
-              <input className="input-field" type="number" value={form.cost_milli} onChange={(e) => set("cost_milli", Number(e.target.value))} aria-label="التكلفة" />
+              <label className="input-label">{t("machineForm.cost")}</label>
+              <input className="input-field" type="number" value={form.cost_milli} onChange={(e) => set("cost_milli", Number(e.target.value))} aria-label={t("machineForm.cost")} />
             </div>
             <div className="input-group">
-              <label className="input-label">السعة الدقيقة (كوب/دقيقة)</label>
-              <input className="input-field" type="number" value={form.capacity_cpm} onChange={(e) => set("capacity_cpm", Number(e.target.value))} aria-label="السعة الدقيقة" />
+              <label className="input-label">{t("machineForm.capacityCpm")}</label>
+              <input className="input-field" type="number" value={form.capacity_cpm} onChange={(e) => set("capacity_cpm", Number(e.target.value))} aria-label={t("machineForm.capacityCpm")} />
             </div>
             <div className="input-group">
-              <label className="input-label">الحالة</label>
-              <select className="input-field" value={form.status} onChange={(e) => set("status", e.target.value)} aria-label="الحالة">
-                <option value="active">نشط</option>
-                <option value="inactive">غير نشط</option>
-                <option value="maintenance">صيانة</option>
+              <label className="input-label">{t("common.status")}</label>
+              <select className="input-field" value={form.status} onChange={(e) => set("status", e.target.value)} aria-label={t("common.status")}>
+                <option value="active">{t("common.active")}</option>
+                <option value="inactive">{t("common.inactive")}</option>
+                <option value="maintenance">{t("machineForm.status.maintenance")}</option>
               </select>
             </div>
             <div className="input-group col-span-2">
-              <label className="input-label">ملاحظات</label>
-              <textarea className="input-field" rows={3} value={form.notes} onChange={(e) => set("notes", e.target.value)} aria-label="ملاحظات" />
+              <label className="input-label">{t("common.notes")}</label>
+              <textarea className="input-field" rows={3} value={form.notes} onChange={(e) => set("notes", e.target.value)} aria-label={t("common.notes")} />
             </div>
           </div>
         </Card>
         <div className="flex justify-start gap-3 mt-4">
           <Button type="submit" loading={saving} icon={<Save className="w-4 h-4" />}>
-            {isEdit ? "حفظ التعديلات" : "إضافة الماكينة"}
+            {isEdit ? t("machineForm.saveChanges") : t("machineForm.addMachine")}
           </Button>
           <Button variant="outline" type="button" onClick={() => navigate("/machines")}>
-            إلغاء
+            {t("common.cancel")}
           </Button>
         </div>
       </form>

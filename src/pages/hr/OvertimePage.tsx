@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import OvertimeBadge from "@/components/ui/OvertimeBadge";
 import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
-import { Plus, Clock, DollarSign, CheckCircle, XCircle } from "lucide-react";
+import { Plus, Clock } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useUIStore } from "@/stores/uiStore";
 import type { Employee } from "@/types";
@@ -23,6 +24,7 @@ interface OvertimeRecord {
 }
 
 export default function OvertimePage() {
+  const { t } = useTranslation();
   const addNotification = useUIStore((s) => s.addNotification);
   const [records, setRecords] = useState<OvertimeRecord[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -52,9 +54,9 @@ export default function OvertimePage() {
       ]);
       setRecords(otData as OvertimeRecord[]);
       setEmployees(empData as Employee[]);
-    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("overtime.errorLoad") }); }
     finally { setLoading(false); }
-  }, [addNotification]);
+  }, [addNotification, t]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -74,7 +76,7 @@ export default function OvertimePage() {
       setShowForm(false);
       setForm({ employee_id: "", date: new Date().toISOString().split("T")[0], hours: "", rate_multiplier: "1.5", reason: "", notes: "" });
       loadData();
-    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء الحفظ" }); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("overtime.errorSave") }); }
     finally { setSaving(false); }
   };
 
@@ -82,14 +84,14 @@ export default function OvertimePage() {
     try {
       await invoke("approve_overtime", { id, input: { approved_by: "admin" } });
       loadData();
-    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء الحفظ" }); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("overtime.errorSave") }); }
   };
 
   const handleReject = async (id: number) => {
     try {
       await invoke("reject_overtime", { id });
       loadData();
-    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء الحفظ" }); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("overtime.errorSave") }); }
   };
 
   const totalHoursThisMonth = records
@@ -112,79 +114,79 @@ export default function OvertimePage() {
   const approvedCount = records.filter((r) => r.status === "approved").length;
 
   const columns: Column<OvertimeRecord>[] = useMemo(() => [
-    { key: "employee_name", header: "الموظف", sortable: true, render: (r) => <span className="font-medium">{r.employee_name}</span> },
-    { key: "date", header: "التاريخ", sortable: true, render: (r) => formatDate(r.date) },
-    { key: "hours", header: "الساعات", sortable: true, align: "left", render: (r) => <span className="font-bold">{r.hours}</span> },
-    { key: "rate_multiplier", header: "المضاعف", sortable: true, align: "left", render: (r) => <span className="text-gold-400">{r.rate_multiplier}x</span> },
-    { key: "reason", header: "السبب", render: (r) => r.reason || "—" },
-    { key: "status", header: "الحالة", render: (r) => <OvertimeBadge status={r.status} /> },
+    { key: "employee_name", header: t("overtime.employee"), sortable: true, render: (r) => <span className="font-medium">{r.employee_name}</span> },
+    { key: "date", header: t("common.date"), sortable: true, render: (r) => formatDate(r.date) },
+    { key: "hours", header: t("overtime.hours"), sortable: true, align: "left", render: (r) => <span className="font-bold">{r.hours}</span> },
+    { key: "rate_multiplier", header: t("overtime.multiplier"), sortable: true, align: "left", render: (r) => <span className="text-gold-400">{r.rate_multiplier}x</span> },
+    { key: "reason", header: t("overtime.reason"), render: (r) => r.reason || "—" },
+    { key: "status", header: t("common.status"), render: (r) => <OvertimeBadge status={r.status} /> },
     { key: "actions", header: "", render: (r) => r.status === "Pending" ? (
       <div className="flex gap-2">
-        <Button size="sm" variant="success" onClick={(e) => { e.stopPropagation(); setConfirmTitle("موافقة على Hours إضافية"); setConfirmMessage("هل أنت متأكد من الموافقة على هذه الساعة الإضافية؟"); setConfirmVariant("warning"); setPendingAction(() => () => handleApprove(r.id)); setShowConfirm(true); }}>موافقة</Button>
-        <Button size="sm" variant="danger" onClick={(e) => { e.stopPropagation(); setConfirmTitle("رفض Hours إضافية"); setConfirmMessage("هل أنت متأكد من رفض هذه الساعة الإضافية؟"); setConfirmVariant("danger"); setPendingAction(() => () => handleReject(r.id)); setShowConfirm(true); }}>رفض</Button>
+        <Button size="sm" variant="success" onClick={(e) => { e.stopPropagation(); setConfirmTitle(t("overtime.approveConfirmTitle")); setConfirmMessage(t("overtime.approveConfirmMessage")); setConfirmVariant("warning"); setPendingAction(() => () => handleApprove(r.id)); setShowConfirm(true); }}>{t("overtime.approve")}</Button>
+        <Button size="sm" variant="danger" onClick={(e) => { e.stopPropagation(); setConfirmTitle(t("overtime.rejectConfirmTitle")); setConfirmMessage(t("overtime.rejectConfirmMessage")); setConfirmVariant("danger"); setPendingAction(() => () => handleReject(r.id)); setShowConfirm(true); }}>{t("overtime.reject")}</Button>
       </div>
     ) : null },
-  ], []);
+  ], [t]);
 
   return (
     <div className="space-y-6">
       <div className="page-header">
         <div>
-          <h1 className="page-title">ساعات العمل الإضافية</h1>
-          <p className="page-subtitle">{records.length} سجل</p>
+          <h1 className="page-title">{t("overtime.title")}</h1>
+          <p className="page-subtitle">{t("overtime.subtitle", { count: records.length })}</p>
         </div>
-        <Button icon={<Plus className="w-4 h-4" />} onClick={() => setShowForm(true)}>ساعة إضافية جديدة</Button>
+        <Button icon={<Plus className="w-4 h-4" />} onClick={() => setShowForm(true)}>{t("overtime.newRecord")}</Button>
       </div>
 
       <div className="grid grid-cols-4 gap-4">
         <Card className="text-center">
           <p className="text-2xl font-bold gradient-text">{totalHoursThisMonth}</p>
-          <p className="text-xs text-surface-400">ساعات إضافية هذا الشهر</p>
+          <p className="text-xs text-surface-400">{t("overtime.hoursThisMonth")}</p>
         </Card>
         <Card className="text-center">
           <p className="text-2xl font-bold text-gold-400">{formatOMR(Math.round(totalCost * 1000))}</p>
-          <p className="text-xs text-surface-400">التكلفة التقديرية</p>
+          <p className="text-xs text-surface-400">{t("overtime.estimatedCost")}</p>
         </Card>
         <Card className="text-center">
           <p className="text-2xl font-bold text-yellow-400">{pendingCount}</p>
-          <p className="text-xs text-surface-400">بانتظار الموافقة</p>
+          <p className="text-xs text-surface-400">{t("overtime.pendingApproval")}</p>
         </Card>
         <Card className="text-center">
           <p className="text-2xl font-bold text-emerald-400">{approvedCount}</p>
-          <p className="text-xs text-surface-400">تمت الموافقة</p>
+          <p className="text-xs text-surface-400">{t("overtime.approved")}</p>
         </Card>
       </div>
 
       {showForm && (
         <Card>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-white">ساعة إضافية جديدة</h2>
+            <h2 className="text-lg font-bold text-white">{t("overtime.newRecord")}</h2>
             <button onClick={() => setShowForm(false)} className="text-surface-400 hover:text-white text-xl">&times;</button>
           </div>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="input-group">
-                <label className="input-label">الموظف</label>
-                <select value={form.employee_id} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} className="input-field" aria-label="الموظف">
-                  <option value="">— اختر موظف —</option>
+                <label className="input-label">{t("overtime.employee")}</label>
+                <select value={form.employee_id} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} className="input-field" aria-label={t("overtime.employee")}>
+                  <option value="">{t("overtime.selectEmployee")}</option>
                   {employees.map((emp: any) => (
                     <option key={emp.id} value={emp.id}>{emp.name}</option>
                   ))}
                 </select>
               </div>
               <div className="input-group">
-                <label className="input-label">التاريخ</label>
-                <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="input-field" aria-label="التاريخ" />
+                <label className="input-label">{t("common.date")}</label>
+                <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="input-field" aria-label={t("common.date")} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="input-group">
-                <label className="input-label">عدد الساعات</label>
-                <input type="number" min="0.5" step="0.5" value={form.hours} onChange={(e) => setForm({ ...form, hours: e.target.value })} className="input-field" dir="ltr" aria-label="عدد الساعات" />
+                <label className="input-label">{t("overtime.hoursCount")}</label>
+                <input type="number" min="0.5" step="0.5" value={form.hours} onChange={(e) => setForm({ ...form, hours: e.target.value })} className="input-field" dir="ltr" aria-label={t("overtime.hoursCount")} />
               </div>
               <div className="input-group">
-                <label className="input-label">مضاعف الأجر</label>
-                <select value={form.rate_multiplier} onChange={(e) => setForm({ ...form, rate_multiplier: e.target.value })} className="input-field" aria-label="مضاعف الأجر">
+                <label className="input-label">{t("overtime.rateMultiplier")}</label>
+                <select value={form.rate_multiplier} onChange={(e) => setForm({ ...form, rate_multiplier: e.target.value })} className="input-field" aria-label={t("overtime.rateMultiplier")}>
                   <option value="1.5">1.5x</option>
                   <option value="2">2x</option>
                   <option value="2.5">2.5x</option>
@@ -193,22 +195,22 @@ export default function OvertimePage() {
               </div>
             </div>
             <div className="input-group">
-              <label className="input-label">السبب</label>
-              <input type="text" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} className="input-field" placeholder="سبب العمل الإضافي..." aria-label="السبب" />
+              <label className="input-label">{t("overtime.reason")}</label>
+              <input type="text" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} className="input-field" placeholder={t("overtime.reasonPlaceholder")} aria-label={t("overtime.reason")} />
             </div>
             <div className="input-group">
-              <label className="input-label">ملاحظات</label>
-              <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="input-field" rows={3} placeholder="ملاحظات إضافية..." aria-label="ملاحظات" />
+              <label className="input-label">{t("common.notes")}</label>
+              <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="input-field" rows={3} placeholder={t("overtime.notesPlaceholder")} aria-label={t("common.notes")} />
             </div>
           </div>
           <div className="flex justify-end gap-3 mt-4">
-            <Button variant="ghost" onClick={() => setShowForm(false)}>إلغاء</Button>
-            <Button icon={<Clock className="w-4 h-4" />} onClick={handleCreate} loading={saving}>إنشاء السجل</Button>
+            <Button variant="ghost" onClick={() => setShowForm(false)}>{t("common.cancel")}</Button>
+            <Button icon={<Clock className="w-4 h-4" />} onClick={handleCreate} loading={saving}>{t("overtime.createRecord")}</Button>
           </div>
         </Card>
       )}
 
-      <DataTable columns={columns} data={records} loading={loading} emptyMessage="لا توجد سجلات ساعات إضافية" />
+      <DataTable columns={columns} data={records} loading={loading} emptyMessage={t("overtime.empty")} />
 
       <ConfirmDialog
         open={showConfirm}

@@ -3,14 +3,14 @@ import { Languages, Check } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 
 const languages = [
-  { code: "ar", label: "العربية", dir: "rtl" },
-  { code: "en", label: "English", dir: "ltr" },
-  { code: "hi", label: "हिन्दी", dir: "ltr" },
-  { code: "ur", label: "اردو", dir: "rtl" },
+  { code: "ar", labelKey: "language.ar", dir: "rtl" },
+  { code: "en", labelKey: "language.en", dir: "ltr" },
+  { code: "hi", labelKey: "language.hi", dir: "ltr" },
+  { code: "ur", labelKey: "language.ur", dir: "rtl" },
 ];
 
 export default function LanguageSwitcher() {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -35,10 +35,10 @@ export default function LanguageSwitcher() {
         className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs text-gray-400 hover:text-white hover:bg-zinc-800/50 transition-all"
       >
         <Languages className="w-3.5 h-3.5" />
-        <span>{current.label}</span>
+        <span>{t(current.labelKey)}</span>
       </button>
       {open && (
-        <div className="absolute bottom-full right-0 mb-1 w-32 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden">
+        <div className="absolute top-full right-0 mt-1 w-40 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden z-50">
           {languages.map((lang) => (
             <button
               key={lang.code}
@@ -49,7 +49,7 @@ export default function LanguageSwitcher() {
                   : "text-gray-400 hover:text-white hover:bg-zinc-800"
               }`}
             >
-              <span className="flex-1 text-right">{lang.label}</span>
+              <span className="flex-1 text-right">{t(lang.labelKey)}</span>
               {i18n.language === lang.code && <Check className="w-3 h-3 text-gold-400" />}
             </button>
           ))}

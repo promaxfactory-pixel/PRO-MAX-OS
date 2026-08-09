@@ -41,6 +41,27 @@ pub struct InstallmentSummary {
     pub pending_payments: i64,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct InstallmentOption {
+    pub id: i64,
+    pub name: String,
+    pub status: String,
+}
+
+#[tauri::command]
+pub fn list_installments(state: State<'_, DbState>) -> Result<Vec<InstallmentOption>, AppError> {
+    let conn = state.0.lock()?;
+    let mut stmt = conn.prepare("SELECT id, name, status FROM installments ORDER BY name")?;
+    let rows = stmt.query_map([], |row| {
+        Ok(InstallmentOption {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            status: row.get(2)?,
+        })
+    })?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(AppError::from)
+}
+
 const PAYMENT_COLUMNS: &str = "p.id, p.installment_id, i.name AS installment_name, p.installment_number, p.due_date, p.amount_milli, p.paid_milli, p.paid_date, p.penalty_milli, p.status, p.notes";
 
 #[tauri::command]

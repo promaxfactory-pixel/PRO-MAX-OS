@@ -6,6 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { ArrowRight, AlertTriangle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useUIStore } from "@/stores/uiStore";
+import { useTranslation } from "react-i18next";
 
 interface LowStockItem {
   item_code: string;
@@ -19,6 +20,7 @@ interface LowStockItem {
 }
 
 export default function ReportsLowStockPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const addNotification = useUIStore((s) => s.addNotification);
   const [items, setItems] = useState<LowStockItem[]>([]);
@@ -36,20 +38,20 @@ export default function ReportsLowStockPage() {
           totalCostGap: arr.reduce((s: number, i: LowStockItem) => s + (i.cost_gap_milli || 0), 0),
         });
       })
-      .catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
+      .catch((e: unknown) => addNotification({ title: t('common.error'), message: String(e), type: 'error' }))
       .finally(() => setLoading(false));
   }, []);
 
   const columns: Column<LowStockItem>[] = useMemo(() => [
-    { key: "item_code", header: "الكود", render: (r) => <span className="font-mono text-brand-400">{r.item_code}</span> },
-    { key: "item_name", header: "الصنف", sortable: true, render: (r) => <span className="font-medium">{r.item_name}</span> },
-    { key: "warehouse", header: "المستودع", render: (r) => r.warehouse || "—" },
-    { key: "current_qty", header: "الكمية الحالية", align: "left", render: (r) => <span className="text-amber-400 font-bold">{r.current_qty}</span> },
-    { key: "min_level", header: "الحد الأدنى", align: "left", render: (r) => r.min_level },
-    { key: "deficit", header: "النقص", align: "left", render: (r) => <span className="text-red-400 font-bold">-{r.deficit}</span> },
-    { key: "unit_cost_milli", header: "تكلفة الوحدة", align: "left", render: (r) => formatOMR(r.unit_cost_milli) },
-    { key: "cost_gap_milli", header: "قيمة النقص", align: "left", render: (r) => <span className="text-red-400 font-bold">{formatOMR(r.cost_gap_milli)}</span> },
-  ], []);
+    { key: "item_code", header: t("inventory.code"), render: (r) => <span className="font-mono text-brand-400">{r.item_code}</span> },
+    { key: "item_name", header: t("stockTransfers.item"), sortable: true, render: (r) => <span className="font-medium">{r.item_name}</span> },
+    { key: "warehouse", header: t("reports.warehouse"), render: (r) => r.warehouse || "—" },
+    { key: "current_qty", header: t("reports.currentQty"), align: "left", render: (r) => <span className="text-amber-400 font-bold">{r.current_qty}</span> },
+    { key: "min_level", header: t("reports.minLevel"), align: "left", render: (r) => r.min_level },
+    { key: "deficit", header: t("reports.deficit"), align: "left", render: (r) => <span className="text-red-400 font-bold">-{r.deficit}</span> },
+    { key: "unit_cost_milli", header: t("reports.unitCost"), align: "left", render: (r) => formatOMR(r.unit_cost_milli) },
+    { key: "cost_gap_milli", header: t("reports.deficitValue"), align: "left", render: (r) => <span className="text-red-400 font-bold">{formatOMR(r.cost_gap_milli)}</span> },
+  ], [t]);
 
   return (
     <div className="space-y-6">
@@ -59,8 +61,8 @@ export default function ReportsLowStockPage() {
             <ArrowRight className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="page-title">المخزون المنخفض</h1>
-            <p className="page-subtitle">أصناف تحت الحد الأدنى</p>
+            <h1 className="page-title">{t("reports.lowStock")}</h1>
+            <p className="page-subtitle">{t("reports.belowMinLevel")}</p>
           </div>
         </div>
       </div>
@@ -73,25 +75,25 @@ export default function ReportsLowStockPage() {
             </div>
             <div>
               <p className="text-2xl font-bold text-white">{summary.totalItems}</p>
-              <p className="text-xs text-surface-400">صنف منخفض</p>
+              <p className="text-xs text-surface-400">{t("reports.lowStockItems")}</p>
             </div>
           </div>
         </Card>
         <Card>
           <div className="text-center">
             <p className="text-2xl font-bold text-red-400">{summary.totalDeficit}</p>
-            <p className="text-xs text-surface-400">إجمالي النقص (وحدة)</p>
+            <p className="text-xs text-surface-400">{t("reports.totalDeficitUnits")}</p>
           </div>
         </Card>
         <Card>
           <div className="text-center">
             <p className="text-2xl font-bold gradient-text">{formatOMR(summary.totalCostGap)}</p>
-            <p className="text-xs text-surface-400">قيمة النقص الإجمالية</p>
+            <p className="text-xs text-surface-400">{t("reports.totalDeficitValue")}</p>
           </div>
         </Card>
       </div>
 
-      <DataTable columns={columns} data={items} loading={loading} emptyMessage="لا توجد أصناف منخفضة المخزون" />
+      <DataTable columns={columns} data={items} loading={loading} emptyMessage={t("reports.lowStockEmpty")} />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTranslation } from "react-i18next";
@@ -6,7 +6,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { Factory, Eye, EyeOff, ArrowLeft, Shield, Zap } from "lucide-react";
 import LanguageSwitcher from "@/components/layout/LanguageSwitcher";
 
-function Particle({ index }: { index: number }) {
+function Particle(_: { index: number }) {
   const style = useMemo(() => ({
     left: `${Math.random() * 100}%`,
     top: `${Math.random() * 100}%`,
@@ -45,7 +45,7 @@ export default function LoginPage() {
       await login(username, password);
       navigate("/");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err) || "خطأ في تسجيل الدخول");
+      setError(err instanceof Error ? err.message : String(err) || t("auth.loginFailed"));
     } finally {
       setLoading(false);
     }
@@ -141,7 +141,7 @@ export default function LoginPage() {
             {/* Header */}
             <div className="mb-8">
               <h2 className="text-2xl font-bold text-white mb-1">{t("auth.login")}</h2>
-              <p className="text-sm text-surface-400">أدخل بياناتك للوصول إلى النظام</p>
+              <p className="text-sm text-surface-400">{t("auth.enterCredentials")}</p>
             </div>
 
             {/* Error */}
@@ -169,7 +169,7 @@ export default function LoginPage() {
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="أدخل اسم المستخدم"
+                  placeholder={t("auth.usernamePlaceholder")}
                   className={`w-full transition-all duration-300 ${focusedField === 'username' ? 'border-gold-400/50 shadow-[0_0_0_3px_rgba(212,175,55,0.1)]' : ''}`}
                   required
                   autoFocus
@@ -187,7 +187,7 @@ export default function LoginPage() {
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="أدخل كلمة المرور"
+                    placeholder={t("auth.passwordPlaceholder")}
                     className={`w-full pl-12 transition-all duration-300 ${focusedField === 'password' ? 'border-gold-400/50 shadow-[0_0_0_3px_rgba(212,175,55,0.1)]' : ''}`}
                     required
                     onFocus={() => setFocusedField('password')}
@@ -198,7 +198,7 @@ export default function LoginPage() {
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 hover:text-gold-400 transition-colors p-1"
-                    aria-label={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
+                    aria-label={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -225,7 +225,7 @@ export default function LoginPage() {
               {loading ? (
                 <>
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span className="text-surface-200">جاري التحقق...</span>
+                  <span className="text-surface-200">{t("auth.verifying")}</span>
                   {/* Shimmer effect */}
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-slide-in-left" />
                 </>
@@ -256,7 +256,7 @@ export default function LoginPage() {
                   transition={{ delay: 0.9 }}
                 >
                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="text-[10px] text-surface-500 font-medium"> نظام آمن</span>
+                  <span className="text-[10px] text-surface-500 font-medium"> {t("auth.secureSystem")}</span>
                 </motion.div>
               </div>
             </div>
@@ -270,7 +270,7 @@ export default function LoginPage() {
           animate={{ opacity: 1 }}
           transition={{ delay: 1 }}
         >
-          &copy; {new Date().getFullYear()} Mayadeen Bahla National Company. All rights reserved.
+          &copy; {new Date().getFullYear()} {t("auth.copyright")}
         </motion.p>
       </motion.div>
     </div>

@@ -1,17 +1,38 @@
 import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { useUIStore, type WorkMode } from "@/stores/uiStore";
-import { Zap, Anchor, Crosshair, Sparkles, Moon, Briefcase } from "lucide-react";
+import { useUIStore, type WorkMode, type Density, type Motion } from "@/stores/uiStore";
+import {
+  Layers, Zap, Anchor, Crosshair, Sparkles, Moon, Briefcase,
+  ChevronDown, Ruler, Gauge, Move, Wind,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const modeIcons: Record<WorkMode, React.ElementType> = {
-  power: Zap, stability: Anchor, focus: Crosshair,
-  creative: Sparkles, night: Moon, professional: Briefcase,
+  default: Layers,
+  power: Zap,
+  stability: Anchor,
+  focus: Crosshair,
+  creative: Sparkles,
+  night: Moon,
+  professional: Briefcase,
+};
+
+const modeOrder: WorkMode[] = ["default", "professional", "power", "stability", "focus", "creative", "night"];
+
+const modeAccent: Record<WorkMode, string> = {
+  default: "#8b5cf6",
+  professional: "#3b82f6",
+  power: "#ef4444",
+  stability: "#3b82f6",
+  focus: "#14b8a6",
+  creative: "#a78bfa",
+  night: "#818cf8",
 };
 
 export default function ModeSelector({ showLabel = false }: { showLabel?: boolean }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const { workMode, setWorkMode } = useUIStore();
+  const { workMode, setWorkMode, density, setDensity, motion, setMotion } = useUIStore();
   const { t } = useTranslation();
 
   useEffect(() => {
@@ -22,57 +43,133 @@ export default function ModeSelector({ showLabel = false }: { showLabel?: boolea
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  const modeIds: WorkMode[] = ["power", "stability", "focus", "creative", "night", "professional"];
-  const Icon = modeIcons[workMode];
+  const Icon = modeIcons[workMode] ?? Layers;
+
+  const densityOptions: { id: Density; label: string }[] = [
+    { id: "comfortable", label: t("appearance.densityComfortable") || "مريح" },
+    { id: "compact", label: t("appearance.densityCompact") || "مضغوط" },
+  ];
+
+  const motionOptions: { id: Motion; label: string }[] = [
+    { id: "full", label: t("appearance.motionFull") || "كامل" },
+    { id: "reduced", label: t("appearance.motionReduced") || "مخفّض" },
+  ];
 
   return (
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-surface-800/50 transition-all duration-200 border border-transparent hover:border-surface-700/50"
-        title={t("mode." + workMode)}
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl hover:bg-surface-800/50 transition-all duration-200 border border-transparent hover:border-surface-700/50"
+        title={t("appearance.title") || "المظهر"}
+        aria-haspopup="true"
+        aria-expanded={open}
       >
         <Icon className="w-4 h-4" style={{ color: `var(--mode-accent)` }} />
         {showLabel && <span className="text-xs text-surface-400">{t("mode." + workMode)}</span>}
+        <ChevronDown className={cn("w-3 h-3 text-surface-500 transition-transform duration-200", open && "rotate-180")} />
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full mt-2 w-64 bg-surface-800 border border-surface-700 rounded-2xl shadow-luxury overflow-hidden animate-scale-in z-50">
-          <div className="p-3 border-b border-surface-700/50">
-            <p className="text-xs font-bold text-surface-400 uppercase tracking-wider">{t("mode.title")}</p>
-            <p className="text-[10px] text-surface-500 mt-0.5">{t("mode.subtitle")}</p>
+        <div className="absolute left-0 top-full mt-2 w-80 bg-surface-800 border border-surface-700 rounded-2xl shadow-luxury overflow-hidden animate-scale-in z-50">
+          <div className="p-4 border-b border-surface-700/50 flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: `var(--mode-glow)` }}>
+              <Icon className="w-4 h-4" style={{ color: `var(--mode-accent)` }} />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-surface-300">{t("appearance.title") || "المظهر"}</p>
+              <p className="text-[10px] text-surface-500 mt-0.5">{t("mode.subtitle")}</p>
+            </div>
           </div>
-          <div className="p-1.5">
-            {modeIds.map((id) => {
-              const ModeIcon = modeIcons[id];
-              const isActive = workMode === id;
-              return (
-                <button
-                  key={id}
-                  onClick={() => { setWorkMode(id); setOpen(false); }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200 ${
-                    isActive
-                      ? "text-white"
-                      : "text-surface-400 hover:text-white hover:bg-surface-700/50"
-                  }`}
-                  style={isActive ? { backgroundColor: `var(--mode-glow)`, color: `var(--mode-accent)` } : {}}
-                >
-                  <div
-                    className="w-8 h-8 rounded-lg flex items-center justify-center"
-                    style={{ backgroundColor: `var(--mode-glow)` }}
+
+          <div className="p-3">
+            <p className="text-[10px] font-bold text-surface-500 uppercase tracking-wider mb-2 px-1">
+              {t("appearance.modes") || "الأوضاع"}
+            </p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {modeOrder.map((id) => {
+                const isActive = workMode === id;
+                return (
+                  <button
+                    key={id}
+                    onClick={() => setWorkMode(id)}
+                    className={cn(
+                      "flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs font-medium transition-all duration-200 border",
+                      isActive
+                        ? "text-white border-transparent"
+                        : "text-surface-400 hover:text-white hover:bg-surface-700/40 border-transparent hover:border-surface-600/40"
+                    )}
+                    style={isActive ? { backgroundColor: `var(--mode-glow)`, boxShadow: `0 0 0 1px var(--mode-accent)` } : {}}
+                    aria-pressed={isActive}
                   >
-                    <ModeIcon className="w-4 h-4" style={{ color: `var(--mode-accent)` }} />
-                  </div>
-                  <div className="text-right flex-1">
-                    <p className="font-medium text-xs">{t("mode." + id)}</p>
-                    <p className="text-[10px] text-surface-500">{t("mode." + id + "Desc")}</p>
-                  </div>
-                  {isActive && (
-                    <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: `var(--mode-accent)` }} />
-                  )}
-                </button>
-              );
-            })}
+                    <span
+                      className="flex-shrink-0 w-4 h-4 rounded-full"
+                      style={{ background: modeAccent[id], boxShadow: `0 0 8px ${modeAccent[id]}66` }}
+                      aria-hidden="true"
+                    />
+                    <span className="truncate">{t("mode." + id)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="px-3 pb-1 space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-[11px] text-surface-400">
+                <Ruler className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>{t("appearance.density") || "الكثافة"}</span>
+              </div>
+              <div className="flex rounded-lg overflow-hidden border border-surface-600/60">
+                {densityOptions.map((opt) => (
+                  <button
+                    key={opt.id}
+                    onClick={() => setDensity(opt.id)}
+                    className={cn(
+                      "px-3 py-1 text-[11px] font-medium transition-colors duration-150",
+                      density === opt.id ? "text-white" : "text-surface-500 hover:text-surface-300"
+                    )}
+                    style={density === opt.id ? { backgroundColor: `var(--mode-glow)` } : {}}
+                    aria-pressed={density === opt.id}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-[11px] text-surface-400">
+                <Wind className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>{t("appearance.motion") || "الحركات"}</span>
+              </div>
+              <div className="flex rounded-lg overflow-hidden border border-surface-600/60">
+                {motionOptions.map((opt) => (
+                  <button
+                    key={opt.id}
+                    onClick={() => setMotion(opt.id)}
+                    className={cn(
+                      "px-3 py-1 text-[11px] font-medium transition-colors duration-150",
+                      motion === opt.id ? "text-white" : "text-surface-500 hover:text-surface-300"
+                    )}
+                    style={motion === opt.id ? { backgroundColor: `var(--mode-glow)` } : {}}
+                    aria-pressed={motion === opt.id}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="p-3 flex items-center justify-between border-t border-surface-700/50 mt-2">
+            <span className="text-[10px] text-surface-500 flex items-center gap-1">
+              <Gauge className="w-3 h-3" aria-hidden="true" />
+              {t("mode.subtitle")}
+            </span>
+            <span className="text-[10px] text-surface-600 font-mono flex items-center gap-1">
+              <Move className="w-3 h-3" aria-hidden="true" />
+              {t("appearance.livePreview") || "تطبيق فوري"}
+            </span>
           </div>
         </div>
       )}

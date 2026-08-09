@@ -3,13 +3,15 @@ import { useParams, useNavigate } from "react-router-dom";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/Badge";
-import { formatOMR, formatDate } from "@/lib/utils";
+import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowRight, Phone, Mail, MapPin, Edit, FileText, Banknote } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
+import { useTranslation } from "react-i18next";
 import { Customer } from "@/types";
 
 export default function CustomerDetailPage() {
+  const { t } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
   const addNotification = useUIStore((s) => s.addNotification);
@@ -17,7 +19,7 @@ export default function CustomerDetailPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    invoke("get_customer", { id: Number(id) }).then((d) => setCustomer(d as Customer)).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false));
+    invoke("get_customer", { id: Number(id) }).then((d) => setCustomer(d as Customer)).catch((e: unknown) => addNotification({ title: t("common.error"), message: String(e), type: 'error' })).finally(() => setLoading(false));
   }, [id]);
 
   if (loading || !customer) {
@@ -31,13 +33,13 @@ export default function CustomerDetailPage() {
           <button onClick={() => navigate('/customers')} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
           <div>
             <h1 className="page-title">{customer.name}</h1>
-            <p className="page-subtitle font-mono">{customer.code || "بدون كود"}</p>
+            <p className="page-subtitle font-mono">{customer.code || t("customer.noCode")}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" icon={<FileText className="w-4 h-4" />} onClick={() => navigate(`/customers/${id}/statement`)}>كشف حساب</Button>
-          <Button variant="gold" icon={<Banknote className="w-4 h-4" />} onClick={() => navigate(`/customers/${id}/pay`)}>تسجيل دفعة</Button>
-          <Button variant="outline" icon={<Edit className="w-4 h-4" />} onClick={() => navigate(`/customers/${id}/edit`)}>تعديل</Button>
+          <Button variant="outline" icon={<FileText className="w-4 h-4" />} onClick={() => navigate(`/customers/${id}/statement`)}>{t("customer.statement")}</Button>
+          <Button variant="gold" icon={<Banknote className="w-4 h-4" />} onClick={() => navigate(`/customers/${id}/pay`)}>{t("customer.makePayment")}</Button>
+          <Button variant="outline" icon={<Edit className="w-4 h-4" />} onClick={() => navigate(`/customers/${id}/edit`)}>{t("common.edit")}</Button>
         </div>
       </div>
 
@@ -45,7 +47,7 @@ export default function CustomerDetailPage() {
         <Card className="col-span-2">
           <div className="grid grid-cols-2 gap-6">
             <div>
-              <h4 className="text-sm text-surface-400 mb-3">معلومات الاتصال</h4>
+              <h4 className="text-sm text-surface-400 mb-3">{t("customer.contactInfo")}</h4>
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-sm"><Phone className="w-4 h-4 text-surface-500" /> {customer.phone || "—"}</div>
                 <div className="flex items-center gap-2 text-sm"><Mail className="w-4 h-4 text-surface-500" /> {customer.email || "—"}</div>
@@ -53,26 +55,26 @@ export default function CustomerDetailPage() {
               </div>
             </div>
             <div>
-              <h4 className="text-sm text-surface-400 mb-3">معلومات مالية</h4>
+              <h4 className="text-sm text-surface-400 mb-3">{t("customer.financialInfo")}</h4>
               <div className="space-y-2">
-                <div className="flex justify-between text-sm"><span className="text-surface-400">الرصيد</span><span className="font-bold gradient-text">{formatOMR(customer.balance_milli)}</span></div>
-                <div className="flex justify-between text-sm"><span className="text-surface-400">الحد الائتماني</span><span>{formatOMR(customer.credit_limit_milli)}</span></div>
-                <div className="flex justify-between text-sm"><span className="text-surface-400">النوع</span><StatusBadge status={customer.ctype || "credit"} /></div>
-                <div className="flex justify-between text-sm"><span className="text-surface-400">رقم ضريبة القيمة المضافة</span><span className="font-mono text-xs">{customer.vat_number || "—"}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-surface-400">{t("customer.balance")}</span><span className="font-bold gradient-text">{formatOMR(customer.balance_milli)}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-surface-400">{t("customer.creditLimitLabel")}</span><span>{formatOMR(customer.credit_limit_milli)}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-surface-400">{t("customer.type")}</span><StatusBadge status={customer.ctype || "credit"} /></div>
+                <div className="flex justify-between text-sm"><span className="text-surface-400">{t("customer.vatNumberFull")}</span><span className="font-mono text-xs">{customer.vat_number || "—"}</span></div>
               </div>
             </div>
           </div>
         </Card>
         <Card>
-          <h4 className="text-sm text-surface-400 mb-3">ملخص</h4>
+          <h4 className="text-sm text-surface-400 mb-3">{t("customer.summary")}</h4>
           <div className="space-y-4">
             <div className="text-center py-4">
               <p className="text-3xl font-bold gradient-text">{formatOMR(customer.balance_milli)}</p>
-              <p className="text-xs text-surface-400 mt-1">الرصيد الحالي</p>
+              <p className="text-xs text-surface-400 mt-1">{t("customer.currentBalance")}</p>
             </div>
             <div className="text-center py-2 bg-surface-900/50 rounded-xl">
               <p className="text-sm font-medium">{formatOMR(customer.credit_limit_milli)}</p>
-              <p className="text-xs text-surface-400">الحد الائتماني</p>
+              <p className="text-xs text-surface-400">{t("customer.creditLimitLabel")}</p>
             </div>
           </div>
         </Card>

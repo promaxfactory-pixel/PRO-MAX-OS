@@ -1,0 +1,94 @@
+{
+  "machineForm": {
+    "titleEdit": { "en": "Edit Machine", "ar": "تعديل الماكينة" },
+    "titleNew": { "en": "New Machine", "ar": "ماكينة جديدة" },
+    "subtitleEdit": { "en": "Editing {{name}}", "ar": "تعديل {{name}}" },
+    "subtitleNew": { "en": "Add a new machine", "ar": "إضافة ماكينة جديدة" },
+    "name": { "en": "Machine Name", "ar": "اسم الماكينة" },
+    "code": { "en": "Code", "ar": "الكود" },
+    "type": { "en": "Type", "ar": "النوع" },
+    "mtype": {
+      "singleDie": { "en": "Single Die", "ar": "قالب مفرد" },
+      "multiDie": { "en": "Multi Die", "ar": "قالب متعدد" },
+      "punch": { "en": "Punch", "ar": "بنش" },
+      "printer": { "en": "Printing", "ar": "طباعة" },
+      "gluer": { "en": "Gluing", "ar": "لصق" },
+      "other": { "en": "Other", "ar": "أخرى" }
+    },
+    "supportedProducts": { "en": "Supported Products", "ar": "المنتجات المدعومة" },
+    "purchaseDate": { "en": "Purchase Date", "ar": "تاريخ الشراء" },
+    "supplier": { "en": "Supplier", "ar": "المورد" },
+    "cost": { "en": "Cost (Billion)", "ar": "التكلفة (مليار)" },
+    "capacityCpm": { "en": "Capacity per Minute (cups/minute)", "ar": "السعة الدقيقة (كوب/دقيقة)" },
+    "status": {
+      "maintenance": { "en": "Maintenance", "ar": "صيانة" }
+    },
+    "saveChanges": { "en": "Save Changes", "ar": "حفظ التعديلات" },
+    "addMachine": { "en": "Add Machine", "ar": "إضافة الماكينة" },
+    "errors": {
+      "nameRequired": { "en": "Machine name is required", "ar": "اسم الماكينة مطلوب" }
+    },
+    "notifications": {
+      "saved": { "en": "Machine data saved successfully", "ar": "تم حفظ بيانات الماكينة بنجاح" },
+      "saveFailed": { "en": "Failed to save machine data", "ar": "فشل في حفظ بيانات الماكينة" }
+    }
+  },
+  "machineList": {
+    "subtitle": { "en": "{{count}} machines registered", "ar": "{{count}} آلة مسجلة" },
+    "addMachine": { "en": "Add Machine", "ar": "إضافة آلة" },
+    "devTitle": { "en": "Machine management is under development", "ar": "إدارة الآلات قيد التطوير" },
+    "devMessage": { "en": "This feature will be added soon", "ar": "سيتم إضافة هذه الميزة قريباً" },
+    "capacityUnit": { "en": "cups/minute", "ar": "كوب/دقيقة" },
+    "empty": { "en": "No machines registered", "ar": "لا توجد آلات مسجلة" }
+  },
+  "qualityForm": {
+    "title": { "en": "New Quality Inspection", "ar": "فحص جودة جديد" },
+    "subtitle": { "en": "Add a quality inspection report", "ar": "إضافة تقرير فحص جودة" },
+    "inspector": { "en": "Inspector", "ar": "المفتش" },
+    "productionLineId": { "en": "Production Line No.", "ar": "رقم خط الإنتاج" },
+    "result": { "en": "Result", "ar": "النتيجة" },
+    "resultOptions": {
+      "pass": { "en": "Passed", "ar": "ناجح" },
+      "fail": { "en": "Failed", "ar": "غير ناجح" },
+      "rework": { "en": "Rework", "ar": "إعادة العمل" }
+    },
+    "defectType": { "en": "Defect Type", "ar": "نوع العيب" },
+    "defectQty": { "en": "Defect Quantity", "ar": "كمية العيب" },
+    "statusOptions": {
+      "inProgress": { "en": "In Progress", "ar": "قيد التنفيذ" }
+    },
+    "save": { "en": "Save Inspection", "ar": "حفظ الفحص" },
+    "errors": {
+      "dateRequired": { "en": "Date is required", "ar": "التاريخ مطلوب" },
+      "inspectorRequired": { "en": "Inspector name is required", "ar": "اسم المفتش مطلوب" },
+      "defectQtyNonNegative": { "en": "Quantity must be 0 or greater", "ar": "الكمية يجب أن تكون 0 أو أكبر" }
+    },
+    "notifications": {
+      "completeRequiredData": { "en": "Please complete the required fields", "ar": "يرجى استكمال البيانات المطلوبة" },
+      "saved": { "en": "Inspection recorded successfully", "ar": "تم تسجيل الفحص بنجاح" },
+      "saveFailed": { "en": "Failed to record inspection: {{error}}", "ar": "فشل في تسجيل الفحص: {{error}}" }
+    }
+  },
+  "qualityList": {
+    "title": { "en": "Quality Inspections", "ar": "فحوصات الجودة" },
+    "subtitle": { "en": "{{count}} inspections recorded", "ar": "{{count}} فحص مسجل" },
+    "addInspection": { "en": "New Inspection", "ar": "فحص جديد" },
+    "inspectionNo": { "en": "Inspection No.", "ar": "رقم الفحص" },
+    "inspector": { "en": "Inspector", "ar": "الفاحص" },
+    "productionLine": { "en": "Production Line", "ar": "خط الإنتاج" },
+    "result": {
+      "conditional": { "en": "Conditional", "ar": "مشروط" }
+    },
+    "severity": {
+      "critical": { "en": "Critical", "ar": "حرج" },
+      "major": { "en": "Major", "ar": "رئيسي" },
+      "minor": { "en": "Minor", "ar": "بسيط" }
+    },
+    "status": {
+      "inProgress": { "en": "In Review", "ar": "قيد المراجعة" }
+    },
+    "devTitle": { "en": "Quality inspections are under development", "ar": "فحوصات الجودة قيد التطوير" },
+    "devMessage": { "en": "This feature will be added soon", "ar": "سيتم إضافة هذه الميزة قريباً" },
+    "empty": { "en": "No quality inspections", "ar": "لا توجد فحوصات جودة" }
+  }
+}

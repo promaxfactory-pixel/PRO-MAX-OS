@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import Card from "@/components/ui/Card";
 import { BarChart3, Clock, Package, FileText, Users, TrendingUp, Receipt, Truck, Calendar, DollarSign, AlertTriangle } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface ReportCard {
   title: string;
@@ -11,89 +12,90 @@ interface ReportCard {
 }
 
 export default function ReportsPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   const reports: ReportCard[] = [
     {
-      title: "الإقفال اليومي للمصنع",
-      description: "ملخص شامل لأنشطة اليوم: إنتاج، مبيعات، مشتريات، تحصيلات",
+      title: t("reports.dailyClosingTitle"),
+      description: t("reports.dailyClosingDesc"),
       icon: <Calendar className="w-6 h-6" />,
       path: "/reports/daily-closing",
       color: "text-emerald-400",
     },
     {
-      title: "ملخص المالك",
-      description: "نظرة عامة على الأداء المالي وربحية الأعمال",
+      title: t("reports.ownerSummary"),
+      description: t("reports.ownerSummaryDesc"),
       icon: <DollarSign className="w-6 h-6" />,
       path: "/reports/owner-summary",
       color: "text-gold-400",
     },
     {
-      title: "هامش الربح",
-      description: "تحليل هامش الربح لكل منتج في المخزون",
+      title: t("reports.profitMargin"),
+      description: t("reports.inventoryMarginSubtitle"),
       icon: <TrendingUp className="w-6 h-6" />,
       path: "/reports/inventory-margin",
       color: "text-purple-400",
     },
     {
-      title: "المبيعات حسب العميل",
-      description: "تحليل المبيعات والفواتير لكل عميل",
+      title: t("reports.salesByCustomer"),
+      description: t("reports.salesByCustomerDesc"),
       icon: <Users className="w-6 h-6" />,
       path: "/reports/sales-by-customer",
       color: "text-blue-400",
     },
     {
-      title: "الفواتير غير المحصلة",
-      description: "جميع الفواتير التي لم تُسدد بالكامل",
+      title: t("reports.unpaidInvoicesTitle"),
+      description: t("reports.unpaidInvoicesDesc"),
       icon: <AlertTriangle className="w-6 h-6" />,
       path: "/reports/unpaid-invoices",
       color: "text-gold-400",
     },
     {
-      title: "أعمار الذمم",
-      description: "تقرير أعمار المستحقات من العملاء",
+      title: t("reports.agingTitle"),
+      description: t("reports.agingDesc"),
       icon: <Clock className="w-6 h-6" />,
       path: "/reports/aging",
       color: "text-amber-400",
     },
     {
-      title: "المخزون المنخفض",
-      description: "الأصناف تحت الحد الأدنى",
+      title: t("reports.lowStock"),
+      description: t("reports.lowStockDesc"),
       icon: <Package className="w-6 h-6" />,
       path: "/reports/low-stock",
       color: "text-red-400",
     },
     {
-      title: "إقرار ضريبة القيمة المضافة",
-      description: "تقرير VAT للتقديم للهيئة",
+      title: t("reports.vatReturnTitle"),
+      description: t("reports.vatReturnDesc"),
       icon: <Receipt className="w-6 h-6" />,
       path: "/reports/vat-return",
       color: "text-emerald-400",
     },
     {
-      title: "قائمة الدخل",
-      description: "الإيرادات والمصروفات وصافي الربح",
+      title: t("accounting.incomeStatement"),
+      description: t("reports.incomeStatementDesc"),
       icon: <TrendingUp className="w-6 h-6" />,
       path: "/accounting/statements",
       color: "text-purple-400",
     },
     {
-      title: "ميزان المراجعة",
-      description: "أرصدة الحسابات والمطابقة",
+      title: t("accounting.trialBalance"),
+      description: t("reports.trialBalanceDesc"),
       icon: <BarChart3 className="w-6 h-6" />,
       path: "/accounting/trial-balance",
       color: "text-cyan-400",
     },
     {
-      title: "تقرير المشتريات",
-      description: "أوامر الشراء والموردين",
+      title: t("reports.purchasesReport"),
+      description: t("reports.purchasesReportDesc"),
       icon: <Truck className="w-6 h-6" />,
       path: "/purchases",
       color: "text-orange-400",
     },
     {
-      title: "التقارير المخصصة",
-      description: "إنشاء تقرير حسب الطلب",
+      title: t("reports.customReports"),
+      description: t("reports.customReportsDesc"),
       icon: <FileText className="w-6 h-6" />,
       path: "/reports",
       color: "text-brand-400",
@@ -104,8 +106,8 @@ export default function ReportsPage() {
     <div className="space-y-6">
       <div className="page-header">
         <div>
-          <h1 className="page-title">التقارير</h1>
-          <p className="page-subtitle">جميع التقارير المالية والتشغيلية</p>
+          <h1 className="page-title">{t("reports.title")}</h1>
+          <p className="page-subtitle">{t("reports.pageSubtitle")}</p>
         </div>
       </div>
 

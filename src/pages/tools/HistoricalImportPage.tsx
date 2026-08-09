@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
@@ -8,9 +9,8 @@ import {
   Users, Truck, Package, Warehouse, FileText, ShoppingCart,
   Receipt, Database, UserCheck, Upload, CheckCircle2, XCircle,
   AlertTriangle, RotateCcw, ArrowRight, ChevronLeft, FileSpreadsheet,
-  Download, Loader2, ChevronDown
+  Download, Loader2
 } from "lucide-react";
-import { useUIStore } from "@/stores/uiStore";
 
 interface FileWithPath {
   name: string;
@@ -28,14 +28,27 @@ interface Template {
   columns: { field: string; label: string; required: boolean; description: string }[];
 }
 
+interface PreviewError {
+  row: number;
+  field: string;
+  message: string;
+  severity: "error" | "warning";
+}
+
+interface PreviewMapping {
+  source_column: string;
+  target_field: string;
+  auto_matched: boolean;
+}
+
 interface PreviewData {
+  entity_type: string;
   headers: string[];
-  rows: Record<string, any>[];
-  mappings: { source: string; target: string }[];
-  validation: { row: number; column: string; message: string; severity: "error" | "warning" }[];
+  sample_data: string[][];
+  mappings: PreviewMapping[];
+  errors: PreviewError[];
   total_rows: number;
   valid_rows: number;
-  error_count: number;
 }
 
 interface ImportResult {
@@ -53,18 +66,6 @@ interface HistoryEntry {
   created_at: string;
 }
 
-const ENTITY_CARDS: { type: EntityType; label: string; description: string; icon: any }[] = [
-  { type: "customers", label: "العملاء", description: "استيراد بيانات العملاء والموردين", icon: Users },
-  { type: "suppliers", label: "الموردين", description: "استيراد بيانات الموردين والبائعين", icon: Truck },
-  { type: "products", label: "المنتجات", description: "استيراد قائمة المنتجات والأصناف", icon: Package },
-  { type: "inventory", label: "المخزون", description: "استيراد أرصدة المخزون والمستودعات", icon: Warehouse },
-  { type: "invoices", label: "فواتير المبيعات", description: "استيراد فواتير المبيعات السابقة", icon: FileText },
-  { type: "purchases", label: "مشتريات", description: "استيراد سجل المشتريات والمشتريات", icon: ShoppingCart },
-  { type: "expenses", label: "النفقات", description: "استيراد سجل المصروفات التشغيلية", icon: Receipt },
-  { type: "opening_balances", label: "الأرصدة الافتتاحية", description: "استيراد الأرصدة الافتتاحية للحسابات", icon: Database },
-  { type: "employees", label: "الموظفين", description: "استيراد بيانات الموظفين والموظفات", icon: UserCheck },
-];
-
 const TARGET_FIELDS_BY_TYPE: Record<EntityType, string[]> = {
   customers: ["name", "phone", "email", "address", "vat_number", "credit_limit", "notes"],
   suppliers: ["name", "phone", "email", "address", "vat_number", "payment_terms", "notes"],
@@ -79,6 +80,19 @@ const TARGET_FIELDS_BY_TYPE: Record<EntityType, string[]> = {
 
 export default function HistoricalImportPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
+
+  const ENTITY_CARDS: { type: EntityType; label: string; description: string; icon: any }[] = [
+    { type: "customers", label: t("tools.historicalImport.entityCustomers"), description: t("tools.historicalImport.entityCustomersDesc"), icon: Users },
+    { type: "suppliers", label: t("tools.historicalImport.entitySuppliers"), description: t("tools.historicalImport.entitySuppliersDesc"), icon: Truck },
+    { type: "products", label: t("tools.historicalImport.entityProducts"), description: t("tools.historicalImport.entityProductsDesc"), icon: Package },
+    { type: "inventory", label: t("tools.historicalImport.entityInventory"), description: t("tools.historicalImport.entityInventoryDesc"), icon: Warehouse },
+    { type: "invoices", label: t("tools.historicalImport.entityInvoices"), description: t("tools.historicalImport.entityInvoicesDesc"), icon: FileText },
+    { type: "purchases", label: t("tools.historicalImport.entityPurchases"), description: t("tools.historicalImport.entityPurchasesDesc"), icon: ShoppingCart },
+    { type: "expenses", label: t("tools.historicalImport.entityExpenses"), description: t("tools.historicalImport.entityExpensesDesc"), icon: Receipt },
+    { type: "opening_balances", label: t("tools.historicalImport.entityOpeningBalances"), description: t("tools.historicalImport.entityOpeningBalancesDesc"), icon: Database },
+    { type: "employees", label: t("tools.historicalImport.entityEmployees"), description: t("tools.historicalImport.entityEmployeesDesc"), icon: UserCheck },
+  ];
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [entityType, setEntityType] = useState<EntityType | null>(null);
@@ -134,9 +148,13 @@ export default function HistoricalImportPage() {
         entityType,
       });
       setPreview(data);
-      setMappings(data.mappings.length > 0 ? data.mappings : data.headers.map((h: string) => ({ source: h, target: "" })));
+      setMappings(
+        data.mappings.length > 0
+          ? data.mappings.map((m: PreviewMapping) => ({ source: m.source_column, target: m.target_field }))
+          : data.headers.map((h: string) => ({ source: h, target: "" }))
+      );
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err) || "فشل تحميل الملف");
+      setError(err instanceof Error ? err.message : String(err) || t("tools.historicalImport.fileUploadFailed"));
     } finally {
       setLoading(false);
     }
@@ -154,8 +172,8 @@ export default function HistoricalImportPage() {
       const path = (file as FileWithPath).path || file.name;
       const activeMappings = mappings.filter((m) => m.target);
       const data = await invoke<ImportResult>("execute_import", {
+        filePath: path,
         entityType,
-        data: { filePath: path },
         mappings: activeMappings,
         skipFirstRow,
       });
@@ -163,7 +181,7 @@ export default function HistoricalImportPage() {
       setStep(3);
       loadHistory();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err) || "فشل الاستيراد");
+      setError(err instanceof Error ? err.message : String(err) || t("tools.historicalImport.importFailed"));
     } finally {
       setLoading(false);
     }
@@ -187,13 +205,13 @@ export default function HistoricalImportPage() {
         <div>
           <h1 className="page-title flex items-center gap-2">
             <FileSpreadsheet className="w-6 h-6 text-gold-400" />
-            استيراد البيانات التاريخية
+            {t("tools.historicalImport.title")}
           </h1>
-          <p className="page-subtitle">استيراد البيانات السابقة من ملفات Excel و CSV</p>
+          <p className="page-subtitle">{t("tools.historicalImport.subtitle")}</p>
         </div>
         {step > 1 && (
           <Button variant="ghost" icon={<RotateCcw className="w-4 h-4" />} onClick={resetAll}>
-            بدء من جديد
+            {t("tools.restart")}
           </Button>
         )}
       </div>
@@ -207,7 +225,7 @@ export default function HistoricalImportPage() {
 
       {templates.length > 0 && step === 1 && (
         <Card>
-          <h3 className="section-title mb-4">القوالب المتاحة</h3>
+          <h3 className="section-title mb-4">{t("tools.historicalImport.availableTemplates")}</h3>
           <div className="grid grid-cols-3 gap-4">
             {templates.map((tpl) => (
               <div key={tpl.name} className="p-4 bg-surface-800/50 rounded-xl border border-surface-700/50">
@@ -220,7 +238,7 @@ export default function HistoricalImportPage() {
                     </div>
                   ))}
                   {tpl.columns.length > 4 && (
-                    <p className="text-xs text-surface-600">+{tpl.columns.length - 4} حقول أخرى</p>
+                    <p className="text-xs text-surface-600">{t("tools.historicalImport.moreFields", { count: tpl.columns.length - 4 })}</p>
                   )}
                 </div>
               </div>
@@ -231,13 +249,13 @@ export default function HistoricalImportPage() {
 
       <div className="flex items-center gap-3 mb-2">
         <div className={cn("w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold", step >= 1 ? "bg-gold-500/20 text-gold-400" : "bg-surface-800 text-surface-500")}>1</div>
-        <span className={cn("text-sm", step >= 1 ? "text-white" : "text-surface-500")}>اختيار نوع البيانات</span>
+        <span className={cn("text-sm", step >= 1 ? "text-white" : "text-surface-500")}>{t("tools.historicalImport.stepChooseData")}</span>
         <div className="h-px w-12 bg-surface-700" />
         <div className={cn("w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold", step >= 2 ? "bg-gold-500/20 text-gold-400" : "bg-surface-800 text-surface-500")}>2</div>
-        <span className={cn("text-sm", step >= 2 ? "text-white" : "text-surface-500")}>رفع ومعاينة</span>
+        <span className={cn("text-sm", step >= 2 ? "text-white" : "text-surface-500")}>{t("tools.historicalImport.stepUploadPreview")}</span>
         <div className="h-px w-12 bg-surface-700" />
         <div className={cn("w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold", step >= 3 ? "bg-gold-500/20 text-gold-400" : "bg-surface-800 text-surface-500")}>3</div>
-        <span className={cn("text-sm", step >= 3 ? "text-white" : "text-surface-500")}>نتائج الاستيراد</span>
+        <span className={cn("text-sm", step >= 3 ? "text-white" : "text-surface-500")}>{t("tools.historicalImport.stepImportResults")}</span>
       </div>
 
       {step === 1 && (
@@ -266,7 +284,7 @@ export default function HistoricalImportPage() {
           <div className="col-span-2 space-y-6">
             <Card>
               <div className="space-y-4">
-                <h3 className="section-title">رفع الملف</h3>
+                <h3 className="section-title">{t("tools.historicalImport.uploadFile")}</h3>
                 <div
                   className="border-2 border-dashed rounded-xl p-8 text-center cursor-pointer border-surface-600 hover:border-brand-500/50 transition-all"
                   onClick={() => document.getElementById("hist-file-input")?.click()}
@@ -277,15 +295,15 @@ export default function HistoricalImportPage() {
                     accept=".xlsx,.xls,.csv"
                     className="hidden"
                     onChange={handleFileUpload}
-                    aria-label="اختر ملف"
+                    aria-label={t("tools.historicalImport.chooseFileAria")}
                   />
                   {loading ? (
                     <Loader2 className="w-12 h-12 mx-auto mb-3 text-gold-400 animate-spin" />
                   ) : (
                     <Upload className="w-12 h-12 mx-auto mb-3 text-surface-500" />
                   )}
-                  <p className="text-surface-400">اسحب الملف هنا أو انقر للاختيار</p>
-                  <p className="text-xs text-surface-600 mt-1">Excel (.xlsx, .xls) أو CSV</p>
+                  <p className="text-surface-400">{t("tools.dragDrop")}</p>
+                  <p className="text-xs text-surface-600 mt-1">{t("tools.historicalImport.excelCsvHint")}</p>
                 </div>
                 {file && (
                   <div className="flex items-center gap-2 text-sm text-surface-400">
@@ -300,21 +318,21 @@ export default function HistoricalImportPage() {
               <>
                 <div className="flex items-center gap-4">
                   <div className="stat-card flex-1 text-center">
-                    <p className="text-xs text-surface-500">إجمالي الصفوف</p>
+                    <p className="text-xs text-surface-500">{t("tools.historicalImport.totalRows")}</p>
                     <p className="text-lg font-bold text-white">{preview.total_rows}</p>
                   </div>
                   <div className="stat-card flex-1 text-center">
-                    <p className="text-xs text-surface-500">صحيحة</p>
+                    <p className="text-xs text-surface-500">{t("tools.historicalImport.validRows")}</p>
                     <p className="text-lg font-bold text-emerald-400">{preview.valid_rows}</p>
                   </div>
                   <div className="stat-card flex-1 text-center">
-                    <p className="text-xs text-surface-500">أخطاء</p>
-                    <p className="text-lg font-bold text-red-400">{preview.error_count}</p>
+                    <p className="text-xs text-surface-500">{t("tools.historicalImport.errors")}</p>
+                    <p className="text-lg font-bold text-red-400">{preview.errors.filter((e) => e.severity === "error").length}</p>
                   </div>
                 </div>
 
                 <Card>
-                  <h3 className="section-title mb-3">معاينة البيانات</h3>
+                  <h3 className="section-title mb-3">{t("tools.dataPreview")}</h3>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
@@ -323,9 +341,9 @@ export default function HistoricalImportPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {preview.rows.slice(0, 5).map((r, i) => (
+                        {preview.sample_data.slice(0, 5).map((row, i) => (
                           <tr key={i} className="border-b border-surface-700/20">
-                            {preview.headers.map((h) => <td key={h} className="p-2 whitespace-nowrap">{String(r[h] ?? "")}</td>)}
+                            {preview.headers.map((h, j) => <td key={h} className="p-2 whitespace-nowrap">{String(row[j] ?? "")}</td>)}
                           </tr>
                         ))}
                       </tbody>
@@ -334,7 +352,7 @@ export default function HistoricalImportPage() {
                 </Card>
 
                 <Card>
-                  <h3 className="section-title mb-4">تعيين الأعمدة</h3>
+                  <h3 className="section-title mb-4">{t("tools.columnMapping")}</h3>
                   <div className="space-y-3">
                     {mappings.map((m, i) => (
                       <div key={i} className="flex items-center gap-4">
@@ -345,17 +363,17 @@ export default function HistoricalImportPage() {
                           onChange={(e) => handleMappingChange(i, e.target.value)}
                           className="input-field flex-1"
                         >
-                          <option value="">— تخطي —</option>
+                          <option value="">{t("tools.skipOption")}</option>
                           {targetFields.map((f) => {
-                            const autoMapped = preview.mappings.find((pm) => pm.source === m.source)?.target;
+                            const autoMapped = preview.mappings.find((pm) => pm.source_column === m.source)?.target_field;
                             return (
                               <option key={f} value={f}>
-                                {f} {autoMapped === f ? "(مقترح)" : ""}
+                                {f} {autoMapped === f ? t("tools.historicalImport.suggestedMarker") : ""}
                               </option>
                             );
                           })}
                         </select>
-                        {preview.validation.filter((v) => v.column === m.source).length > 0 && (
+                        {preview.errors.filter((v) => v.field === m.source).length > 0 && (
                           <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
                         )}
                       </div>
@@ -369,19 +387,19 @@ export default function HistoricalImportPage() {
                         onChange={(e) => setSkipFirstRow(e.target.checked)}
                         className="rounded"
                       />
-                      تخطي الصف الأول (رؤوس الأعمدة)
+                      {t("tools.historicalImport.skipFirstRow")}
                     </label>
                     <Button onClick={handleExecuteImport} loading={loading} icon={<Download className="w-4 h-4" />}>
-                      الاستيراد
+                      {t("tools.historicalImport.importButton")}
                     </Button>
                   </div>
                 </Card>
 
-                {preview.validation.filter((v) => v.severity === "error" || v.severity === "warning").length > 0 && (
+                {preview.errors.filter((v) => v.severity === "error" || v.severity === "warning").length > 0 && (
                   <Card>
-                    <h3 className="section-title mb-3">نتائج التحقق</h3>
+                    <h3 className="section-title mb-3">{t("tools.validationResults")}</h3>
                     <div className="space-y-2 max-h-48 overflow-y-auto">
-                      {preview.validation.map((v, i) => (
+                      {preview.errors.map((v, i) => (
                         <div
                           key={i}
                           className={cn(
@@ -396,7 +414,7 @@ export default function HistoricalImportPage() {
                           ) : (
                             <AlertTriangle className="w-4 h-4 flex-shrink-0" />
                           )}
-                          <span>صف {v.row}: {v.column} - {v.message}</span>
+                          <span>{t("tools.historicalImport.rowFieldError", { row: v.row, field: v.field, message: v.message })}</span>
                         </div>
                       ))}
                     </div>
@@ -407,9 +425,9 @@ export default function HistoricalImportPage() {
           </div>
 
           <Card>
-            <h3 className="section-title mb-4">سجل الاستيراد</h3>
+            <h3 className="section-title mb-4">{t("tools.importHistory")}</h3>
             {history.length === 0 ? (
-              <p className="text-center text-surface-500 py-4 text-sm">لا توجد سجلات</p>
+              <p className="text-center text-surface-500 py-4 text-sm">{t("tools.noRecords")}</p>
             ) : (
               <div className="space-y-3 max-h-96 overflow-y-auto">
                 {history.map((h) => {
@@ -423,7 +441,7 @@ export default function HistoricalImportPage() {
                       </div>
                       <div className="flex items-center justify-between text-xs text-surface-500">
                         <span>{card?.label || h.entity_type}</span>
-                        <span>{h.rows_imported} صف</span>
+                        <span>{t("tools.rowsCount", { count: h.rows_imported })}</span>
                       </div>
                     </div>
                   );
@@ -440,16 +458,16 @@ export default function HistoricalImportPage() {
             <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-emerald-500/10 flex items-center justify-center">
               <CheckCircle2 className="w-10 h-10 text-emerald-400" />
             </div>
-            <h3 className="text-lg font-bold text-white mb-2">تم الاستيراد بنجاح</h3>
+            <h3 className="text-lg font-bold text-white mb-2">{t("tools.importSuccess")}</h3>
             <div className="flex items-center justify-center gap-6 mt-4 mb-6">
               <div className="text-center">
                 <p className="text-2xl font-bold text-emerald-400">{result.imported}</p>
-                <p className="text-xs text-surface-500">تم استيرادها</p>
+                <p className="text-xs text-surface-500">{t("tools.historicalImport.importedCount")}</p>
               </div>
               {result.skipped > 0 && (
                 <div className="text-center">
                   <p className="text-2xl font-bold text-amber-400">{result.skipped}</p>
-                  <p className="text-xs text-surface-500">تم تخطيها</p>
+                  <p className="text-xs text-surface-500">{t("tools.historicalImport.skippedCount")}</p>
                 </div>
               )}
             </div>
@@ -458,17 +476,17 @@ export default function HistoricalImportPage() {
                 {result.errors.map((e, i) => (
                   <div key={i} className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 p-2 rounded-lg">
                     <XCircle className="w-4 h-4 flex-shrink-0" />
-                    <span>صف {e.row}: {e.message}</span>
+                    <span>{t("tools.historicalImport.rowMessageError", { row: e.row, message: e.message })}</span>
                   </div>
                 ))}
               </div>
             )}
             <div className="flex items-center justify-center gap-3">
               <Button variant="outline" onClick={resetAll} icon={<RotateCcw className="w-4 h-4" />}>
-                استيراد المزيد
+                {t("tools.historicalImport.importMore")}
               </Button>
               <Button variant="ghost" onClick={() => navigate(-1)} icon={<ChevronLeft className="w-4 h-4" />}>
-                العودة
+                {t("tools.goBack")}
               </Button>
             </div>
           </div>

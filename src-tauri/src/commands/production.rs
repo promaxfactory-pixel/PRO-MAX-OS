@@ -47,6 +47,20 @@ pub struct CreateOrderInput {
     pub operator: Option<String>,
     pub supervisor: Option<String>,
     pub notes: Option<String>,
+    pub lines: Option<Vec<CreateOrderLineInput>>,
+    pub created_by: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateOrderLineInput {
+    pub product_id: i64,
+    pub cups_per_carton: Option<i64>,
+    pub cartons_good: f64,
+    pub cartons_waste: f64,
+    pub worker: Option<String>,
+    pub brand_type: Option<String>,
+    pub customer_id: Option<i64>,
+    pub batch_no: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -142,24 +156,25 @@ pub fn create_production_order(
     state: State<'_, DbState>,
     input: CreateOrderInput,
 ) -> Result<i64, AppError> {
-    let conn = state.0.lock()?;
+    let mut conn = state.0.lock()?;
+    let tx = conn.transaction()?;
     let year = chrono::Utc::now().format("%Y").to_string();
 
-    let seq: i64 = conn
+    let seq: i64 = tx
         .query_row(
             "SELECT COALESCE(last_number,0)+1 FROM doc_sequences WHERE doc_type='PROD' AND year=?",
             [&year],
             |r| r.get(0),
         )
         .unwrap_or(1);
-    conn.execute(
+    tx.execute(
         "INSERT INTO doc_sequences(doc_type, year, last_number) VALUES('PROD',?,?) ON CONFLICT(doc_type, year) DO UPDATE SET last_number=excluded.last_number",
         rusqlite::params![year, seq],
     )
     .map_err(|e| format!("Failed to increment production order sequence: {}", e))?;
     let prod_no = format!("PROD-{}-{:04}", year, seq);
 
-    conn.execute(
+    tx.execute(
         "INSERT INTO production_orders(prod_no, date, shift, machine_id, operator, supervisor, status, notes, created_by) VALUES(?,?,?,?,?,?,?,'Draft',?)",
         rusqlite::params![
             prod_no,
@@ -169,12 +184,33 @@ pub fn create_production_order(
             input.operator,
             input.supervisor,
             input.notes,
-            chrono::Utc::now().to_string(),
+            input.created_by,
         ],
     )
     ?;
-    let order_id = conn.last_insert_rowid();
-    let _ = rbac::log_audit(&conn, None, None, "create_production_order", "production_orders", Some(order_id), None, Some(&prod_no), None);
+    let order_id = tx.last_insert_rowid();
+
+    if let Some(lines) = &input.lines {
+        for line in lines {
+            tx.execute(
+                "INSERT INTO production_lines(order_id, product_id, cups_per_carton, cartons_good, cartons_waste, worker, brand_type, customer_id, batch_no) VALUES(?,?,?,?,?,?,?,?,?)",
+                rusqlite::params![
+                    order_id,
+                    line.product_id,
+                    line.cups_per_carton.unwrap_or(1000),
+                    line.cartons_good,
+                    line.cartons_waste,
+                    line.worker,
+                    line.brand_type.clone().unwrap_or_else(|| "factory".into()),
+                    line.customer_id,
+                    line.batch_no,
+                ],
+            )?;
+        }
+    }
+
+    let _ = rbac::log_audit(&*tx, None, None, "create_production_order", "production_orders", Some(order_id), None, Some(&prod_no), None);
+    tx.commit()?;
     Ok(order_id)
 }
 

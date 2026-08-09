@@ -26,6 +26,18 @@ pub struct OperationsSheet {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct CreateOperationsSheetLineInput {
+    pub worker_id: Option<i64>,
+    pub worker_name: Option<String>,
+    pub attendance: Option<String>,
+    pub overtime_hours: Option<f64>,
+    pub production_qty: Option<f64>,
+    pub quality_grade: Option<String>,
+    pub safety_incident: Option<bool>,
+    pub safety_note: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct CreateOperationsSheetInput {
     pub date: String,
     pub shift: Option<String>,
@@ -39,6 +51,7 @@ pub struct CreateOperationsSheetInput {
     pub total_cups: Option<f64>,
     pub notes: Option<String>,
     pub created_by: Option<String>,
+    pub entries: Option<Vec<CreateOperationsSheetLineInput>>,
 }
 
 #[tauri::command]
@@ -148,6 +161,26 @@ pub fn create_operations_sheet(
     )?;
 
     let id = conn.last_insert_rowid();
+
+    if let Some(entries) = &input.entries {
+        for e in entries {
+            conn.execute(
+                "INSERT INTO operations_sheet_lines (sheet_id, worker_id, worker_name, attendance, overtime_hours, production_qty, quality_grade, safety_incident, safety_note)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                params![
+                    id,
+                    e.worker_id,
+                    e.worker_name,
+                    e.attendance.clone().unwrap_or_else(|| "present".into()),
+                    e.overtime_hours.unwrap_or(0.0),
+                    e.production_qty.unwrap_or(0.0),
+                    e.quality_grade.clone().unwrap_or_else(|| "A".into()),
+                    e.safety_incident.unwrap_or(false) as i64,
+                    e.safety_note,
+                ],
+            )?;
+        }
+    }
 
     Ok(conn.query_row(
         "SELECT id, sheet_no, date, shift, supervisor_name, worker_name, start_time, end_time, normal_hours, overtime_hours, cartons_produced, total_cups, status, notes, created_by, created_at FROM operations_daily_sheets WHERE id=?1",

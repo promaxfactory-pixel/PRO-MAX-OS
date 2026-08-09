@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import {
   MessageSquare, Mail, Printer, Save, CheckCircle2,
-  Send, Wifi, WifiOff
+  Send, WifiOff
 } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
@@ -22,6 +23,7 @@ interface Settings {
 }
 
 export default function IntegrationsPage() {
+  const { t } = useTranslation();
   const addNotification = useUIStore((s) => s.addNotification);
   const [form, setForm] = useState<Settings>({
     whatsapp_api_key: "", whatsapp_phone: "",
@@ -36,7 +38,7 @@ export default function IntegrationsPage() {
   useEffect(() => {
     invoke<Partial<Settings>>("integrations_get_settings")
       .then((d) => setForm((prev) => ({ ...prev, ...d })))
-      .catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }));
+      .catch((e: unknown) => addNotification({ title: t('common.error'), message: String(e), type: 'error' }));
   }, []);
 
   const handleChange = (field: keyof Settings, value: any) => {
@@ -50,7 +52,7 @@ export default function IntegrationsPage() {
       await invoke("integrations_save_settings", { settings: form });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء الحفظ" }); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("tools.saveError") }); }
     finally { setSaving(false); }
   };
 
@@ -61,7 +63,7 @@ export default function IntegrationsPage() {
       const result = await invoke<{ ok: boolean; message: string }>(`integrations_test_${type}`);
       setTestResult({ type, ok: result.ok, msg: result.message });
     } catch (err: unknown) {
-      setTestResult({ type, ok: false, msg: err instanceof Error ? err.message : String(err) || "فشل الاتصال" });
+      setTestResult({ type, ok: false, msg: err instanceof Error ? err.message : String(err) || t("tools.connectionFailed") });
     } finally {
       setTesting(null);
       setTimeout(() => setTestResult(null), 5000);
@@ -86,11 +88,11 @@ export default function IntegrationsPage() {
     <div className="space-y-6">
       <div className="page-header">
         <div>
-          <h1 className="page-title">التكاملات</h1>
-          <p className="page-subtitle">إعدادات واتساب والبريد والطابعة</p>
+          <h1 className="page-title">{t("tools.integrations.title")}</h1>
+          <p className="page-subtitle">{t("tools.integrations.subtitle")}</p>
         </div>
         <Button icon={<Save className="w-4 h-4" />} onClick={handleSave} loading={saving}>
-          {saved ? "تم الحفظ ✓" : "حفظ"}
+          {saved ? t("tools.integrations.savedCheck") : t("tools.integrations.save")}
         </Button>
       </div>
 
@@ -108,15 +110,15 @@ export default function IntegrationsPage() {
           <div className="flex items-center justify-between mb-4">
             <h3 className="section-title flex items-center gap-2">
               <MessageSquare className="w-5 h-5 text-emerald-400" />
-              واتساب
+              {t("tools.integrations.whatsapp")}
             </h3>
             <Button variant="ghost" size="sm" icon={<Send className="w-3.5 h-3.5" />} onClick={() => handleTest("whatsapp")} loading={testing === "whatsapp"}>
-              اختبار
+              {t("tools.integrations.test")}
             </Button>
           </div>
           <div className="space-y-4">
-            {field("API Key", form.whatsapp_api_key, (v) => handleChange("whatsapp_api_key", v))}
-            {field("رقم الهاتف", form.whatsapp_phone, (v) => handleChange("whatsapp_phone", v))}
+            {field(t("tools.integrations.apiKey"), form.whatsapp_api_key, (v) => handleChange("whatsapp_api_key", v))}
+            {field(t("tools.integrations.phoneNumber"), form.whatsapp_phone, (v) => handleChange("whatsapp_phone", v))}
           </div>
         </Card>
 
@@ -124,21 +126,21 @@ export default function IntegrationsPage() {
           <div className="flex items-center justify-between mb-4">
             <h3 className="section-title flex items-center gap-2">
               <Mail className="w-5 h-5 text-blue-400" />
-              البريد الإلكتروني (SMTP)
+              {t("tools.integrations.emailSmtp")}
             </h3>
             <Button variant="ghost" size="sm" icon={<Send className="w-3.5 h-3.5" />} onClick={() => handleTest("email")} loading={testing === "email"}>
-              اختبار
+              {t("tools.integrations.test")}
             </Button>
           </div>
           <div className="space-y-4">
             <div className="grid grid-cols-3 gap-4">
-              {field("الخادم", form.smtp_server, (v) => handleChange("smtp_server", v))}
-              {field("المنفذ", form.smtp_port, (v) => handleChange("smtp_port", Number(v)), { type: "number" })}
+              {field(t("tools.integrations.server"), form.smtp_server, (v) => handleChange("smtp_server", v))}
+              {field(t("tools.integrations.port"), form.smtp_port, (v) => handleChange("smtp_port", Number(v)), { type: "number" })}
               <div />
             </div>
-            {field("المستخدم", form.smtp_user, (v) => handleChange("smtp_user", v))}
-            {field("كلمة المرور", form.smtp_pass, (v) => handleChange("smtp_pass", v), { type: "password" })}
-            {field("من", form.smtp_from, (v) => handleChange("smtp_from", v))}
+            {field(t("tools.integrations.username"), form.smtp_user, (v) => handleChange("smtp_user", v))}
+            {field(t("tools.integrations.password"), form.smtp_pass, (v) => handleChange("smtp_pass", v), { type: "password" })}
+            {field(t("tools.integrations.from"), form.smtp_from, (v) => handleChange("smtp_from", v))}
           </div>
         </Card>
 
@@ -146,16 +148,16 @@ export default function IntegrationsPage() {
           <div className="flex items-center justify-between mb-4">
             <h3 className="section-title flex items-center gap-2">
               <Printer className="w-5 h-5 text-gold-400" />
-              الطابعة
+              {t("tools.integrations.printer")}
             </h3>
             <Button variant="ghost" size="sm" icon={<Send className="w-3.5 h-3.5" />} onClick={() => handleTest("printer")} loading={testing === "printer"}>
-              اختبار
+              {t("tools.integrations.test")}
             </Button>
           </div>
           <div className="space-y-4">
             <div>
-              <label className="form-label">اسم الطابعة</label>
-              <input type="text" value={form.printer_name} onChange={(e) => handleChange("printer_name", e.target.value)} className="input-field" aria-label="اسم الطابعة" />
+              <label className="form-label">{t("tools.integrations.printerName")}</label>
+              <input type="text" value={form.printer_name} onChange={(e) => handleChange("printer_name", e.target.value)} className="input-field" aria-label={t("tools.integrations.printerName")} />
             </div>
             <label className="flex items-center gap-3 cursor-pointer">
               <input
@@ -163,9 +165,9 @@ export default function IntegrationsPage() {
                 checked={form.printer_auto}
                 onChange={(e) => handleChange("printer_auto", e.target.checked)}
                 className="rounded"
-                aria-label="طباعة تلقائية"
+                aria-label={t("tools.integrations.autoPrint")}
               />
-              <span className="text-sm text-surface-300">طباعة تلقائية</span>
+              <span className="text-sm text-surface-300">{t("tools.integrations.autoPrint")}</span>
             </label>
           </div>
         </Card>

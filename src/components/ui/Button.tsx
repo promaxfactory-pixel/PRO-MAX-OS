@@ -16,7 +16,7 @@ const Button = memo(forwardRef<HTMLButtonElement, ButtonProps>(
       gold: 'btn-gold',
       outline: 'btn-outline',
       danger: 'btn-danger',
-      success: 'bg-emerald-600 hover:bg-emerald-700 text-white',
+      success: 'btn-success',
       ghost: 'btn-ghost',
       link: 'text-brand-400 hover:text-brand-300 underline underline-offset-2',
     };

@@ -13,6 +13,7 @@ import {
   CheckCircle,
   Info,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface AlertsData {
   expiry: { product_name: string; expiry_date: string; batch?: string }[];
@@ -22,52 +23,53 @@ interface AlertsData {
   quality_pending: { batch_id: number; product_name: string; created_at: string }[];
 }
 
-const sectionConfig = [
-  {
-    key: "expiry" as const,
-    title: "انتهاء صلاحية",
-    icon: Clock,
-    borderColor: "border-l-red-500",
-    iconColor: "text-red-400",
-    badgeColor: "bg-red-500/20 text-red-400",
-  },
-  {
-    key: "overdue_orders" as const,
-    title: "أوامر إنتاج متأخرة",
-    icon: FileWarning,
-    borderColor: "border-l-yellow-500",
-    iconColor: "text-yellow-400",
-    badgeColor: "bg-yellow-500/20 text-yellow-400",
-  },
-  {
-    key: "low_stock" as const,
-    title: "مخزون منخفض",
-    icon: AlertTriangle,
-    borderColor: "border-l-amber-500",
-    iconColor: "text-amber-400",
-    badgeColor: "bg-amber-500/20 text-amber-400",
-  },
-  {
-    key: "overdue_invoices" as const,
-    title: "فواتير متأخرة",
-    icon: FileWarning,
-    borderColor: "border-l-red-500",
-    iconColor: "text-red-400",
-    badgeColor: "bg-red-500/20 text-red-400",
-  },
-  {
-    key: "quality_pending" as const,
-    title: "جودة معلقة",
-    icon: Shield,
-    borderColor: "border-l-blue-500",
-    iconColor: "text-blue-400",
-    badgeColor: "bg-blue-500/20 text-blue-400",
-  },
-] as const;
-
 export default function AlertCenterPage() {
+  const { t } = useTranslation();
   const [alerts, setAlerts] = useState<AlertsData | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const sectionConfig = [
+    {
+      key: "expiry" as const,
+      title: t("alerts.expiry"),
+      icon: Clock,
+      borderColor: "border-l-red-500",
+      iconColor: "text-red-400",
+      badgeColor: "bg-red-500/20 text-red-400",
+    },
+    {
+      key: "overdue_orders" as const,
+      title: t("alerts.overdueOrders"),
+      icon: FileWarning,
+      borderColor: "border-l-yellow-500",
+      iconColor: "text-yellow-400",
+      badgeColor: "bg-yellow-500/20 text-yellow-400",
+    },
+    {
+      key: "low_stock" as const,
+      title: t("alerts.lowStock"),
+      icon: AlertTriangle,
+      borderColor: "border-l-amber-500",
+      iconColor: "text-amber-400",
+      badgeColor: "bg-amber-500/20 text-amber-400",
+    },
+    {
+      key: "overdue_invoices" as const,
+      title: t("alerts.overdueInvoices"),
+      icon: FileWarning,
+      borderColor: "border-l-red-500",
+      iconColor: "text-red-400",
+      badgeColor: "bg-red-500/20 text-red-400",
+    },
+    {
+      key: "quality_pending" as const,
+      title: t("alerts.pendingQuality"),
+      icon: Shield,
+      borderColor: "border-l-blue-500",
+      iconColor: "text-blue-400",
+      badgeColor: "bg-blue-500/20 text-blue-400",
+    },
+  ] as const;
 
   const fetchAlerts = useCallback(async () => {
     setLoading(true);
@@ -108,8 +110,8 @@ export default function AlertCenterPage() {
             <Bell className="h-6 w-6 text-amber-400" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white">مركز التنبيهات</h1>
-            <p className="text-sm text-surface-400">مراقبة جميع التنبيهات والإشعارات</p>
+            <h1 className="text-xl font-bold text-white">{t("alerts.title")}</h1>
+            <p className="text-sm text-surface-400">{t("alerts.subtitle")}</p>
           </div>
         </div>
         <Button
@@ -119,7 +121,7 @@ export default function AlertCenterPage() {
           className="border-surface-700 text-surface-400 hover:text-white"
         >
           <RefreshCw className={`h-4 w-4 ml-2 ${loading ? "animate-spin" : ""}`} />
-          تحديث
+          {t("alerts.refresh")}
         </Button>
       </div>
 
@@ -130,7 +132,7 @@ export default function AlertCenterPage() {
           </div>
           <div>
             <p className="text-2xl font-bold text-white">{counts.total}</p>
-            <p className="text-xs text-surface-400">إجمالي التنبيهات</p>
+            <p className="text-xs text-surface-400">{t("alerts.totalAlerts")}</p>
           </div>
         </div>
         <div className="bg-surface-800 border border-surface-700 rounded-xl p-4 flex items-center gap-3">
@@ -139,7 +141,7 @@ export default function AlertCenterPage() {
           </div>
           <div>
             <p className="text-2xl font-bold text-white">{counts.critical}</p>
-            <p className="text-xs text-surface-400">حرجة</p>
+            <p className="text-xs text-surface-400">{t("alerts.critical")}</p>
           </div>
         </div>
         <div className="bg-surface-800 border border-surface-700 rounded-xl p-4 flex items-center gap-3">
@@ -148,7 +150,7 @@ export default function AlertCenterPage() {
           </div>
           <div>
             <p className="text-2xl font-bold text-white">{counts.info}</p>
-            <p className="text-xs text-surface-400">معلوماتية</p>
+            <p className="text-xs text-surface-400">{t("alerts.informational")}</p>
           </div>
         </div>
       </div>
@@ -162,8 +164,8 @@ export default function AlertCenterPage() {
       {isEmpty && (
         <div className="flex flex-col items-center justify-center py-20 text-surface-400">
           <CheckCircle className="h-16 w-16 mb-4 text-emerald-500 opacity-50" />
-          <p className="text-lg font-semibold text-white">لا توجد تنبيهات حالياً</p>
-          <p className="text-sm mt-1">كل شيء يعمل بشكل طبيعي</p>
+          <p className="text-lg font-semibold text-white">{t("alerts.noAlerts")}</p>
+          <p className="text-sm mt-1">{t("alerts.allWorking")}</p>
         </div>
       )}
 

@@ -64,7 +64,7 @@ fn ensure_admin_user(conn: &Connection) -> Result<()> {
 mod migrations {
     use rusqlite::{Connection, Result};
     
-    const SCHEMA_VERSION: i32 = 22;
+    pub(crate) const SCHEMA_VERSION: i32 = 24;
     
     pub fn run(conn: &Connection) -> Result<()> {
         let current: i32 = conn
@@ -624,6 +624,62 @@ mod migrations {
                     CREATE INDEX IF NOT EXISTS idx_emp_contract ON employees(contract_end);"
                 ).ok();
             }
+            23 => {
+                conn.execute_batch(
+                    "-- ============================================================
+                    -- MIGRATION 23: Operations sheet lines + advance receipt notes
+                    -- ============================================================
+
+                    CREATE TABLE IF NOT EXISTS operations_sheet_lines (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        sheet_id INTEGER NOT NULL REFERENCES operations_daily_sheets(id),
+                        worker_id INTEGER, worker_name TEXT,
+                        attendance TEXT DEFAULT 'present',
+                        overtime_hours REAL DEFAULT 0,
+                        production_qty REAL DEFAULT 0,
+                        quality_grade TEXT DEFAULT 'A',
+                        safety_incident INTEGER DEFAULT 0,
+                        safety_note TEXT
+                    );"
+                )?;
+                let has_notes: bool = conn.query_row(
+                    "SELECT COUNT(*) FROM pragma_table_info('advance_receipts') WHERE name='notes'",
+                    [],
+                    |r| r.get::<_, i64>(0),
+                ).map(|n| n > 0).unwrap_or(false);
+                if !has_notes {
+                    conn.execute("ALTER TABLE advance_receipts ADD COLUMN notes TEXT", [])?;
+                }
+            }
+            24 => {
+                conn.execute_batch(
+                    "-- ============================================================
+                    -- MIGRATION 24: AI file extractions (any-file -> LLM -> structured)
+                    -- ============================================================
+
+                    CREATE TABLE IF NOT EXISTS ai_extractions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        file_path TEXT NOT NULL,
+                        file_name TEXT NOT NULL,
+                        file_type TEXT NOT NULL DEFAULT 'unknown',
+                        doc_type TEXT NOT NULL DEFAULT 'invoice',
+                        provider TEXT NOT NULL DEFAULT 'unknown',
+                        model TEXT NOT NULL DEFAULT '',
+                        raw_text TEXT,
+                        extracted_json TEXT NOT NULL,
+                        fields_json TEXT,
+                        confidence REAL NOT NULL DEFAULT 0,
+                        status TEXT NOT NULL DEFAULT 'draft',
+                        target_table TEXT,
+                        target_id INTEGER,
+                        created_by TEXT,
+                        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                        updated_at TEXT
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_ai_ext_status ON ai_extractions(status);
+                    CREATE INDEX IF NOT EXISTS idx_ai_ext_created ON ai_extractions(created_at);"
+                )?;
+            }
             _ => {}
         }
         Ok(())
@@ -700,7 +756,7 @@ mod tests {
     }
 
     #[test]
-    fn test_schema_version_is_22() {
+    fn test_schema_version_is_current() {
         let conn = test_conn();
         let version: i32 = conn
             .query_row(
@@ -709,7 +765,69 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap_or(0);
-        assert_eq!(version, 22, "Schema version should be 22");
+        assert_eq!(
+            version,
+            migrations::SCHEMA_VERSION,
+            "Schema version should match migrations::SCHEMA_VERSION"
+        );
+        // Every migration up to SCHEMA_VERSION must have produced its table(s).
+        let ai_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM ai_extractions", [], |r| r.get(0))
+            .expect("ai_extractions table (migration 24) must exist after init");
+        assert_eq!(ai_count, 0, "ai_extractions should be empty after init");
+    }
+
+    #[test]
+    fn test_migration_23_operations_sheet_lines() {
+        let conn = test_conn();
+        conn.execute(
+            "INSERT INTO operations_daily_sheets (sheet_no, date, shift, status) VALUES ('OPS-T1', '2026-08-05', 'A', 'Open')",
+            [],
+        ).unwrap();
+        let sheet_id: i64 = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO operations_sheet_lines (sheet_id, worker_name, attendance, overtime_hours, production_qty) VALUES (?, 'Worker A', 'present', 1.5, 120.0)",
+            [sheet_id],
+        ).unwrap();
+        let qty: f64 = conn.query_row(
+            "SELECT production_qty FROM operations_sheet_lines WHERE sheet_id = ?",
+            [sheet_id],
+            |r| r.get(0),
+        ).unwrap();
+        assert!((qty - 120.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_migration_23_advance_receipts_notes_column() {
+        let conn = test_conn();
+        let cols: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('advance_receipts') WHERE name = 'notes'",
+            [],
+            |r| r.get(0),
+        ).unwrap();
+        assert_eq!(cols, 1, "advance_receipts.notes column should exist");
+    }
+
+    #[test]
+    fn test_import_shipments_enriched_columns_exist() {
+        let conn = test_conn();
+        let expected = [
+            "shipping_company", "container_no", "bl_no", "vessel_flight",
+            "port_of_loading", "port_of_discharge", "estimated_arrival",
+            "actual_arrival", "customs_declaration_no", "customs_clearance_date",
+            "duty_amount_milli", "vat_on_import_milli", "freight_cost_milli",
+            "insurance_cost_milli", "handling_cost_milli", "commercial_invoice_no",
+            "packing_list_no", "origin_country", "gross_weight_kg", "cbm",
+            "clearance_agent", "total_landed_cost_milli",
+        ];
+        for col in expected {
+            let n: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('import_shipments') WHERE name = ?",
+                [col],
+                |r| r.get(0),
+            ).unwrap();
+            assert_eq!(n, 1, "import_shipments.{} column should exist", col);
+        }
     }
 
     #[test]
@@ -1057,6 +1175,57 @@ mod tests {
             "SELECT COUNT(*) FROM production_lines WHERE order_id = ?", [order_id], |r| r.get(0),
         ).unwrap();
         assert_eq!(line_count, 1);
+    }
+
+    #[test]
+    fn test_production_order_atomic_rollback() {
+        let mut conn = test_conn();
+
+        // Mimic create_production_order: order head + lines inside one transaction.
+        // A failing line (unknown product FK) must roll back the whole order.
+        let tx = conn.transaction().unwrap();
+        tx.execute(
+            "INSERT INTO production_orders (prod_no, date, status, created_by) VALUES ('PRO-ATOMIC', '2026-07-26', 'Draft', 'tester')",
+            [],
+        ).unwrap();
+        let order_id = tx.last_insert_rowid();
+        let line_result = tx.execute(
+            "INSERT INTO production_lines (order_id, product_id) VALUES (?, 999999)",
+            [order_id],
+        );
+        assert!(line_result.is_err(), "line with unknown product must fail");
+        drop(tx);
+
+        let order_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM production_orders WHERE prod_no='PRO-ATOMIC'", [], |r| r.get(0),
+        ).unwrap();
+        assert_eq!(order_count, 0, "failed line must roll back the order head");
+
+        // Multi-line success path must insert head + all lines atomically.
+        conn.execute("INSERT INTO products (name_ar, active) VALUES ('Atomic Product', 1)", []).unwrap();
+        let prod_id: i64 = conn.last_insert_rowid();
+        let tx = conn.transaction().unwrap();
+        tx.execute(
+            "INSERT INTO production_orders (prod_no, date, status, created_by) VALUES ('PRO-ATOMIC-OK', '2026-07-26', 'Draft', 'tester')",
+            [],
+        ).unwrap();
+        let order_id = tx.last_insert_rowid();
+        for line in &[prod_id, prod_id] {
+            tx.execute(
+                "INSERT INTO production_lines (order_id, product_id) VALUES (?, ?)",
+                rusqlite::params![order_id, line],
+            ).unwrap();
+        }
+        tx.commit().unwrap();
+
+        let order_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM production_orders WHERE prod_no='PRO-ATOMIC-OK'", [], |r| r.get(0),
+        ).unwrap();
+        assert_eq!(order_count, 1);
+        let line_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM production_lines WHERE order_id = ?", [order_id], |r| r.get(0),
+        ).unwrap();
+        assert_eq!(line_count, 2);
     }
 
     #[test]

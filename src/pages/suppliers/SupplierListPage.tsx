@@ -6,9 +6,11 @@ import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, Search, Truck } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
+import { useTranslation } from "react-i18next";
 import { Supplier } from "@/types";
 
 export default function SupplierListPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const addNotification = useUIStore((s) => s.addNotification);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -20,7 +22,7 @@ export default function SupplierListPage() {
     try {
       const data = await invoke("list_suppliers");
       setSuppliers(data as Supplier[]);
-    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("supplier.loadError") }); }
     finally { setLoading(false); }
   }, [addNotification]);
 
@@ -34,15 +36,15 @@ export default function SupplierListPage() {
     <div className="space-y-6">
       <div className="page-header">
         <div>
-          <h1 className="page-title">الموردين</h1>
-          <p className="page-subtitle">{suppliers.length} مورد مسجل</p>
+          <h1 className="page-title">{t("supplier.title")}</h1>
+          <p className="page-subtitle">{t("supplier.subtitle", { count: suppliers.length })}</p>
         </div>
-        <Button icon={<Plus className="w-4 h-4" />} onClick={() => navigate('/suppliers/new')}>إضافة مورد</Button>
+        <Button icon={<Plus className="w-4 h-4" />} onClick={() => navigate('/suppliers/new')}>{t("supplier.addSupplierButton")}</Button>
       </div>
 
       <div className="relative">
         <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-500" />
-        <input type="text" placeholder="بحث بالاسم أو الكود..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pr-10 input-field" aria-label="بحث" />
+        <input type="text" placeholder={t("supplier.searchPlaceholder")} value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pr-10 input-field" aria-label={t("common.search")} />
       </div>
 
       {loading ? (
@@ -57,18 +59,18 @@ export default function SupplierListPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="font-bold text-white group-hover:text-brand-300 transition-colors truncate">{supplier.name}</h3>
-                  <p className="text-xs text-surface-400 font-mono">{supplier.code || "بدون كود"}</p>
+                  <p className="text-xs text-surface-400 font-mono">{supplier.code || t("supplier.noCode")}</p>
                   <p className="text-xs text-surface-500 mt-1">{supplier.phone || "—"}</p>
                 </div>
                 <div className="text-left">
                   <p className="text-sm font-bold gradient-text">{formatOMR(supplier.balance_milli)}</p>
-                  <p className="text-[10px] text-surface-500">الرصيد</p>
+                  <p className="text-[10px] text-surface-500">{t("supplier.balance")}</p>
                 </div>
               </div>
             </Card>
           ))}
           {filtered.length === 0 && (
-            <div className="col-span-3 text-center py-12 text-surface-500">لا يوجد موردين</div>
+            <div className="col-span-3 text-center py-12 text-surface-500">{t("supplier.empty")}</div>
           )}
         </div>
       )}

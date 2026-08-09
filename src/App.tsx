@@ -68,6 +68,7 @@ const ExpensesPage = lazy(() => import("./pages/expenses/ExpensesPage"));
 const CashBankPage = lazy(() => import("./pages/cashbank/CashBankPage"));
 const PettyCashPage = lazy(() => import("./pages/pettycash/PettyCashPage"));
 const ChequesPage = lazy(() => import("./pages/finance/ChequesPage"));
+const OperatingAdvancesPage = lazy(() => import("./pages/finance/OperatingAdvancesPage"));
 const RenewalsPage = lazy(() => import("./pages/settings/RenewalsPage"));
 const GovernmentDashboardPage = lazy(() => import("./pages/government/GovernmentDashboardPage"));
 const AlertCenterPage = lazy(() => import("./pages/alerts/AlertCenterPage"));
@@ -75,6 +76,7 @@ const SettingsPage = lazy(() => import("./pages/settings/SettingsPage"));
 const UsersPage = lazy(() => import("./pages/settings/UsersPage"));
 const HistoricalImportPage = lazy(() => import("./pages/tools/HistoricalImportPage"));
 const AiAssistantPage = lazy(() => import("./pages/tools/AiAssistantPage"));
+const AiFileImportPage = lazy(() => import("./pages/tools/AiFileImportPage"));
 const EnhancedOcrPage = lazy(() => import("./pages/tools/EnhancedOcrPage"));
 const ExcelImportPage = lazy(() => import("./pages/tools/ExcelImportPage"));
 const EInvoicePage = lazy(() => import("./pages/tools/EInvoicePage"));
@@ -154,6 +156,7 @@ export default function App() {
           <Route path="/cashbank" element={<ProtectedRoute><CashBankPage /></ProtectedRoute>} />
           <Route path="/petty-cash" element={<ProtectedRoute><PettyCashPage /></ProtectedRoute>} />
           <Route path="/cheques" element={<ProtectedRoute><ChequesPage /></ProtectedRoute>} />
+          <Route path="/operating-advances" element={<ProtectedRoute><OperatingAdvancesPage /></ProtectedRoute>} />
 
           {/* HR */}
           <Route path="/hr/employees" element={<ProtectedRoute><EmployeeListPage /></ProtectedRoute>} />
@@ -211,6 +214,7 @@ export default function App() {
           {/* Tools */}
           <Route path="/tools/ocr" element={<ProtectedRoute><EnhancedOcrPage /></ProtectedRoute>} />
           <Route path="/tools/ai" element={<ProtectedRoute><AiAssistantPage /></ProtectedRoute>} />
+          <Route path="/tools/ai-file-import" element={<ProtectedRoute><AiFileImportPage /></ProtectedRoute>} />
           <Route path="/tools/historical-import" element={<ProtectedRoute><HistoricalImportPage /></ProtectedRoute>} />
           <Route path="/tools/excel-import" element={<ProtectedRoute><ExcelImportPage /></ProtectedRoute>} />
           <Route path="/tools/einvoice" element={<ProtectedRoute><EInvoicePage /></ProtectedRoute>} />

@@ -9,15 +9,10 @@ import { ArrowRight, Printer, Calendar } from "lucide-react";
 import StatementPrintTemplate from "@/components/print/StatementPrintTemplate";
 import { printComponent } from "@/utils/printUtils";
 import { useUIStore } from "@/stores/uiStore";
-
-interface StatementData {
-  supplier: { id: number; name: string; code: string };
-  transactions: { date: string; ref_type: string; ref_id: number; debit_milli: number; credit_milli: number; balance_milli: number; memo: string }[];
-  opening_balance_milli: number;
-  closing_balance_milli: number;
-}
+import { useTranslation } from "react-i18next";
 
 export default function SupplierStatementPage() {
+  const { t } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
   const addNotification = useUIStore((s) => s.addNotification);
@@ -39,7 +34,7 @@ export default function SupplierStatementPage() {
         toDate: toDate || null,
       });
       setData(result);
-    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("supplier.loadError") }); }
     finally { setLoading(false); }
   }, [addNotification, id, fromDate, toDate]);
 
@@ -54,7 +49,7 @@ export default function SupplierStatementPage() {
         printComponent("print-area");
         setShowPrint(false);
       }, 200);
-    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("supplier.loadError") }); }
   };
 
   if (loading || !data) {
@@ -62,19 +57,19 @@ export default function SupplierStatementPage() {
   }
 
   const txnLabels: Record<string, string> = {
-    purchase: "مشتريات",
-    payment: "دفعة",
+    purchase: t("print.txnPurchase"),
+    payment: t("print.txnPayment"),
   };
 
   const columns: Column<any>[] = useMemo(() => [
-    { key: "date", header: "التاريخ", render: (r) => formatDate(r.date) },
-    { key: "ref_no", header: "المرجع", render: (r) => r.ref_no || "—" },
-    { key: "txn_type", header: "النوع", render: (r) => txnLabels[r.txn_type] || r.txn_type },
-    { key: "debit_milli", header: "مدين (دفعة)", align: "left", render: (r) => r.debit_milli > 0 ? <span className="text-emerald-400 font-medium">{formatOMR(r.debit_milli)}</span> : "—" },
-    { key: "credit_milli", header: "دائن (مشتريات)", align: "left", render: (r) => r.credit_milli > 0 ? <span className="text-red-400 font-medium">{formatOMR(r.credit_milli)}</span> : "—" },
-    { key: "balance_milli", header: "الرصيد", align: "left", render: (r) => <span className="font-bold">{formatOMR(r.balance_milli)}</span> },
-    { key: "notes", header: "ملاحظات", render: (r) => r.notes || "—" },
-  ], []);
+    { key: "date", header: t("common.date"), render: (r) => formatDate(r.date) },
+    { key: "ref_no", header: t("print.reference"), render: (r) => r.ref_no || "—" },
+    { key: "txn_type", header: t("supplier.type"), render: (r) => txnLabels[r.txn_type] || r.txn_type },
+    { key: "debit_milli", header: t("supplier.debitPayment"), align: "left", render: (r) => r.debit_milli > 0 ? <span className="text-emerald-400 font-medium">{formatOMR(r.debit_milli)}</span> : "—" },
+    { key: "credit_milli", header: t("supplier.creditPurchases"), align: "left", render: (r) => r.credit_milli > 0 ? <span className="text-red-400 font-medium">{formatOMR(r.credit_milli)}</span> : "—" },
+    { key: "balance_milli", header: t("supplier.balance"), align: "left", render: (r) => <span className="font-bold">{formatOMR(r.balance_milli)}</span> },
+    { key: "notes", header: t("common.notes"), render: (r) => r.notes || "—" },
+  ], [t]);
 
   return (
     <div className="space-y-6">
@@ -82,27 +77,27 @@ export default function SupplierStatementPage() {
         <div className="flex items-center gap-3">
           <button onClick={() => navigate(`/suppliers/${id}`)} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
           <div>
-            <h1 className="page-title">كشف حساب المورد</h1>
+            <h1 className="page-title">{t("supplier.statementTitle")}</h1>
             <p className="page-subtitle">{data.supplier.name} — {data.supplier.code || ""}</p>
           </div>
         </div>
-        <Button variant="outline" icon={<Printer className="w-4 h-4" />} onClick={handlePrint}>طباعة</Button>
+        <Button variant="outline" icon={<Printer className="w-4 h-4" />} onClick={handlePrint}>{t("print.title")}</Button>
       </div>
 
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
           <Calendar className="w-4 h-4 text-surface-400" />
-          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="input-field text-sm" aria-label="من تاريخ" />
-          <span className="text-surface-500">إلى</span>
-          <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="input-field text-sm" aria-label="إلى تاريخ" />
+          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="input-field text-sm" aria-label={t("common.fromDate")} />
+          <span className="text-surface-500">{t("supplier.to")}</span>
+          <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="input-field text-sm" aria-label={t("common.toDate")} />
         </div>
       </div>
 
       <div className="grid grid-cols-4 gap-4">
-        <Card><p className="text-sm text-surface-400">الرصيد الافتتاحي</p><p className="text-lg font-bold mt-1">{formatOMR(data.opening_balance_milli)}</p></Card>
-        <Card><p className="text-sm text-surface-400">إجمالي المدفوعات</p><p className="text-lg font-bold mt-1 text-emerald-400">{formatOMR(data.total_debit_milli)}</p></Card>
-        <Card><p className="text-sm text-surface-400">إجمالي المشتريات</p><p className="text-lg font-bold mt-1 text-red-400">{formatOMR(data.total_credit_milli)}</p></Card>
-        <Card><p className="text-sm text-surface-400">الرصيد الختامي</p><p className="text-lg font-bold mt-1 gradient-text">{formatOMR(data.closing_balance_milli)}</p></Card>
+        <Card><p className="text-sm text-surface-400">{t("print.openingBalance")}</p><p className="text-lg font-bold mt-1">{formatOMR(data.opening_balance_milli)}</p></Card>
+        <Card><p className="text-sm text-surface-400">{t("supplier.totalPayments")}</p><p className="text-lg font-bold mt-1 text-emerald-400">{formatOMR(data.total_debit_milli)}</p></Card>
+        <Card><p className="text-sm text-surface-400">{t("supplier.totalPurchases")}</p><p className="text-lg font-bold mt-1 text-red-400">{formatOMR(data.total_credit_milli)}</p></Card>
+        <Card><p className="text-sm text-surface-400">{t("print.closingBalance")}</p><p className="text-lg font-bold mt-1 gradient-text">{formatOMR(data.closing_balance_milli)}</p></Card>
       </div>
 
       <Card>
@@ -112,7 +107,7 @@ export default function SupplierStatementPage() {
       {showPrint && printData && (
         <div style={{ position: "absolute", left: "-9999px" }}>
           <StatementPrintTemplate
-            title="كشف حساب مورد"
+            title={t("supplier.statementPrintTitle")}
             entityName={printData.supplier.name}
             entityCode={printData.supplier.code}
             entityType="supplier"

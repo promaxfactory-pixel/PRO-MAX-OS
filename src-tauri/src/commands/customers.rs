@@ -35,6 +35,7 @@ pub struct CreateCustomerInput {
     pub vat_number: Option<String>,
     pub credit_limit_milli: Option<i64>,
     pub payment_terms: Option<String>,
+    pub opening_balance_milli: Option<i64>,
     pub notes: Option<String>,
 }
 
@@ -50,6 +51,7 @@ pub struct UpdateCustomerInput {
     pub vat_number: Option<String>,
     pub credit_limit_milli: Option<i64>,
     pub payment_terms: Option<String>,
+    pub opening_balance_milli: Option<i64>,
     pub notes: Option<String>,
     pub active: Option<i64>,
 }
@@ -105,12 +107,13 @@ fn get_customer_by_conn(conn: &rusqlite::Connection, id: i64) -> Result<Customer
 #[tauri::command]
 pub fn create_customer(state: State<'_, DbState>, input: CreateCustomerInput) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    let opening = input.opening_balance_milli.unwrap_or(0);
     conn.execute(
-        "INSERT INTO customers(code, name, ctype, contact, phone, email, address, vat_number, credit_limit_milli, payment_terms, notes) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO customers(code, name, ctype, contact, phone, email, address, vat_number, credit_limit_milli, payment_terms, opening_balance_milli, balance_milli, notes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
         rusqlite::params![
             input.code, input.name, input.ctype.unwrap_or_else(|| "credit".into()),
             input.contact, input.phone, input.email, input.address, input.vat_number,
-            input.credit_limit_milli.unwrap_or(0), input.payment_terms, input.notes
+            input.credit_limit_milli.unwrap_or(0), input.payment_terms, opening, opening, input.notes
         ],
     )?;
     let cid = conn.last_insert_rowid();
@@ -134,6 +137,7 @@ pub fn update_customer(state: State<'_, DbState>, id: i64, input: UpdateCustomer
     if let Some(v) = &input.vat_number { sets.push("vat_number=?"); params.push(Box::new(v.clone())); }
     if let Some(v) = input.credit_limit_milli { sets.push("credit_limit_milli=?"); params.push(Box::new(v)); }
     if let Some(v) = &input.payment_terms { sets.push("payment_terms=?"); params.push(Box::new(v.clone())); }
+    if let Some(v) = input.opening_balance_milli { sets.push("opening_balance_milli=?"); params.push(Box::new(v)); }
     if let Some(v) = &input.notes { sets.push("notes=?"); params.push(Box::new(v.clone())); }
     if let Some(v) = input.active { sets.push("active=?"); params.push(Box::new(v)); }
 
@@ -219,7 +223,7 @@ pub fn get_customer_statement(
 
     {
         let mut stmt = conn.prepare(
-            "SELECT cp.date, cp.receipt_no, cp.amount_milli, cp.method, cp.notes FROM customer_payments cp WHERE cp.customer_id=? AND cp.date BETWEEN ? AND ? AND cp.status != 'Void' ORDER BY cp.date ASC"
+            "SELECT cp.date, cp.rec_no, cp.amount_milli, cp.method, cp.notes FROM customer_payments cp WHERE cp.customer_id=? AND cp.date BETWEEN ? AND ? AND cp.status != 'Void' ORDER BY cp.date ASC"
         )?;
         let rows = stmt.query_map(rusqlite::params![customer_id, from, to], |row| {
             Ok((
@@ -293,4 +297,71 @@ pub fn get_customer_statement(
         total_debit_milli: total_debit,
         total_credit_milli: total_credit,
     })
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateCustomerPaymentInput {
+    pub date: String,
+    pub amount_milli: i64,
+    pub method: Option<String>,
+    pub cashbank_id: Option<i64>,
+    pub reference: Option<String>,
+    pub notes: Option<String>,
+}
+
+#[tauri::command]
+pub fn create_customer_payment(
+    customer_id: i64,
+    input: CreateCustomerPaymentInput,
+    state: State<'_, DbState>,
+) -> Result<i64, AppError> {
+    let mut conn = state.0.lock()?;
+    let tx = conn.transaction()?;
+
+    let seq: i64 = tx.query_row(
+        "SELECT COALESCE(MAX(id), 0) + 1 FROM customer_payments",
+        [],
+        |row| row.get(0),
+    )?;
+    let rec_no = format!("RCP-{:06}", seq);
+
+    tx.execute(
+        "INSERT INTO customer_payments (rec_no, date, customer_id, amount_milli, method, cashbank_id, reference, notes, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'))",
+        rusqlite::params![
+            rec_no,
+            input.date,
+            customer_id,
+            input.amount_milli,
+            input.method.unwrap_or_else(|| "cash".into()),
+            input.cashbank_id,
+            input.reference,
+            input.notes,
+        ],
+    )?;
+    let payment_id: i64 = tx.last_insert_rowid();
+
+    tx.execute(
+        "UPDATE customers SET balance_milli = balance_milli - ?1 WHERE id = ?2",
+        rusqlite::params![input.amount_milli, customer_id],
+    )?;
+
+    tx.execute(
+        "UPDATE sales_invoices SET paid_milli = paid_milli + ?1 WHERE customer_id = ?2 AND status != 'Void'",
+        rusqlite::params![input.amount_milli, customer_id],
+    )?;
+
+    let _ = rbac::log_audit(
+        &tx,
+        None,
+        None,
+        "create_customer_payment",
+        "customer_payments",
+        Some(payment_id),
+        None,
+        None,
+        None,
+    );
+    tx.commit()?;
+    Ok(payment_id)
 }

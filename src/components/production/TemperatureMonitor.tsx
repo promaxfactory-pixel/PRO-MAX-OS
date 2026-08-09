@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from "react-i18next";
 import { motion, AnimatePresence } from "framer-motion";
 import { Thermometer, AlertTriangle, Activity } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
@@ -29,6 +30,7 @@ function tempBg(temp: number): string {
 }
 
 export default function TemperatureMonitor() {
+  const { t } = useTranslation();
   const [temps, setTemps] = useState<LiveMachineTemp[]>([]);
   const { addNotification } = useUIStore();
 
@@ -38,13 +40,13 @@ export default function TemperatureMonitor() {
       setTemps(data);
       for (const m of data) {
         if (m.status === "critical" && m.temperature > 0) {
-          addNotification({ id: crypto.randomUUID(), type: "warning", title: "حرارة عالية", message: `${m.machine_name}: ${m.temperature}°C` });
+          addNotification({ id: crypto.randomUUID(), type: "warning", title: t("temperatureMonitor.highTemp"), message: `${m.machine_name}: ${m.temperature}°C` });
         }
       }
     } catch (e) {
-      addNotification({ type: "error", title: "خطأ", message: "فشل جلب حرارة الماكينات" });
+      addNotification({ type: "error", title: t("common.error"), message: t("temperatureMonitor.fetchFailed") });
     }
-  }, [addNotification]);
+  }, [addNotification, t]);
 
   useEffect(() => {
     fetchTemps();
@@ -60,7 +62,7 @@ export default function TemperatureMonitor() {
       <div className="flex items-center justify-between mb-4">
         <h3 className="section-title">
           <Thermometer className="w-4 h-4" />
-          حرارة الماكينات
+          {t("temperatureMonitor.title")}
         </h3>
         <Activity className="w-4 h-4 text-surface-400" />
       </div>

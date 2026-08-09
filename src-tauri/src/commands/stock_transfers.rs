@@ -4,6 +4,34 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct Warehouse {
+    pub id: i64,
+    pub code: Option<String>,
+    pub name: String,
+    pub location: Option<String>,
+    pub manager: Option<String>,
+}
+
+#[tauri::command]
+pub fn list_warehouses(state: State<'_, DbState>) -> Result<Vec<Warehouse>, AppError> {
+    crate::commands::licensing::require_feature(crate::commands::licensing::FEAT_STOCK_TRANSFERS)?;
+    let conn = state.0.lock()?;
+    let mut stmt = conn.prepare(
+        "SELECT id, code, name, location, manager FROM multi_warehouse WHERE active=1 ORDER BY name",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(Warehouse {
+            id: row.get(0)?,
+            code: row.get(1)?,
+            name: row.get(2)?,
+            location: row.get(3)?,
+            manager: row.get(4)?,
+        })
+    })?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(AppError::from)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct StockTransfer {
     pub id: i64,
     pub transfer_no: Option<String>,

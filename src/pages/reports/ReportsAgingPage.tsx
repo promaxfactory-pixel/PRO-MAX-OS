@@ -6,6 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useUIStore } from "@/stores/uiStore";
+import { useTranslation } from "react-i18next";
 
 interface AgingRow {
   customer_code: string;
@@ -28,6 +29,7 @@ interface AgingSummary {
 }
 
 export default function ReportsAgingPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const addNotification = useUIStore((s) => s.addNotification);
   const [data, setData] = useState<AgingRow[]>([]);
@@ -48,20 +50,20 @@ export default function ReportsAgingPage() {
           over_90: arr.reduce((s, c) => s + (c.over_90 || 0), 0),
         });
       })
-      .catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
+      .catch((e: unknown) => addNotification({ title: t('common.error'), message: String(e), type: 'error' }))
       .finally(() => setLoading(false));
   }, []);
 
   const columns: Column<AgingRow>[] = useMemo(() => [
-    { key: "customer_code", header: "الكود", render: (r) => <span className="font-mono text-brand-400">{r.customer_code}</span> },
-    { key: "customer_name", header: "اسم العميل", sortable: true, render: (r) => <span className="font-medium">{r.customer_name}</span> },
-    { key: "current", header: "حتى 30 يوم", align: "left", render: (r) => <span className="text-emerald-400">{formatOMR(r.current)}</span> },
-    { key: "days_30", header: "31-60 يوم", align: "left", render: (r) => <span className="text-amber-400">{formatOMR(r.days_30)}</span> },
-    { key: "days_60", header: "61-90 يوم", align: "left", render: (r) => <span className="text-orange-400">{formatOMR(r.days_60)}</span> },
-    { key: "days_90", header: "91-120 يوم", align: "left", render: (r) => <span className="text-red-400">{formatOMR(r.days_90)}</span> },
-    { key: "over_90", header: "أكثر من 120 يوم", align: "left", render: (r) => <span className="text-red-500 font-bold">{formatOMR(r.over_90)}</span> },
-    { key: "total", header: "الإجمالي", align: "left", render: (r) => <span className="font-bold text-white">{formatOMR(r.total)}</span> },
-  ], []);
+    { key: "customer_code", header: t("customer.code"), render: (r) => <span className="font-mono text-brand-400">{r.customer_code}</span> },
+    { key: "customer_name", header: t("settings.page.customerNameLabel"), sortable: true, render: (r) => <span className="font-medium">{r.customer_name}</span> },
+    { key: "current", header: t("reports.upTo30Days"), align: "left", render: (r) => <span className="text-emerald-400">{formatOMR(r.current)}</span> },
+    { key: "days_30", header: t("reports.days31to60"), align: "left", render: (r) => <span className="text-amber-400">{formatOMR(r.days_30)}</span> },
+    { key: "days_60", header: t("reports.days61to90"), align: "left", render: (r) => <span className="text-orange-400">{formatOMR(r.days_60)}</span> },
+    { key: "days_90", header: t("reports.days91to120"), align: "left", render: (r) => <span className="text-red-400">{formatOMR(r.days_90)}</span> },
+    { key: "over_90", header: t("reports.over120Days"), align: "left", render: (r) => <span className="text-red-500 font-bold">{formatOMR(r.over_90)}</span> },
+    { key: "total", header: t("reports.total"), align: "left", render: (r) => <span className="font-bold text-white">{formatOMR(r.total)}</span> },
+  ], [t]);
 
   return (
     <div className="space-y-6">
@@ -71,8 +73,8 @@ export default function ReportsAgingPage() {
             <ArrowRight className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="page-title">أعمار الذمم</h1>
-            <p className="page-subtitle">تحليل مستحقات العملاء</p>
+            <h1 className="page-title">{t("reports.agingTitle")}</h1>
+            <p className="page-subtitle">{t("reports.agingSubtitle")}</p>
           </div>
         </div>
       </div>
@@ -81,41 +83,41 @@ export default function ReportsAgingPage() {
         <Card>
           <div className="text-center">
             <p className="text-2xl font-bold gradient-text">{formatOMR(summary.current)}</p>
-            <p className="text-xs text-surface-400 mt-1">حتى 30 يوم</p>
+            <p className="text-xs text-surface-400 mt-1">{t("reports.upTo30Days")}</p>
           </div>
         </Card>
         <Card>
           <div className="text-center">
             <p className="text-2xl font-bold text-amber-400">{formatOMR(summary.days_30)}</p>
-            <p className="text-xs text-surface-400 mt-1">31-60 يوم</p>
+            <p className="text-xs text-surface-400 mt-1">{t("reports.days31to60")}</p>
           </div>
         </Card>
         <Card>
           <div className="text-center">
             <p className="text-2xl font-bold text-orange-400">{formatOMR(summary.days_60)}</p>
-            <p className="text-xs text-surface-400 mt-1">61-90 يوم</p>
+            <p className="text-xs text-surface-400 mt-1">{t("reports.days61to90")}</p>
           </div>
         </Card>
         <Card>
           <div className="text-center">
             <p className="text-2xl font-bold text-red-400">{formatOMR(summary.days_90)}</p>
-            <p className="text-xs text-surface-400 mt-1">91-120 يوم</p>
+            <p className="text-xs text-surface-400 mt-1">{t("reports.days91to120")}</p>
           </div>
         </Card>
         <Card>
           <div className="text-center">
             <p className="text-2xl font-bold text-red-500">{formatOMR(summary.over_90)}</p>
-            <p className="text-xs text-surface-400 mt-1">أكثر من 120 يوم</p>
+            <p className="text-xs text-surface-400 mt-1">{t("reports.over120Days")}</p>
           </div>
         </Card>
       </div>
 
       <Card>
         <div className="flex justify-between items-center mb-4">
-          <h3 className="section-title">التفاصيل حسب العميل</h3>
-          <span className="text-sm text-surface-400">الإجمالي: <span className="font-bold text-white">{formatOMR(summary.total)}</span></span>
+          <h3 className="section-title">{t("reports.agingDetails")}</h3>
+          <span className="text-sm text-surface-400">{t("reports.totalLabel")} <span className="font-bold text-white">{formatOMR(summary.total)}</span></span>
         </div>
-        <DataTable columns={columns} data={data} loading={loading} emptyMessage="لا توجد مستحقات" />
+        <DataTable columns={columns} data={data} loading={loading} emptyMessage={t("reports.agingEmpty")} />
       </Card>
     </div>
   );

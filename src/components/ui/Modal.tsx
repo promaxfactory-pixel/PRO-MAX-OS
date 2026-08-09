@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -12,6 +13,7 @@ interface ModalProps {
 }
 
 export default function Modal({ open, onClose, title, children, size = 'md', footer }: ModalProps) {
+  const { t } = useTranslation();
   const overlayRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const titleId = `modal-title-${title.replace(/\s+/g, '-').toLowerCase()}`;
@@ -83,7 +85,7 @@ export default function Modal({ open, onClose, title, children, size = 'md', foo
           <h2 id={titleId} className="text-lg font-bold text-white">{title}</h2>
           <button
             onClick={onClose}
-            aria-label="إغلاق"
+            aria-label={t("common.close")}
             className="btn-ghost p-2 hover:bg-surface-700 rounded-lg"
           >
             <X className="w-4 h-4" aria-hidden="true" />

@@ -286,9 +286,9 @@ pub fn create_operating_advance(
          department, purpose, description, amount_milli, currency, exchange_rate,
          status, approval_status, source_account_code, advance_gl_account_code,
          default_expense_account_code, expected_return_date, notes, created_by, created_at)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,'draft','pending',?10,?11,?12,?13,?14,?15,datetime('now'))",
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,'draft','pending',?11,?12,?13,?14,?15,?16,datetime('now'))",
         params![advance_no, date_str, input.employee_id, input.employee_name, input.department,
-                input.purpose, input.description, input.amount_milli, currency,
+                input.purpose, input.description, input.amount_milli, currency, exchange_rate,
                 input.source_account_code, input.advance_gl_account_code,
                 input.default_expense_account_code, input.expected_return_date, input.notes, input.created_by],
     )?;
@@ -339,7 +339,7 @@ pub fn reject_advance(
         params![input.reason, input.advance_id],
     )?;
     tx.commit()?;
-    let _ = rbac::log_audit(&conn, None, None, "reject_advance", "operating_advances", Some(input.advance_id), None, Some(&input.reason), None);
+    let _ = rbac::log_audit(&conn, Some(input.rejected_by), None, "reject_advance", "operating_advances", Some(input.advance_id), None, Some(&input.reason), None);
     drop(conn);
     get_operating_advance(state, input.advance_id)
 }
@@ -451,12 +451,12 @@ pub fn submit_receipt(
 ) -> Result<AdvanceReceipt, AppError> {
     let conn = state.0.lock()?;
     let mut stmt = conn.prepare(
-        "INSERT INTO advance_receipts (advance_id,transaction_id,receipt_no,date,vendor_name,amount_milli,vat_milli,net_milli,category,account_code,description,attachment_ids,status,created_by,created_at)
-         VALUES (?1,NULL,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,'submitted',?12,datetime('now'))"
+        "INSERT INTO advance_receipts (advance_id,transaction_id,receipt_no,date,vendor_name,amount_milli,vat_milli,net_milli,category,account_code,description,attachment_ids,notes,status,created_by,created_at)
+         VALUES (?1,NULL,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,'submitted',?13,datetime('now'))"
     )?;
     stmt.execute(params![input.advance_id, input.receipt_no, input.date, input.vendor_name,
         input.amount_milli, input.vat_milli, input.net_milli, input.category,
-        input.account_code, input.description, input.attachment_ids, input.created_by])?;
+        input.account_code, input.description, input.attachment_ids, input.notes, input.created_by])?;
     let id = conn.last_insert_rowid();
     let result = conn.query_row(
         "SELECT id, advance_id, transaction_id, receipt_no, date, vendor_name, amount_milli,
@@ -598,7 +598,7 @@ pub fn reconcile_advance(
 ) -> Result<OperatingAdvance, AppError> {
     let mut conn = state.0.lock()?;
     let tx = conn.transaction()?;
-    let (a_balance, a_spent): (i64, i64) = tx.query_row(
+    let (_a_balance, a_spent): (i64, i64) = tx.query_row(
         "SELECT balance_milli, total_spent_milli FROM operating_advances WHERE id = ?1",
         params![input.advance_id], |r| Ok((r.get(0)?, r.get(1)?)),
     )?;

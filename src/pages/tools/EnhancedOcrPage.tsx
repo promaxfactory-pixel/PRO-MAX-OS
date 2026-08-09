@@ -1,14 +1,15 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { formatOMR, formatDate, cn } from "@/lib/utils";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
-import { useNavigate } from "react-router-dom";
+import { open } from "@tauri-apps/plugin-dialog";
 import {
-  ScanLine, Upload, FileText, Image, FileSpreadsheet, Save,
-  CheckCircle2, XCircle, AlertTriangle, Eye, EyeOff, ChevronLeft,
-  ChevronRight, Edit, Clock, History, Zap, RotateCcw, Loader2,
-  Download, BadgeCheck, BadgeHelp, BadgeX, BadgeInfo, Plus
+  ScanLine, Upload, FileText, Image, FileSpreadsheet,
+  CheckCircle2, XCircle,
+  History, Zap, RotateCcw, Loader2,
+  BadgeCheck
 } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
@@ -59,55 +60,48 @@ interface Suggestion {
 interface HistoryEntry {
   id: number;
   file_name: string;
-  invoice_number: string;
-  total: number;
-  status: "extracted" | "executed" | "rejected" | "needs_review";
+  parsed_data: string;
+  confidence: number;
+  status: string;
   created_at: string;
 }
 
-const CONFIDENCE_CONFIG: Record<ConfidenceLevel, { color: string; bg: string; label: string }> = {
-  high: { color: "text-emerald-400", bg: "bg-emerald-500/10", label: "عال" },
-  medium: { color: "text-amber-400", bg: "bg-amber-500/10", label: "متوسط" },
-  low: { color: "text-red-400", bg: "bg-red-500/10", label: "منخفض" },
-};
+function parseOcrData(raw: string): { invoice_number?: string; total_amount?: number } | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return {
+      invoice_number: parsed?.invoice_number ?? "",
+      total_amount: parsed?.total_amount ?? 0,
+    };
+  } catch {
+    return null;
+  }
+}
 
-const STATUS_CONFIG: Record<string, { color: string; bg: string; icon: any }> = {
-  extracted: { color: "text-blue-400", bg: "bg-blue-500/10", icon: BadgeInfo },
-  executed: { color: "text-emerald-400", bg: "bg-emerald-500/10", icon: BadgeCheck },
-  rejected: { color: "text-red-400", bg: "bg-red-500/10", icon: BadgeX },
-  needs_review: { color: "text-amber-400", bg: "bg-amber-500/10", icon: BadgeHelp },
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  extracted: "مستخرج",
-  executed: "تم التنفيذ",
-  rejected: "مرفوض",
-  needs_review: "يحتاج مراجعة",
+const CONFIDENCE_COLORS: Record<ConfidenceLevel, { color: string; bg: string }> = {
+  high: { color: "text-emerald-400", bg: "bg-emerald-500/10" },
+  medium: { color: "text-amber-400", bg: "bg-amber-500/10" },
+  low: { color: "text-red-400", bg: "bg-red-500/10" },
 };
 
 function FieldBadge({ level }: { level: ConfidenceLevel }) {
-  const cfg = CONFIDENCE_CONFIG[level];
+  const { t } = useTranslation();
+  const cfg = CONFIDENCE_COLORS[level];
+  const labelMap: Record<ConfidenceLevel, string> = {
+    high: t("tools.confidenceHigh"),
+    medium: t("tools.confidenceMedium"),
+    low: t("tools.confidenceLow"),
+  };
   return (
     <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium", cfg.bg, cfg.color)}>
-      {cfg.label}
-    </span>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const cfg = STATUS_CONFIG[status];
-  if (!cfg) return null;
-  const Icon = cfg.icon;
-  return (
-    <span className={cn("flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium", cfg.bg, cfg.color)}>
-      <Icon className="w-3 h-3" />
-      {STATUS_LABELS[status] || status}
+      {labelMap[level]}
     </span>
   );
 }
 
 export default function EnhancedOcrPage() {
-  const navigate = useNavigate();
+  const { t } = useTranslation();
   const addNotification = useUIStore((s) => s.addNotification);
 
   const [activeTab, setActiveTab] = useState<"scan" | "history">("scan");
@@ -125,21 +119,26 @@ export default function EnhancedOcrPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   const loadHistory = useCallback(() => {
     setHistoryLoading(true);
     invoke("ocr_get_history")
       .then((d: any) => setHistory(d || []))
-      .catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
+      .catch((e: unknown) => addNotification({ title: t('common.error'), message: String(e), type: 'error' }))
       .finally(() => setHistoryLoading(false));
   }, []);
 
   useEffect(() => { loadHistory(); }, [loadHistory]);
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selected = e.target.files?.[0];
-    if (!selected) return;
+  const handleFileSelect = async () => {
+    const picked = await open({
+      multiple: false,
+      filters: [{ name: "Documents", extensions: ["jpg", "jpeg", "png", "pdf", "xlsx", "xls", "csv"] }],
+    });
+    if (!picked) return;
+    const filePath = Array.isArray(picked) ? picked[0] : picked;
+    if (!filePath) return;
+    const selectedName = filePath.split(/[\\/]/).pop() || "file";
+    const selected = { name: selectedName, path: filePath } as unknown as File;
     setFile(selected);
     setResult(null);
     setSuggestions([]);
@@ -148,10 +147,10 @@ export default function EnhancedOcrPage() {
     setError(null);
 
     const path = (selected as FileWithPath).path || selected.name;
-    const ext = selected.name.split(".").pop()?.toLowerCase() || "";
+    const ext = path.split(".").pop()?.toLowerCase() || "";
 
     if (["jpg", "jpeg", "png"].includes(ext)) {
-      setPreviewUrl(URL.createObjectURL(selected));
+      setPreviewUrl(convertFileSrc(path));
     } else if (ext === "pdf") {
       setPreviewUrl(null);
     } else if (["xlsx", "xls", "csv"].includes(ext)) {
@@ -162,17 +161,18 @@ export default function EnhancedOcrPage() {
     try {
       let data: ExtractionResult;
       if (["jpg", "jpeg", "png", "pdf"].includes(ext)) {
-        data = await invoke<ExtractionResult>("ocr_parse_invoice", { filePath: path });
+        data = await invoke<ExtractionResult>("ocr_parse_invoice", { path });
       } else {
-        const excelData = await invoke<{ headers: string[]; rows: Record<string, any>[] }>("excel_read_preview", {
-          filePath: path,
-          importType: "invoices",
+        const excelData = await invoke<{ headers: string[]; rows: (string | number | null)[][]; total_rows: number }>("excel_read_preview", {
+          file_path: path,
         });
+        const firstRow: Record<string, any> = {};
+        excelData.headers.forEach((h, i) => { firstRow[h] = excelData.rows[0]?.[i] ?? ""; });
         data = {
           fields: excelData.headers.map((h) => ({
             key: h,
             label: h,
-            value: excelData.rows[0]?.[h]?.toString() || "",
+            value: firstRow[h]?.toString() || "",
             confidence: "medium" as ConfidenceLevel,
             source: h,
           })),
@@ -192,7 +192,7 @@ export default function EnhancedOcrPage() {
       const sugs = await invoke<Suggestion[]>("ocr_get_suggestions", { result: data }).catch(() => []);
       setSuggestions(sugs);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err) || "فشل تحليل المستند");
+      setError(err instanceof Error ? err.message : String(err) || t("tools.enhancedOcr.documentParseFailed"));
     } finally {
       setScanning(false);
     }
@@ -220,11 +220,11 @@ export default function EnhancedOcrPage() {
     try {
       await invoke(command, { data: suggestion.data });
       setAcceptedSuggestions((prev) => new Set(prev).add(suggestion.id));
-      setSuccessMsg(`تم تنفيذ: ${suggestion.label}`);
+      setSuccessMsg(t("tools.enhancedOcr.executedLabel", { label: suggestion.label }));
       setTimeout(() => setSuccessMsg(null), 3000);
       loadHistory();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err) || "فشل تنفيذ الإجراء");
+      setError(err instanceof Error ? err.message : String(err) || t("tools.enhancedOcr.actionExecuteFailed"));
     } finally {
       setExecuting(null);
     }
@@ -245,11 +245,6 @@ export default function EnhancedOcrPage() {
     setSuccessMsg(null);
   };
 
-  const handleViewHistoryDetail = (entry: HistoryEntry) => {
-    setSelectedHistoryId(entry.id);
-    setActiveTab("history");
-  };
-
   const overallConfidence = result
     ? result.fields.reduce((acc, f) => {
         const scores: Record<ConfidenceLevel, number> = { high: 1, medium: 0.6, low: 0.3 };
@@ -263,9 +258,9 @@ export default function EnhancedOcrPage() {
         <div>
           <h1 className="page-title flex items-center gap-2">
             <ScanLine className="w-6 h-6 text-gold-400" />
-            المسح الذكي
+            {t("tools.enhancedOcr.title")}
           </h1>
-          <p className="page-subtitle">استخراج ذكي للبيانات من المستندات والفواتير</p>
+          <p className="page-subtitle">{t("tools.enhancedOcr.subtitle")}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -274,7 +269,7 @@ export default function EnhancedOcrPage() {
             icon={<ScanLine className="w-4 h-4" />}
             onClick={() => setActiveTab("scan")}
           >
-            مسح
+            {t("tools.enhancedOcr.scanTab")}
           </Button>
           <Button
             variant={activeTab === "history" ? "primary" : "ghost"}
@@ -282,7 +277,7 @@ export default function EnhancedOcrPage() {
             icon={<History className="w-4 h-4" />}
             onClick={() => setActiveTab("history")}
           >
-            السجل
+            {t("tools.enhancedOcr.historyTab")}
           </Button>
         </div>
       </div>
@@ -310,16 +305,8 @@ export default function EnhancedOcrPage() {
                   "border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all",
                   file ? "border-brand-500/50 bg-brand-900/20" : "border-surface-600 hover:border-brand-500/50"
                 )}
-                onClick={() => fileInputRef.current?.click()}
+                onClick={handleFileSelect}
               >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".jpg,.jpeg,.png,.pdf,.xlsx,.xls,.csv"
-                  className="hidden"
-                  onChange={handleFileSelect}
-                  aria-label="اختر ملف"
-                />
                 {scanning ? (
                   <Loader2 className="w-12 h-12 mx-auto mb-3 text-gold-400 animate-spin" />
                 ) : previewUrl === "excel" ? (
@@ -329,7 +316,7 @@ export default function EnhancedOcrPage() {
                 ) : (
                   <>
                     <Upload className="w-12 h-12 mx-auto mb-3 text-surface-500" />
-                    <p className="text-surface-400">اسحب الملف هنا أو انقر للاختيار</p>
+                    <p className="text-surface-400">{t("tools.dragDrop")}</p>
                   </>
                 )}
               </div>
@@ -347,7 +334,7 @@ export default function EnhancedOcrPage() {
                   </div>
                   {result && (
                     <Button variant="ghost" size="sm" onClick={resetScan} icon={<RotateCcw className="w-3.5 h-3.5" />}>
-                      جديد
+                      {t("tools.enhancedOcr.newScan")}
                     </Button>
                   )}
                 </div>
@@ -365,7 +352,7 @@ export default function EnhancedOcrPage() {
               <Card>
                 <h3 className="section-title flex items-center gap-2 mb-3">
                   <Zap className="w-4 h-4 text-gold-400" />
-                  درجة الثقة الإجمالية
+                  {t("tools.enhancedOcr.overallConfidence")}
                 </h3>
                 <div className="text-center">
                   <div className={cn(
@@ -384,7 +371,7 @@ export default function EnhancedOcrPage() {
               <Card>
                 <h3 className="section-title flex items-center gap-2 mb-3">
                   <Zap className="w-4 h-4 text-gold-400" />
-                  الإجراءات المقترحة
+                  {t("tools.suggestedActions")}
                 </h3>
                 <div className="space-y-3">
                   {suggestions.map((s) => {
@@ -443,9 +430,9 @@ export default function EnhancedOcrPage() {
               <Card>
                 <div className="text-center py-12">
                   <ScanLine className="w-16 h-16 mx-auto mb-4 text-surface-600" />
-                  <h3 className="text-lg font-bold text-white mb-2">المسح الذكي للمستندات</h3>
+                  <h3 className="text-lg font-bold text-white mb-2">{t("tools.enhancedOcr.smartScanTitle")}</h3>
                   <p className="text-surface-400 text-sm">
-                    ارفع صورة فاتورة أو مستند Excel لاستخراج البيانات تلقائياً
+                    {t("tools.enhancedOcr.smartScanDesc")}
                   </p>
                 </div>
               </Card>
@@ -455,7 +442,7 @@ export default function EnhancedOcrPage() {
               <Card>
                 <div className="text-center py-12">
                   <Loader2 className="w-12 h-12 mx-auto mb-4 text-gold-400 animate-spin" />
-                  <p className="text-surface-400">جاري تحليل المستند...</p>
+                  <p className="text-surface-400">{t("tools.enhancedOcr.analyzingDocument")}</p>
                 </div>
               </Card>
             )}
@@ -466,13 +453,12 @@ export default function EnhancedOcrPage() {
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="section-title flex items-center gap-2">
                       <FileText className="w-5 h-5 text-gold-400" />
-                      البيانات المستخرجة
+                      {t("tools.enhancedOcr.extractedData")}
                     </h3>
                     <BadgeCheck className={cn("w-5 h-5", result.confidence_score >= 0.8 ? "text-emerald-400" : "text-amber-400")} />
                   </div>
                   <div className="space-y-3">
                     {result.fields.map((field) => {
-                      const cfg = CONFIDENCE_CONFIG[field.confidence];
                       const isEditable = field.confidence !== "high";
                       return (
                         <div key={field.key} className="flex items-center gap-3 py-2 border-b border-surface-700/20 last:border-0">
@@ -499,16 +485,16 @@ export default function EnhancedOcrPage() {
                   </div>
                   {result.items.length > 0 && (
                     <div className="mt-4">
-                      <h4 className="text-sm font-medium text-surface-300 mb-2">بنود الفاتورة</h4>
+                      <h4 className="text-sm font-medium text-surface-300 mb-2">{t("tools.enhancedOcr.invoiceItems")}</h4>
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                           <thead>
                             <tr className="border-b border-surface-700/50 text-surface-400">
-                              <th className="p-2 text-right">الوصف</th>
-                              <th className="p-2 text-center">الكمية</th>
-                              <th className="p-2 text-center">سعر الوحدة</th>
-                              <th className="p-2 text-left">الإجمالي</th>
-                              <th className="p-2 text-center">الثقة</th>
+                              <th className="p-2 text-right">{t("tools.description")}</th>
+                              <th className="p-2 text-center">{t("invoice.qty")}</th>
+                              <th className="p-2 text-center">{t("tools.enhancedOcr.unitPrice")}</th>
+                              <th className="p-2 text-left">{t("tools.total")}</th>
+                              <th className="p-2 text-center">{t("tools.enhancedOcr.confidenceColumn")}</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -528,15 +514,15 @@ export default function EnhancedOcrPage() {
                   )}
                   <div className="mt-4 grid grid-cols-3 gap-4">
                     <div className="p-3 bg-surface-800/50 rounded-lg text-center">
-                      <p className="text-xs text-surface-500 mb-1">المجموع الفرعي</p>
+                      <p className="text-xs text-surface-500 mb-1">{t("tools.enhancedOcr.subtotal")}</p>
                       <p className="text-sm font-bold text-white">{formatOMR(result.subtotal)}</p>
                     </div>
                     <div className="p-3 bg-surface-800/50 rounded-lg text-center">
-                      <p className="text-xs text-surface-500 mb-1">الضريبة</p>
+                      <p className="text-xs text-surface-500 mb-1">{t("common.vat")}</p>
                       <p className="text-sm font-bold text-amber-400">{formatOMR(result.vat)}</p>
                     </div>
                     <div className="p-3 bg-surface-800/50 rounded-lg text-center">
-                      <p className="text-xs text-surface-500 mb-1">الإجمالي</p>
+                      <p className="text-xs text-surface-500 mb-1">{t("tools.total")}</p>
                       <p className="text-sm font-bold text-gold-400">{formatOMR(result.total)}</p>
                     </div>
                   </div>
@@ -544,7 +530,7 @@ export default function EnhancedOcrPage() {
 
                 {result.raw_text && (
                   <Card>
-                    <h3 className="section-title mb-3">النص المستخرج</h3>
+                    <h3 className="section-title mb-3">{t("tools.enhancedOcr.extractedText")}</h3>
                     <div className="bg-surface-900 rounded-lg p-4 max-h-40 overflow-y-auto">
                       <pre className="text-xs text-surface-400 whitespace-pre-wrap font-mono" dir="ltr">
                         {result.raw_text}
@@ -562,18 +548,19 @@ export default function EnhancedOcrPage() {
         <Card>
           <h3 className="section-title flex items-center gap-2 mb-4">
             <History className="w-5 h-5 text-gold-400" />
-            سجل المسح
+            {t("tools.scanHistory")}
           </h3>
           {historyLoading ? (
             <div className="flex justify-center py-8">
               <div className="w-8 h-8 border-2 border-brand-800 border-t-gold-400 rounded-full animate-spin" />
             </div>
           ) : history.length === 0 ? (
-            <p className="text-center text-surface-500 py-8 text-sm">لا توجد سجلات مسح سابقة</p>
+            <p className="text-center text-surface-500 py-8 text-sm">{t("tools.enhancedOcr.noHistory")}</p>
           ) : (
             <div className="space-y-3">
               {history.map((h) => {
                 const isSelected = selectedHistoryId === h.id;
+                const parsed = parseOcrData(h.parsed_data);
                 return (
                   <div
                     key={h.id}
@@ -586,16 +573,13 @@ export default function EnhancedOcrPage() {
                     <div className="flex items-center gap-4">
                       <FileText className="w-5 h-5 text-surface-500" />
                       <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-surface-200">{h.invoice_number || "---"}</span>
-                          <StatusBadge status={h.status} />
-                        </div>
+                        <span className="text-sm font-medium text-surface-200">{parsed?.invoice_number || h.file_name}</span>
                         <p className="text-xs text-surface-500 mt-0.5">{h.file_name}</p>
                       </div>
                     </div>
                     <div className="text-left">
-                      <p className="text-sm font-medium">{formatOMR(h.total)}</p>
-                      <p className="text-xs text-surface-600">{formatDate(h.created_at)}</p>
+                      <p className="text-sm font-medium">{formatOMR(parsed?.total_amount || 0)}</p>
+                      <p className="text-xs text-surface-600">{formatDate(h.created_at)} • {t("tools.confidence", { confidence: Math.round(h.confidence) })}</p>
                     </div>
                   </div>
                 );

@@ -98,6 +98,92 @@ fn get_db_path(conn: &rusqlite::Connection) -> Result<String, AppError> {
     Err(AppError::not_found("Could not determine database path"))
 }
 
+fn default_backup_dir(conn: &rusqlite::Connection) -> Result<std::path::PathBuf, AppError> {
+    let db_path = get_db_path(conn)?;
+    let db_file = std::path::Path::new(&db_path);
+    db_file
+        .parent()
+        .map(|p| p.join("backups"))
+        .ok_or_else(|| AppError::business("Could not determine database parent directory"))
+}
+
+fn create_backup_in(conn: &rusqlite::Connection, backup_dir: &std::path::Path) -> Result<BackupResult, AppError> {
+    fs::create_dir_all(backup_dir)?;
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let backup_filename = format!("backup_{}.db", timestamp);
+    let backup_path = backup_dir.join(&backup_filename);
+    let backup_path_str = backup_path.to_string_lossy().to_string();
+
+    conn.execute("VACUUM INTO ?", [backup_path_str.clone()])
+        .map_err(|e| format!("Failed to create backup: {}", e))?;
+
+    let (version, table_count, record_count) = get_backup_metadata(conn)?;
+    let metadata = fs::metadata(&backup_path)?;
+    let created_at = current_timestamp();
+
+    Ok(BackupResult {
+        success: true,
+        file_path: backup_path_str,
+        file_size: metadata.len() as i64,
+        created_at,
+        database_version: version,
+        table_count,
+        record_count,
+    })
+}
+
+fn list_backups_in(backup_dir: &std::path::Path) -> Result<Vec<BackupInfo>, AppError> {
+    let mut entries: Vec<BackupInfo> = Vec::new();
+
+    let dir_entries = fs::read_dir(backup_dir)?;
+    for entry in dir_entries {
+        let entry = entry?;
+        let entry_path = entry.path();
+
+        if !entry_path.is_file() {
+            continue;
+        }
+
+        let is_backup = entry_path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| matches!(ext, "db" | "sqlite" | "sqlite3" | "backup" | "bak"))
+            .unwrap_or(false);
+
+        if !is_backup {
+            continue;
+        }
+
+        let metadata = fs::metadata(&entry_path)?;
+        let file_name = entry_path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+
+        let created_at = metadata
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+            .map(|d| format_timestamp(d.as_secs()))
+            .unwrap_or_else(|| "unknown".to_string());
+
+        entries.push(BackupInfo {
+            file_path: entry_path.to_string_lossy().to_string(),
+            file_name,
+            file_size: metadata.len() as i64,
+            created_at,
+            description: None,
+        });
+    }
+
+    entries.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+
+    Ok(entries)
+}
+
 fn is_valid_sqlite(path: &Path) -> bool {
     let mut file = match fs::File::open(path) {
         Ok(f) => f,
@@ -156,33 +242,10 @@ fn get_backup_metadata(conn: &rusqlite::Connection) -> Result<(i32, i32, i64), A
 }
 
 #[tauri::command]
-pub fn backup_create(
-    state: State<'_, DbState>,
-    backup_path: String,
-) -> Result<BackupResult, AppError> {
+pub fn backup_create(state: State<'_, DbState>) -> Result<BackupResult, AppError> {
     let conn = state.0.lock()?;
-
-    let path = Path::new(&backup_path);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-
-    conn.execute("VACUUM INTO ?", [backup_path.clone()])
-        .map_err(|e| format!("Failed to create backup: {}", e))?;
-
-    let (version, table_count, record_count) = get_backup_metadata(&conn)?;
-    let metadata = fs::metadata(&backup_path)?;
-    let created_at = current_timestamp();
-
-    Ok(BackupResult {
-        success: true,
-        file_path: backup_path,
-        file_size: metadata.len() as i64,
-        created_at,
-        database_version: version,
-        table_count,
-        record_count,
-    })
+    let backup_dir = default_backup_dir(&conn)?;
+    create_backup_in(&conn, &backup_dir)
 }
 
 #[tauri::command]
@@ -219,58 +282,10 @@ pub fn backup_restore(
 }
 
 #[tauri::command]
-pub fn backup_list(backup_dir: String) -> Result<Vec<BackupInfo>, AppError> {
-    let dir = Path::new(&backup_dir);
-    if !dir.exists() || !dir.is_dir() {
-        return Err(AppError::not_found(format!("Directory not found: {}", backup_dir)));
-    }
-
-    let mut entries: Vec<BackupInfo> = Vec::new();
-
-    let dir_entries = fs::read_dir(dir)?;
-    for entry in dir_entries {
-        let entry = entry?;
-        let entry_path = entry.path();
-
-        if !entry_path.is_file() {
-            continue;
-        }
-
-        let is_backup = entry_path
-            .extension()
-            .and_then(|ext| ext.to_str())
-            .map(|ext| matches!(ext, "db" | "sqlite" | "sqlite3" | "backup" | "bak"))
-            .unwrap_or(false);
-
-        if !is_backup {
-            continue;
-        }
-
-        let metadata = fs::metadata(&entry_path)?;
-        let file_name = entry_path
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_default();
-
-        let created_at = metadata
-            .modified()
-            .ok()
-            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-            .map(|d| format_timestamp(d.as_secs()))
-            .unwrap_or_else(|| "unknown".to_string());
-
-        entries.push(BackupInfo {
-            file_path: entry_path.to_string_lossy().to_string(),
-            file_name,
-            file_size: metadata.len() as i64,
-            created_at,
-            description: None,
-        });
-    }
-
-    entries.sort_by(|a, b| b.created_at.cmp(&a.created_at));
-
-    Ok(entries)
+pub fn backup_list(state: State<'_, DbState>) -> Result<Vec<BackupInfo>, AppError> {
+    let conn = state.0.lock()?;
+    let backup_dir = default_backup_dir(&conn)?;
+    list_backups_in(&backup_dir)
 }
 
 #[tauri::command]
@@ -369,7 +384,7 @@ pub fn backup_auto(state: State<'_, DbState>) -> Result<BackupResult, AppError> 
 pub fn backup_export_csv(
     state: State<'_, DbState>,
     table_name: String,
-    output_path: String,
+    output_path: Option<String>,
 ) -> Result<String, AppError> {
     let conn = state.0.lock()?;
 
@@ -382,7 +397,15 @@ pub fn backup_export_csv(
         )));
     }
 
-    let out = Path::new(&output_path);
+    let out_path = match output_path {
+        Some(p) if !p.trim().is_empty() => Path::new(&p).to_path_buf(),
+        _ => {
+            let backup_dir = default_backup_dir(&conn)?;
+            backup_dir.join(format!("export_{}.csv", table_name))
+        }
+    };
+
+    let out = out_path.as_path();
     if let Some(parent) = out.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -426,6 +449,6 @@ pub fn backup_export_csv(
 
     Ok(format!(
         "Exported {} rows from table '{}' to '{}'",
-        row_count, table_name, output_path
+        row_count, table_name, out_path.display()
     ))
 }

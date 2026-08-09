@@ -1,0 +1,5 @@
+Backup Timestamp: 20260728_150504 
+Source: C:\Users\USER\AppData\Roaming\com.promaxos.app\promax.db 
+Destination: database\backups\20260728_150504\promax.db 
+Backup Size: 4 KB 
+--- 

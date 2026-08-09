@@ -7,15 +7,16 @@ import DataTable, { Column } from "@/components/ui/DataTable";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
-import { ArrowRight, Send, Ban, Copy, Printer, FileText, Truck, RotateCcw } from "lucide-react";
+import { ArrowRight, Send, Ban, Copy, Printer, FileText, Truck } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useUIStore } from "@/stores/uiStore";
 import type { SalesInvoice, InvoiceLine } from "@/types";
 import InvoicePrintTemplate from "@/components/print/InvoicePrintTemplate";
-import ReceiptPrintTemplate from "@/components/print/ReceiptPrintTemplate";
 import DeliveryNotePrintTemplate from "@/components/print/DeliveryNotePrintTemplate";
 import { printComponent } from "@/utils/printUtils";
 
 export default function InvoiceDetailPage() {
+  const { t } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
   const { addNotification } = useUIStore();
@@ -36,9 +37,9 @@ export default function InvoiceDetailPage() {
       const ln = await invoke<InvoiceLine[]>("get_invoice_lines", { invoiceId: Number(id) });
       setInvoice(inv);
       setLines(ln);
-    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("invoice.loadError") }); }
     finally { setLoading(false); }
-  }, [id, addNotification]);
+  }, [id, addNotification, t]);
 
   useEffect(() => { loadInvoice(); }, [loadInvoice]);
 
@@ -47,16 +48,16 @@ export default function InvoiceDetailPage() {
     try {
       await invoke("post_invoice", { id: Number(id) });
       await loadInvoice();
-    } catch (err: unknown) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(err) }); }
+    } catch (err: unknown) { addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: String(err) }); }
     finally { setActionLoading(false); setConfirmOpen(false); }
   };
 
   const handleVoid = async () => {
     setActionLoading(true);
     try {
-      await invoke("void_invoice", { id: Number(id), reason: "إلغاء" });
+      await invoke("void_invoice", { id: Number(id), reason: t("invoice.voidAction") });
       await loadInvoice();
-    } catch (err: unknown) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(err) }); }
+    } catch (err: unknown) { addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: String(err) }); }
     finally { setActionLoading(false); setConfirmOpen(false); }
   };
 
@@ -64,7 +65,7 @@ export default function InvoiceDetailPage() {
     try {
       const newId = await invoke("duplicate_invoice", { id: Number(id) });
       navigate(`/invoices/${newId}`);
-    } catch (err: unknown) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(err) }); }
+    } catch (err: unknown) { addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: String(err) }); }
   };
 
   const handlePrint = async (type: string) => {
@@ -77,7 +78,7 @@ export default function InvoiceDetailPage() {
         printComponent("print-area");
         setPrintData(null);
       }, 200);
-    } catch (err: unknown) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(err) }); }
+    } catch (err: unknown) { addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: String(err) }); }
   };
 
   const handlePrintDeliveryNote = async () => {
@@ -90,7 +91,7 @@ export default function InvoiceDetailPage() {
         printComponent("print-area");
         setPrintData(null);
       }, 200);
-    } catch (err: unknown) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(err) }); }
+    } catch (err: unknown) { addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: String(err) }); }
   };
 
   const handlePrintCustoms = async () => {
@@ -103,7 +104,7 @@ export default function InvoiceDetailPage() {
         printComponent("print-area");
         setPrintData(null);
       }, 200);
-    } catch (err: unknown) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(err) }); }
+    } catch (err: unknown) { addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: String(err) }); }
   };
 
   if (loading || !invoice) {
@@ -111,14 +112,14 @@ export default function InvoiceDetailPage() {
   }
 
   const lineColumns: Column<InvoiceLine>[] = useMemo(() => [
-    { key: "product_name", header: "المنتج", render: (r) => r.product_name || "—" },
-    { key: "cartons", header: "الكراتين", align: "center" },
-    { key: "cups_per_carton", header: "كوب/كرتون", align: "center", render: (r) => r.cups_per_carton || "—" },
-    { key: "qty_cups", header: "الإجمالي", align: "center", render: (r) => r.qty_cups?.toLocaleString() || "—" },
-    { key: "unit_price_milli", header: "سعر الوحدة", align: "left", render: (r) => formatOMR(r.unit_price_milli) },
-    { key: "line_net_milli", header: "الصافي", align: "left", render: (r) => <span className="font-bold">{formatOMR(r.line_net_milli)}</span> },
-    { key: "vat_milli", header: "الضريبة", align: "left", render: (r) => formatOMR(r.vat_milli) },
-  ], []);
+    { key: "product_name", header: t("print.productLabel"), render: (r) => r.product_name || "—" },
+    { key: "cartons", header: t("print.cartons"), align: "center" },
+    { key: "cups_per_carton", header: t("print.cupsPerCarton"), align: "center", render: (r) => r.cups_per_carton || "—" },
+    { key: "qty_cups", header: t("invoice.lineTotal"), align: "center", render: (r) => r.qty_cups?.toLocaleString() || "—" },
+    { key: "unit_price_milli", header: t("invoice.unitPrice"), align: "left", render: (r) => formatOMR(r.unit_price_milli) },
+    { key: "line_net_milli", header: t("print.net"), align: "left", render: (r) => <span className="font-bold">{formatOMR(r.line_net_milli)}</span> },
+    { key: "vat_milli", header: t("common.vat"), align: "left", render: (r) => formatOMR(r.vat_milli) },
+  ], [t]);
 
   return (
     <div className="space-y-6">
@@ -134,25 +135,25 @@ export default function InvoiceDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleDuplicate} icon={<Copy className="w-4 h-4" />}>نسخ</Button>
+          <Button variant="outline" onClick={handleDuplicate} icon={<Copy className="w-4 h-4" />}>{t("invoice.duplicate")}</Button>
           {invoice.status === "Draft" && (
             <>
-              <Button onClick={() => { setConfirmAction("post"); setConfirmOpen(true); }} icon={<Send className="w-4 h-4" />}>ترحيل</Button>
-              <Button variant="danger" onClick={() => { setConfirmAction("void"); setConfirmOpen(true); }} icon={<Ban className="w-4 h-4" />}>إلغاء</Button>
+              <Button onClick={() => { setConfirmAction("post"); setConfirmOpen(true); }} icon={<Send className="w-4 h-4" />}>{t("invoice.postAction")}</Button>
+              <Button variant="danger" onClick={() => { setConfirmAction("void"); setConfirmOpen(true); }} icon={<Ban className="w-4 h-4" />}>{t("invoice.voidAction")}</Button>
             </>
           )}
           <div className="relative">
-            <Button variant="outline" icon={<Printer className="w-4 h-4" />} onClick={() => setShowPrintModal(!showPrintModal)}>طباعة</Button>
+            <Button variant="outline" icon={<Printer className="w-4 h-4" />} onClick={() => setShowPrintModal(!showPrintModal)}>{t("print.title")}</Button>
             {showPrintModal && (
               <div className="absolute top-full mt-2 left-0 bg-surface-800 border border-surface-700 rounded-xl shadow-xl z-50 py-2 min-w-[200px]">
                 <button onClick={() => handlePrint("invoice")} className="w-full px-4 py-2 text-right text-sm hover:bg-surface-700 flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-brand-400" /> فاتورة مبيعات
+                  <FileText className="w-4 h-4 text-brand-400" /> {t("print.invoiceSalesTitle")}
                 </button>
                 <button onClick={handlePrintDeliveryNote} className="w-full px-4 py-2 text-right text-sm hover:bg-surface-700 flex items-center gap-2">
-                  <Truck className="w-4 h-4 text-orange-400" /> إيصال توصيل
+                  <Truck className="w-4 h-4 text-orange-400" /> {t("print.deliveryNoteTitle")}
                 </button>
                 <button onClick={handlePrintCustoms} className="w-full px-4 py-2 text-right text-sm hover:bg-surface-700 flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-amber-400" /> فاتورة الجمارك
+                  <FileText className="w-4 h-4 text-amber-400" /> {t("invoice.customsInvoice")}
                 </button>
               </div>
             )}
@@ -166,19 +167,19 @@ export default function InvoiceDetailPage() {
         </div>
         <div className="space-y-4">
           <Card>
-            <h3 className="section-title">الملخص المالي</h3>
+            <h3 className="section-title">{t("invoice.financialSummary")}</h3>
             <div className="space-y-3">
-              <div className="flex justify-between text-sm"><span className="text-surface-400">الصافي</span><span>{formatOMR(invoice.net_milli)}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-surface-400">الضريبة</span><span>{formatOMR(invoice.vat_milli)}</span></div>
-              {invoice.discount_milli > 0 && <div className="flex justify-between text-sm"><span className="text-surface-400">الخصم</span><span className="text-red-400">- {formatOMR(invoice.discount_milli)}</span></div>}
-              <div className="flex justify-between text-sm border-t border-surface-700 pt-2"><span className="text-surface-400">الإجمالي</span><span className="font-bold text-lg gradient-text">{formatOMR(invoice.total_milli)}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-surface-400">المدفوع</span><span>{formatOMR(invoice.paid_milli)}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-surface-400">المتبقي</span><span className="text-gold-400 font-bold">{formatOMR(invoice.total_milli - invoice.paid_milli)}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-surface-400">{t("print.net")}</span><span>{formatOMR(invoice.net_milli)}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-surface-400">{t("common.vat")}</span><span>{formatOMR(invoice.vat_milli)}</span></div>
+              {invoice.discount_milli > 0 && <div className="flex justify-between text-sm"><span className="text-surface-400">{t("common.discount")}</span><span className="text-red-400">- {formatOMR(invoice.discount_milli)}</span></div>}
+              <div className="flex justify-between text-sm border-t border-surface-700 pt-2"><span className="text-surface-400">{t("common.total")}</span><span className="font-bold text-lg gradient-text">{formatOMR(invoice.total_milli)}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-surface-400">{t("common.paid")}</span><span>{formatOMR(invoice.paid_milli)}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-surface-400">{t("common.remaining")}</span><span className="text-gold-400 font-bold">{formatOMR(invoice.total_milli - invoice.paid_milli)}</span></div>
             </div>
           </Card>
           <Card>
-            <p className="text-xs text-surface-500">أنشأ: {invoice.created_by || "—"}</p>
-            <p className="text-xs text-surface-500">الوقت: {invoice.created_at || "—"}</p>
+            <p className="text-xs text-surface-500">{t("invoice.createdByLabel")} {invoice.created_by || "—"}</p>
+            <p className="text-xs text-surface-500">{t("invoice.createdAtLabel")} {invoice.created_at || "—"}</p>
           </Card>
         </div>
       </div>
@@ -187,9 +188,9 @@ export default function InvoiceDetailPage() {
         open={confirmOpen}
         onCancel={() => setConfirmOpen(false)}
         onConfirm={confirmAction === "post" ? handlePost : handleVoid}
-        title={confirmAction === "post" ? "ترحيل الفاتورة" : "إلغاء الفاتورة"}
-        message={confirmAction === "post" ? "هل تريد ترحيل هذه الفاتورة؟ لن يمكن التراجع عن هذا الإجراء." : "هل تريد إلغاء هذه الفاتورة؟"}
-        confirmLabel={confirmAction === "post" ? "ترحيل" : "إلغاء"}
+        title={confirmAction === "post" ? t("invoice.postTitle") : t("invoice.voidTitle")}
+        message={confirmAction === "post" ? t("invoice.postConfirm") : t("invoice.voidConfirm")}
+        confirmLabel={confirmAction === "post" ? t("invoice.postAction") : t("invoice.voidAction")}
         loading={actionLoading}
       />
 
@@ -206,7 +207,7 @@ export default function InvoiceDetailPage() {
       {printData && printType === "invoice_customs" && (
         <div style={{ position: "absolute", left: "-9999px" }}>
           <div style={{ textAlign: "center", fontSize: "18px", fontWeight: "bold", color: "#dc2626", marginBottom: "8px" }}>
-            ─── فاتورة الجمارك (للأغراض الجمركية فقط) ───
+            {t("invoice.customsStamp")}
           </div>
           <InvoicePrintTemplate data={printData} />
         </div>

@@ -1,0 +1,48 @@
+{
+  "accounts": {
+    "typeAsset": { "en": "Assets", "ar": "أصول" },
+    "typeLiability": { "en": "Liabilities", "ar": "التزامات" },
+    "typeEquity": { "en": "Equity", "ar": "حقوق ملكية" },
+    "typeRevenue": { "en": "Revenue", "ar": "إيرادات" },
+    "typeExpense": { "en": "Expenses", "ar": "مصروفات" },
+    "nameArabic": { "en": "Name (Arabic)", "ar": "الاسم بالعربية" },
+    "nameEnglish": { "en": "Name (English)", "ar": "الاسم بالإنجليزية" },
+    "parent": { "en": "Parent", "ar": "الأب" },
+    "count": { "en": "{{count}} account(s)", "ar": "{{count}} حساب" }
+  },
+  "auditLog": {
+    "title": { "en": "Audit Log", "ar": "سجل المراجعة" },
+    "subtitle": { "en": "Record of changes and actions (read-only)", "ar": "سجل التغييرات والإجراءات (للقراءة فقط)" },
+    "totalLogs": { "en": "Total Logs", "ar": "إجمالي السجلات" },
+    "todayLogs": { "en": "Today's Logs", "ar": "سجلات اليوم" },
+    "activeUsers": { "en": "Active Users", "ar": "مستخدمون نشطون" },
+    "entityTypes": { "en": "Entity Types", "ar": "أنواع الكيانات" },
+    "searchPlaceholder": { "en": "Search...", "ar": "بحث..." },
+    "entity": { "en": "Entity", "ar": "الكيان" },
+    "user": { "en": "User", "ar": "المستخدم" },
+    "userPlaceholder": { "en": "Username...", "ar": "اسم المستخدم..." },
+    "timestamp": { "en": "Date & Time", "ar": "التاريخ والوقت" },
+    "action": { "en": "Action", "ar": "الإجراء" },
+    "entityId": { "en": "Entity ID", "ar": "رقم الكيان" },
+    "oldValue": { "en": "Old value:", "ar": "القيمة القديمة:" },
+    "newValue": { "en": "New value:", "ar": "القيمة الجديدة:" }
+  },
+  "financialStatements": {
+    "title": { "en": "Financial Statements", "ar": "القوائم المالية" },
+    "totalRevenue": { "en": "Total Revenue", "ar": "إجمالي الإيرادات" },
+    "netProfit": { "en": "Net Profit / Loss", "ar": "صافي الربح / الخسارة" },
+    "assets": { "en": "Assets", "ar": "الأصول" },
+    "liabilitiesEquity": { "en": "Liabilities & Equity", "ar": "الالتزامات وحقوق الملكية" }
+  },
+  "journal": {
+    "count": { "en": "{{count}} entry(ies)", "ar": "{{count}} قيد" },
+    "number": { "en": "Number", "ar": "الرقم" },
+    "memo": { "en": "Description", "ar": "البيان" },
+    "empty": { "en": "No journal entries", "ar": "لا توجد قيود" }
+  },
+  "trialBalance": {
+    "debit": { "en": "Debit", "ar": "المدين" },
+    "credit": { "en": "Credit", "ar": "الدائن" },
+    "unbalanced": { "en": "⚠ The balance is unbalanced! Difference: {{diff}}", "ar": "⚠ الميزان غير متوازن! الفرق: {{diff}}" }
+  }
+}

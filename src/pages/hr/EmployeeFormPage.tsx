@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { invoke } from "@tauri-apps/api/core";
@@ -8,6 +9,7 @@ import { useUIStore } from "@/stores/uiStore";
 import type { Employee } from "@/types";
 
 export default function EmployeeFormPage() {
+  const { t } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
@@ -54,27 +56,27 @@ export default function EmployeeFormPage() {
           sponsor_name: d.sponsor_name || "", sponsor_id: d.sponsor_id || "",
           notes: d.notes || "",
         });
-      }).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false));
+      }).catch((e: unknown) => addNotification({ title: t('common.error'), message: String(e), type: 'error' })).finally(() => setLoading(false));
     }
-  }, [id, isEdit]);
+  }, [id, isEdit, t]);
 
   const set = (key: string, val: string | number | boolean) => setForm((f) => ({ ...f, [key]: val }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim()) return addNotification({ id: crypto.randomUUID(), type: "warning", title: "تنبيه", message: "اسم الموظف مطلوب" });
+    if (!form.name.trim()) return addNotification({ id: crypto.randomUUID(), type: "warning", title: t("common.warning"), message: t("employeeForm.nameRequired") });
     setSaving(true);
     try {
       if (isEdit) {
         await invoke("update_employee", { id: Number(id), input: form });
-        addNotification({ id: crypto.randomUUID(), type: "success", title: "تم بنجاح", message: "تم حفظ بيانات الموظف بنجاح" });
+        addNotification({ id: crypto.randomUUID(), type: "success", title: t("common.success"), message: t("employeeForm.saveSuccess") });
         navigate(`/hr/employees/${id}`);
       } else {
         const newId = await invoke("create_employee", { input: form });
-        addNotification({ id: crypto.randomUUID(), type: "success", title: "تم بنجاح", message: "تم حفظ بيانات الموظف بنجاح" });
+        addNotification({ id: crypto.randomUUID(), type: "success", title: t("common.success"), message: t("employeeForm.saveSuccess") });
         navigate(`/hr/employees/${newId}`);
       }
-    } catch (err: unknown) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "فشل في حفظ بيانات الموظف" }); }
+    } catch (err: unknown) { addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("employeeForm.saveError") }); }
     finally { setSaving(false); }
   };
 
@@ -86,188 +88,188 @@ export default function EmployeeFormPage() {
         <div className="flex items-center gap-3">
           <button onClick={() => navigate('/hr/employees')} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
           <div>
-            <h1 className="page-title">{isEdit ? "تعديل بيانات الموظف" : "إضافة موظف جديد"}</h1>
-            <p className="page-subtitle">{isEdit ? `تعديل ${form.name}` : "إضافة موظف جديد"}</p>
+            <h1 className="page-title">{isEdit ? t("employeeForm.editTitle") : t("employeeForm.newTitle")}</h1>
+            <p className="page-subtitle">{isEdit ? t("employeeForm.editSubtitle", { name: form.name }) : t("employeeForm.newTitle")}</p>
           </div>
         </div>
       </div>
 
       <form onSubmit={handleSubmit}>
         <Card>
-          <h3 className="section-title mb-4">البيانات الشخصية</h3>
+          <h3 className="section-title mb-4">{t("employeeForm.personalData")}</h3>
           <div className="grid grid-cols-3 gap-6">
             <div className="input-group">
-              <label className="input-label">اسم الموظف *</label>
-              <input className="input-field" value={form.name} onChange={(e) => set("name", e.target.value)} required aria-label="اسم الموظف" />
+              <label className="input-label">{t("employeeForm.nameLabel")}</label>
+              <input className="input-field" value={form.name} onChange={(e) => set("name", e.target.value)} required aria-label={t("employeeForm.nameAria")} />
             </div>
             <div className="input-group">
-              <label className="input-label">الرقم الوظيفي</label>
-              <input className="input-field" value={form.code} onChange={(e) => set("code", e.target.value)} aria-label="الرقم الوظيفي" />
+              <label className="input-label">{t("employeeForm.employeeCode")}</label>
+              <input className="input-field" value={form.code} onChange={(e) => set("code", e.target.value)} aria-label={t("employeeForm.employeeCode")} />
             </div>
             <div className="input-group">
-              <label className="input-label">رقم الهوية</label>
-              <input className="input-field" value={form.id_number} onChange={(e) => set("id_number", e.target.value)} aria-label="رقم الهوية" />
+              <label className="input-label">{t("employeeForm.idNumber")}</label>
+              <input className="input-field" value={form.id_number} onChange={(e) => set("id_number", e.target.value)} aria-label={t("employeeForm.idNumber")} />
             </div>
             <div className="input-group">
-              <label className="input-label">الجنسية</label>
-              <input className="input-field" value={form.nationality} onChange={(e) => set("nationality", e.target.value)} aria-label="الجنسية" />
+              <label className="input-label">{t("hr.nationality")}</label>
+              <input className="input-field" value={form.nationality} onChange={(e) => set("nationality", e.target.value)} aria-label={t("hr.nationality")} />
             </div>
             <div className="input-group">
-              <label className="input-label">الوظيفة</label>
-              <input className="input-field" value={form.job} onChange={(e) => set("job", e.target.value)} aria-label="الوظيفة" />
+              <label className="input-label">{t("hr.job")}</label>
+              <input className="input-field" value={form.job} onChange={(e) => set("job", e.target.value)} aria-label={t("hr.job")} />
             </div>
             <div className="input-group">
-              <label className="input-label">الجنس</label>
-              <select className="input-field" value={form.gender} onChange={(e) => set("gender", e.target.value)} aria-label="الجنس">
-                <option value="">-- اختر --</option>
-                <option value="ذكر">ذكر</option>
-                <option value="أنثى">أنثى</option>
+              <label className="input-label">{t("employeeForm.gender")}</label>
+              <select className="input-field" value={form.gender} onChange={(e) => set("gender", e.target.value)} aria-label={t("employeeForm.gender")}>
+                <option value="">{t("employeeForm.selectPlaceholder")}</option>
+                <option value="ذكر">{t("employeeForm.male")}</option>
+                <option value="أنثى">{t("employeeForm.female")}</option>
               </select>
             </div>
             <div className="input-group">
-              <label className="input-label">الحالة الاجتماعية</label>
-              <select className="input-field" value={form.marital_status} onChange={(e) => set("marital_status", e.target.value)} aria-label="الحالة الاجتماعية">
-                <option value="">-- اختر --</option>
-                <option value="أعزب">أعزب</option>
-                <option value="متزوج">متزوج</option>
-                <option value="متزوجة">متزوجة</option>
+              <label className="input-label">{t("employeeForm.maritalStatus")}</label>
+              <select className="input-field" value={form.marital_status} onChange={(e) => set("marital_status", e.target.value)} aria-label={t("employeeForm.maritalStatus")}>
+                <option value="">{t("employeeForm.selectPlaceholder")}</option>
+                <option value="أعزب">{t("employeeForm.single")}</option>
+                <option value="متزوج">{t("employeeForm.married")}</option>
+                <option value="متزوجة">{t("employeeForm.marriedFemale")}</option>
               </select>
             </div>
             <div className="input-group">
-              <label className="input-label">تاريخ الميلاد</label>
-              <input className="input-field" type="date" value={form.date_of_birth} onChange={(e) => set("date_of_birth", e.target.value)} aria-label="تاريخ الميلاد" />
+              <label className="input-label">{t("employeeForm.dateOfBirth")}</label>
+              <input className="input-field" type="date" value={form.date_of_birth} onChange={(e) => set("date_of_birth", e.target.value)} aria-label={t("employeeForm.dateOfBirth")} />
             </div>
             <div className="input-group">
-              <label className="input-label">الهاتف</label>
-              <input className="input-field" value={form.phone} onChange={(e) => set("phone", e.target.value)} aria-label="الهاتف" />
+              <label className="input-label">{t("hr.phone")}</label>
+              <input className="input-field" value={form.phone} onChange={(e) => set("phone", e.target.value)} aria-label={t("hr.phone")} />
             </div>
             <div className="input-group">
-              <label className="input-label">البريد الإلكتروني</label>
-              <input className="input-field" type="email" value={form.email} onChange={(e) => set("email", e.target.value)} aria-label="البريد الإلكتروني" />
+              <label className="input-label">{t("employeeForm.email")}</label>
+              <input className="input-field" type="email" value={form.email} onChange={(e) => set("email", e.target.value)} aria-label={t("employeeForm.email")} />
             </div>
             <div className="input-group">
-              <label className="input-label">تاريخ الالتحاق</label>
-              <input className="input-field" type="date" value={form.joining_date} onChange={(e) => set("joining_date", e.target.value)} aria-label="تاريخ الالتحاق" />
+              <label className="input-label">{t("employeeForm.joiningDate")}</label>
+              <input className="input-field" type="date" value={form.joining_date} onChange={(e) => set("joining_date", e.target.value)} aria-label={t("employeeForm.joiningDate")} />
             </div>
           </div>
         </Card>
 
         <Card className="mt-4">
-          <h3 className="section-title mb-4">الراتب والمزايا</h3>
+          <h3 className="section-title mb-4">{t("employeeForm.salaryBenefits")}</h3>
           <div className="grid grid-cols-3 gap-6">
             <div className="input-group">
-              <label className="input-label">الراتب الإجمالي (مليار)</label>
-              <input className="input-field" type="number" value={form.salary_milli} onChange={(e) => set("salary_milli", Number(e.target.value))} aria-label="الراتب الإجمالي" />
+              <label className="input-label">{t("employeeForm.grossSalary")}</label>
+              <input className="input-field" type="number" value={form.salary_milli} onChange={(e) => set("salary_milli", Number(e.target.value))} aria-label={t("employeeForm.grossSalaryAria")} />
             </div>
             <div className="input-group">
-              <label className="input-label">الراتب الأساسي (مليار)</label>
-              <input className="input-field" type="number" value={form.basic_salary_milli} onChange={(e) => set("basic_salary_milli", Number(e.target.value))} aria-label="الراتب الأساسي" />
+              <label className="input-label">{t("employeeForm.basicSalary")}</label>
+              <input className="input-field" type="number" value={form.basic_salary_milli} onChange={(e) => set("basic_salary_milli", Number(e.target.value))} aria-label={t("employeeForm.basicSalaryAria")} />
             </div>
             <div className="input-group">
-              <label className="input-label">بدل السكن (مليار)</label>
-              <input className="input-field" type="number" value={form.housing_allowance_milli} onChange={(e) => set("housing_allowance_milli", Number(e.target.value))} aria-label="بدل السكن" />
+              <label className="input-label">{t("employeeForm.housingAllowance")}</label>
+              <input className="input-field" type="number" value={form.housing_allowance_milli} onChange={(e) => set("housing_allowance_milli", Number(e.target.value))} aria-label={t("employeeForm.housingAllowanceAria")} />
             </div>
             <div className="input-group">
-              <label className="input-label">بدل النقل (مليار)</label>
-              <input className="input-field" type="number" value={form.transport_allowance_milli} onChange={(e) => set("transport_allowance_milli", Number(e.target.value))} aria-label="بدل النقل" />
+              <label className="input-label">{t("employeeForm.transportAllowance")}</label>
+              <input className="input-field" type="number" value={form.transport_allowance_milli} onChange={(e) => set("transport_allowance_milli", Number(e.target.value))} aria-label={t("employeeForm.transportAllowanceAria")} />
             </div>
             <div className="input-group">
-              <label className="input-label">بدل الطعام (مليار)</label>
-              <input className="input-field" type="number" value={form.food_allowance_milli} onChange={(e) => set("food_allowance_milli", Number(e.target.value))} aria-label="بدل الطعام" />
+              <label className="input-label">{t("employeeForm.foodAllowance")}</label>
+              <input className="input-field" type="number" value={form.food_allowance_milli} onChange={(e) => set("food_allowance_milli", Number(e.target.value))} aria-label={t("employeeForm.foodAllowanceAria")} />
             </div>
             <div className="input-group">
-              <label className="input-label">بدلات أخرى (مليار)</label>
-              <input className="input-field" type="number" value={form.other_allowances_milli} onChange={(e) => set("other_allowances_milli", Number(e.target.value))} aria-label="بدلات أخرى" />
+              <label className="input-label">{t("employeeForm.otherAllowances")}</label>
+              <input className="input-field" type="number" value={form.other_allowances_milli} onChange={(e) => set("other_allowances_milli", Number(e.target.value))} aria-label={t("employeeForm.otherAllowancesAria")} />
             </div>
             <div className="input-group">
-              <label className="input-label">البدلات الإجمالية (مليار)</label>
-              <input className="input-field" type="number" value={form.allowances_milli} onChange={(e) => set("allowances_milli", Number(e.target.value))} aria-label="البدلات الإجمالية" />
+              <label className="input-label">{t("employeeForm.totalAllowances")}</label>
+              <input className="input-field" type="number" value={form.allowances_milli} onChange={(e) => set("allowances_milli", Number(e.target.value))} aria-label={t("employeeForm.totalAllowancesAria")} />
             </div>
             <div className="input-group">
-              <label className="input-label">أجر الساعة الإضافية (مليار)</label>
-              <input className="input-field" type="number" value={form.overtime_rate_milli} onChange={(e) => set("overtime_rate_milli", Number(e.target.value))} aria-label="أجر الساعة الإضافية" />
+              <label className="input-label">{t("employeeForm.overtimeRate")}</label>
+              <input className="input-field" type="number" value={form.overtime_rate_milli} onChange={(e) => set("overtime_rate_milli", Number(e.target.value))} aria-label={t("employeeForm.overtimeRateAria")} />
             </div>
           </div>
         </Card>
 
         <Card className="mt-4">
-          <h3 className="section-title mb-4">الوثائق والتواريخ</h3>
+          <h3 className="section-title mb-4">{t("employeeForm.documents")}</h3>
           <div className="grid grid-cols-3 gap-6">
             <div className="input-group">
-              <label className="input-label">رقم الجواز</label>
-              <input className="input-field" value={form.passport_no} onChange={(e) => set("passport_no", e.target.value)} aria-label="رقم الجواز" />
+              <label className="input-label">{t("hr.passport")}</label>
+              <input className="input-field" value={form.passport_no} onChange={(e) => set("passport_no", e.target.value)} aria-label={t("hr.passport")} />
             </div>
             <div className="input-group">
-              <label className="input-label">انتهاء الجواز</label>
-              <input className="input-field" type="date" value={form.passport_expiry} onChange={(e) => set("passport_expiry", e.target.value)} aria-label="انتهاء الجواز" />
+              <label className="input-label">{t("hr.passportExpiry")}</label>
+              <input className="input-field" type="date" value={form.passport_expiry} onChange={(e) => set("passport_expiry", e.target.value)} aria-label={t("hr.passportExpiry")} />
             </div>
             <div className="input-group">
-              <label className="input-label">انتهاء الإقامة</label>
-              <input className="input-field" type="date" value={form.residence_expiry} onChange={(e) => set("residence_expiry", e.target.value)} aria-label="انتهاء الإقامة" />
+              <label className="input-label">{t("hr.residenceExpiry")}</label>
+              <input className="input-field" type="date" value={form.residence_expiry} onChange={(e) => set("residence_expiry", e.target.value)} aria-label={t("hr.residenceExpiry")} />
             </div>
             <div className="input-group">
-              <label className="input-label">انتهاء التأشيرة</label>
-              <input className="input-field" type="date" value={form.visa_expiry} onChange={(e) => set("visa_expiry", e.target.value)} aria-label="انتهاء التأشيرة" />
+              <label className="input-label">{t("hr.visaExpiry")}</label>
+              <input className="input-field" type="date" value={form.visa_expiry} onChange={(e) => set("visa_expiry", e.target.value)} aria-label={t("hr.visaExpiry")} />
             </div>
             <div className="input-group">
-              <label className="input-label">انتهاء تصريح العمل</label>
-              <input className="input-field" type="date" value={form.workpermit_expiry} onChange={(e) => set("workpermit_expiry", e.target.value)} aria-label="انتهاء تصريح العمل" />
+              <label className="input-label">{t("employeeForm.workPermitExpiry")}</label>
+              <input className="input-field" type="date" value={form.workpermit_expiry} onChange={(e) => set("workpermit_expiry", e.target.value)} aria-label={t("employeeForm.workPermitExpiry")} />
             </div>
             <div className="input-group">
-              <label className="input-label">انتهاء التأمين</label>
-              <input className="input-field" type="date" value={form.insurance_expiry} onChange={(e) => set("insurance_expiry", e.target.value)} aria-label="انتهاء التأمين" />
+              <label className="input-label">{t("employeeForm.insuranceExpiry")}</label>
+              <input className="input-field" type="date" value={form.insurance_expiry} onChange={(e) => set("insurance_expiry", e.target.value)} aria-label={t("employeeForm.insuranceExpiry")} />
             </div>
             <div className="input-group">
-              <label className="input-label">رقم بوليصة التأمين</label>
-              <input className="input-field" value={form.insurance_policy_no} onChange={(e) => set("insurance_policy_no", e.target.value)} aria-label="رقم بوليصة التأمين" />
+              <label className="input-label">{t("employeeForm.insurancePolicyNo")}</label>
+              <input className="input-field" value={form.insurance_policy_no} onChange={(e) => set("insurance_policy_no", e.target.value)} aria-label={t("employeeForm.insurancePolicyNo")} />
             </div>
             <div className="input-group">
-              <label className="input-label">قسط التأمين الشهري (مليار)</label>
-              <input className="input-field" type="number" value={form.insurance_premium_milli} onChange={(e) => set("insurance_premium_milli", Number(e.target.value))} aria-label="قسط التأمين الشهري" />
+              <label className="input-label">{t("employeeForm.insurancePremium")}</label>
+              <input className="input-field" type="number" value={form.insurance_premium_milli} onChange={(e) => set("insurance_premium_milli", Number(e.target.value))} aria-label={t("employeeForm.insurancePremiumAria")} />
             </div>
             <div className="input-group">
-              <label className="input-label">انتهاء العقد</label>
-              <input className="input-field" type="date" value={form.contract_end} onChange={(e) => set("contract_end", e.target.value)} aria-label="انتهاء العقد" />
+              <label className="input-label">{t("hr.contractEnd")}</label>
+              <input className="input-field" type="date" value={form.contract_end} onChange={(e) => set("contract_end", e.target.value)} aria-label={t("hr.contractEnd")} />
             </div>
             <div className="input-group">
-              <label className="input-label">بدل تذاكر الطيران السنوي (مليار)</label>
-              <input className="input-field" type="number" value={form.ticket_allowance_milli} onChange={(e) => set("ticket_allowance_milli", Number(e.target.value))} aria-label="بدل تذاكر الطيران السنوي" />
+              <label className="input-label">{t("employeeForm.annualFlightAllowance")}</label>
+              <input className="input-field" type="number" value={form.ticket_allowance_milli} onChange={(e) => set("ticket_allowance_milli", Number(e.target.value))} aria-label={t("employeeForm.annualFlightAllowanceAria")} />
             </div>
           </div>
         </Card>
 
         <Card className="mt-4">
-          <h3 className="section-title mb-4">البنك والكفيل</h3>
+          <h3 className="section-title mb-4">{t("employeeForm.bankSponsor")}</h3>
           <div className="grid grid-cols-2 gap-6">
             <div className="input-group">
-              <label className="input-label">اسم البنك</label>
-              <input className="input-field" value={form.bank_name} onChange={(e) => set("bank_name", e.target.value)} aria-label="اسم البنك" />
+              <label className="input-label">{t("employeeForm.bankName")}</label>
+              <input className="input-field" value={form.bank_name} onChange={(e) => set("bank_name", e.target.value)} aria-label={t("employeeForm.bankName")} />
             </div>
             <div className="input-group">
-              <label className="input-label">رقم الحساب البنكي</label>
-              <input className="input-field" value={form.bank_account_no} onChange={(e) => set("bank_account_no", e.target.value)} aria-label="رقم الحساب البنكي" />
+              <label className="input-label">{t("employeeForm.bankAccountNo")}</label>
+              <input className="input-field" value={form.bank_account_no} onChange={(e) => set("bank_account_no", e.target.value)} aria-label={t("employeeForm.bankAccountNo")} />
             </div>
             <div className="input-group">
-              <label className="input-label">اسم الكفيل</label>
-              <input className="input-field" value={form.sponsor_name} onChange={(e) => set("sponsor_name", e.target.value)} aria-label="اسم الكفيل" />
+              <label className="input-label">{t("employeeForm.sponsorName")}</label>
+              <input className="input-field" value={form.sponsor_name} onChange={(e) => set("sponsor_name", e.target.value)} aria-label={t("employeeForm.sponsorName")} />
             </div>
             <div className="input-group">
-              <label className="input-label">رقم الكفيل</label>
-              <input className="input-field" value={form.sponsor_id} onChange={(e) => set("sponsor_id", e.target.value)} aria-label="رقم الكفيل" />
+              <label className="input-label">{t("employeeForm.sponsorId")}</label>
+              <input className="input-field" value={form.sponsor_id} onChange={(e) => set("sponsor_id", e.target.value)} aria-label={t("employeeForm.sponsorId")} />
             </div>
           </div>
         </Card>
 
         <Card className="mt-4">
-          <h3 className="section-title mb-4">ملاحظات</h3>
+          <h3 className="section-title mb-4">{t("common.notes")}</h3>
           <div className="input-group">
-            <textarea className="input-field" rows={3} value={form.notes} onChange={(e) => set("notes", e.target.value)} aria-label="ملاحظات" />
+            <textarea className="input-field" rows={3} value={form.notes} onChange={(e) => set("notes", e.target.value)} aria-label={t("common.notes")} />
           </div>
         </Card>
 
         <div className="flex justify-start gap-3 mt-4">
-          <Button type="submit" loading={saving} icon={<Save className="w-4 h-4" />}>{isEdit ? "حفظ التعديلات" : "إضافة الموظف"}</Button>
-          <Button variant="outline" type="button" onClick={() => navigate('/hr/employees')}>إلغاء</Button>
+          <Button type="submit" loading={saving} icon={<Save className="w-4 h-4" />}>{isEdit ? t("employeeForm.saveChanges") : t("employeeForm.addEmployee")}</Button>
+          <Button variant="outline" type="button" onClick={() => navigate('/hr/employees')}>{t("common.cancel")}</Button>
         </div>
       </form>
     </div>

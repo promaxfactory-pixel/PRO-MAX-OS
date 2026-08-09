@@ -5,8 +5,9 @@ import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
-import { Plus, FileText, AlertTriangle, CheckCircle } from "lucide-react";
+import { Plus, FileText } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
+import { useTranslation } from "react-i18next";
 
 type ChequeKind = "all" | "issued" | "received";
 
@@ -22,6 +23,7 @@ interface Cheque {
 }
 
 export default function ChequesPage() {
+  const { t } = useTranslation();
   const addNotification = useUIStore((s) => s.addNotification);
   const [cheques, setCheques] = useState<Cheque[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,7 +45,7 @@ export default function ChequesPage() {
     try {
       const d = await invoke("list_cheques");
       setCheques(d as Cheque[]);
-    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("cheques.loadError") }); }
     finally { setLoading(false); }
   }, [addNotification]);
 
@@ -66,7 +68,7 @@ export default function ChequesPage() {
       setShowForm(false);
       setForm({ kind: "issued", cheque_no: "", bank: "", party: "", amount_milli: "", due_date: "", notes: "" });
       loadCheques();
-    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء الحفظ" }); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("cheques.saveError") }); }
     finally { setSaving(false); }
   };
 
@@ -84,61 +86,56 @@ export default function ChequesPage() {
   }).length;
 
   const statusMap: Record<string, { label: string; variant: any }> = {
-    issued: { label: "صادرة", variant: "warning" },
-    pending: { label: "قيد الانتظار", variant: "warning" },
-    deposited: { label: "مودعة", variant: "info" },
-    cleared: { label: "محصلة", variant: "success" },
-    bounced: { label: "مرتجعة", variant: "danger" },
-  };
-
-  const kindLabels: Record<string, string> = {
-    issued: "صادرة",
-    received: "واردة",
+    issued: { label: t("cheques.issued"), variant: "warning" },
+    pending: { label: t("cheques.statusPending"), variant: "warning" },
+    deposited: { label: t("cheques.statusDeposited"), variant: "info" },
+    cleared: { label: t("cheques.statusCleared"), variant: "success" },
+    bounced: { label: t("cheques.statusBounced"), variant: "danger" },
   };
 
   const columns: Column<Cheque>[] = useMemo(() => [
-    { key: "kind", header: "النوع", render: (r) => (
+    { key: "kind", header: t("common.type"), render: (r) => (
       <Badge variant={r.kind === "issued" ? "warning" : "info"}>
-        {r.kind === "issued" ? "صادرة" : "واردة"}
+        {r.kind === "issued" ? t("cheques.issued") : t("cheques.received")}
       </Badge>
     )},
-    { key: "cheque_no", header: "رقم الشيك", sortable: true, render: (r) => <span className="font-mono text-brand-400">{r.cheque_no}</span> },
-    { key: "bank", header: "البنك", sortable: true },
-    { key: "party", header: "الطرف", sortable: true, render: (r) => r.party || "—" },
-    { key: "amount_milli", header: "المبلغ", sortable: true, align: "left", render: (r) => <span className="font-bold text-gold-400">{formatOMR(r.amount_milli)}</span> },
-    { key: "due_date", header: "تاريخ الاستحقاق", sortable: true, render: (r) => formatDate(r.due_date) },
-    { key: "status", header: "الحالة", render: (r) => {
+    { key: "cheque_no", header: t("cheques.chequeNo"), sortable: true, render: (r) => <span className="font-mono text-brand-400">{r.cheque_no}</span> },
+    { key: "bank", header: t("cheques.bank"), sortable: true },
+    { key: "party", header: t("cheques.party"), sortable: true, render: (r) => r.party || "—" },
+    { key: "amount_milli", header: t("cheques.amount"), sortable: true, align: "left", render: (r) => <span className="font-bold text-gold-400">{formatOMR(r.amount_milli)}</span> },
+    { key: "due_date", header: t("cheques.dueDate"), sortable: true, render: (r) => formatDate(r.due_date) },
+    { key: "status", header: t("common.status"), render: (r) => {
       const s = statusMap[r.status] || { label: r.status, variant: "default" };
       return <Badge variant={s.variant}>{s.label}</Badge>;
     }},
-  ], []);
+  ], [t]);
 
   return (
     <div className="space-y-6">
       <div className="page-header">
         <div>
-          <h1 className="page-title">إدارة الشيكات</h1>
-          <p className="page-subtitle">{cheques.length} شيك</p>
+          <h1 className="page-title">{t("cheques.title")}</h1>
+          <p className="page-subtitle">{t("cheques.subtitle", { count: cheques.length })}</p>
         </div>
-        <Button icon={<Plus className="w-4 h-4" />} onClick={() => setShowForm(true)}>شيك جديد</Button>
+        <Button icon={<Plus className="w-4 h-4" />} onClick={() => setShowForm(true)}>{t("cheques.newCheque")}</Button>
       </div>
 
       <div className="grid grid-cols-4 gap-4">
         <Card className="text-center">
           <p className="text-2xl font-bold gradient-text">{formatOMR(totalIssued)}</p>
-          <p className="text-xs text-surface-400">إجمالي الصادرة</p>
+          <p className="text-xs text-surface-400">{t("cheques.totalIssued")}</p>
         </Card>
         <Card className="text-center">
           <p className="text-2xl font-bold text-brand-400">{formatOMR(totalReceived)}</p>
-          <p className="text-xs text-surface-400">إجمالي الواردة</p>
+          <p className="text-xs text-surface-400">{t("cheques.totalReceived")}</p>
         </Card>
         <Card className="text-center">
           <p className="text-2xl font-bold text-gold-400">{outstanding}</p>
-          <p className="text-xs text-surface-400">غير محصلة</p>
+          <p className="text-xs text-surface-400">{t("cheques.outstanding")}</p>
         </Card>
         <Card className="text-center">
           <p className="text-2xl font-bold text-red-400">{overdue}</p>
-          <p className="text-xs text-surface-400">متأخرة</p>
+          <p className="text-xs text-surface-400">{t("cheques.overdue")}</p>
         </Card>
       </div>
 
@@ -151,7 +148,7 @@ export default function ChequesPage() {
               kind === k ? "bg-brand-600 text-white" : "bg-surface-800 text-surface-400 hover:text-white hover:bg-surface-700"
             }`}
           >
-            {k === "all" ? "الكل" : k === "issued" ? "صادرة" : "واردة"}
+            {k === "all" ? t("cheques.all") : k === "issued" ? t("cheques.issued") : t("cheques.received")}
           </button>
         ))}
       </div>
@@ -159,56 +156,56 @@ export default function ChequesPage() {
       {showForm && (
         <Card>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-white">شيك جديد</h2>
+            <h2 className="text-lg font-bold text-white">{t("cheques.formTitle")}</h2>
             <button onClick={() => setShowForm(false)} className="text-surface-400 hover:text-white text-xl">&times;</button>
           </div>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="input-group">
-                <label className="input-label">النوع</label>
-                <select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })} className="input-field" aria-label="النوع">
-                  <option value="issued">شيك صادر</option>
-                  <option value="received">شيك وارد</option>
+                <label className="input-label">{t("common.type")}</label>
+                <select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })} className="input-field" aria-label={t("common.type")}>
+                  <option value="issued">{t("cheques.issuedCheque")}</option>
+                  <option value="received">{t("cheques.receivedCheque")}</option>
                 </select>
               </div>
               <div className="input-group">
-                <label className="input-label">رقم الشيك</label>
-                <input type="text" value={form.cheque_no} onChange={(e) => setForm({ ...form, cheque_no: e.target.value })} className="input-field" dir="ltr" aria-label="رقم الشيك" />
+                <label className="input-label">{t("cheques.chequeNo")}</label>
+                <input type="text" value={form.cheque_no} onChange={(e) => setForm({ ...form, cheque_no: e.target.value })} className="input-field" dir="ltr" aria-label={t("cheques.chequeNo")} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="input-group">
-                <label className="input-label">البنك</label>
-                <input type="text" value={form.bank} onChange={(e) => setForm({ ...form, bank: e.target.value })} className="input-field" aria-label="البنك" />
+                <label className="input-label">{t("cheques.bank")}</label>
+                <input type="text" value={form.bank} onChange={(e) => setForm({ ...form, bank: e.target.value })} className="input-field" aria-label={t("cheques.bank")} />
               </div>
               <div className="input-group">
-                <label className="input-label">الطرف</label>
-                <input type="text" value={form.party} onChange={(e) => setForm({ ...form, party: e.target.value })} className="input-field" aria-label="الطرف" />
+                <label className="input-label">{t("cheques.party")}</label>
+                <input type="text" value={form.party} onChange={(e) => setForm({ ...form, party: e.target.value })} className="input-field" aria-label={t("cheques.party")} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="input-group">
-                <label className="input-label">المبلغ (ملي)</label>
-                <input type="number" value={form.amount_milli} onChange={(e) => setForm({ ...form, amount_milli: e.target.value })} className="input-field" dir="ltr" aria-label="المبلغ بالملي" />
+                <label className="input-label">{t("cheques.amountMilli")}</label>
+                <input type="number" value={form.amount_milli} onChange={(e) => setForm({ ...form, amount_milli: e.target.value })} className="input-field" dir="ltr" aria-label={t("cheques.amountMilliAria")} />
               </div>
               <div className="input-group">
-                <label className="input-label">تاريخ الاستحقاق</label>
-                <input type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} className="input-field" aria-label="تاريخ الاستحقاق" />
+                <label className="input-label">{t("cheques.dueDate")}</label>
+                <input type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} className="input-field" aria-label={t("cheques.dueDate")} />
               </div>
             </div>
             <div className="input-group">
-              <label className="input-label">ملاحظات</label>
-              <input type="text" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="input-field" aria-label="ملاحظات" />
+              <label className="input-label">{t("cheques.notes")}</label>
+              <input type="text" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="input-field" aria-label={t("cheques.notes")} />
             </div>
           </div>
           <div className="flex justify-end gap-3 mt-4">
-            <Button variant="ghost" onClick={() => setShowForm(false)}>إلغاء</Button>
-            <Button icon={<FileText className="w-4 h-4" />} onClick={handleCreate} loading={saving}>إنشاء الشيك</Button>
+            <Button variant="ghost" onClick={() => setShowForm(false)}>{t("cheques.cancel")}</Button>
+            <Button icon={<FileText className="w-4 h-4" />} onClick={handleCreate} loading={saving}>{t("cheques.createCheque")}</Button>
           </div>
         </Card>
       )}
 
-      <DataTable columns={columns} data={filtered} loading={loading} emptyMessage="لا توجد شيكات" />
+      <DataTable columns={columns} data={filtered} loading={loading} emptyMessage={t("cheques.empty")} />
     </div>
   );
 }

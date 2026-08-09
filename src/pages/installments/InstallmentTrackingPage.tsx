@@ -5,7 +5,8 @@ import Button from "@/components/ui/Button";
 import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { useUIStore } from "@/stores/uiStore";
-import { CreditCard, Plus, CheckCircle2, AlertTriangle, Clock } from "lucide-react";
+import { Plus, CheckCircle2, AlertTriangle, Clock } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface InstallmentPayment {
   id: number;
@@ -39,9 +40,10 @@ const EMPTY_PAYMENT_FORM = {
 };
 
 export default function InstallmentTrackingPage() {
+  const { t } = useTranslation();
   const { addNotification } = useUIStore();
   const [payments, setPayments] = useState<InstallmentPayment[]>([]);
-  const [installments, setInstallments] = useState<Installment[]>([]);
+  const [, setInstallments] = useState<Installment[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_PAYMENT_FORM);
@@ -54,7 +56,7 @@ export default function InstallmentTrackingPage() {
       const d = await invoke<InstallmentPayment[]>("list_installment_payments");
       setPayments(d);
     } catch (err) {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل الدفعات: " + String(err) });
+      addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("installments.loadError", { error: String(err) }) });
     } finally {
       setLoading(false);
     }
@@ -80,9 +82,9 @@ export default function InstallmentTrackingPage() {
       setShowForm(false);
       setForm(EMPTY_PAYMENT_FORM);
       await loadPayments();
-      addNotification({ id: crypto.randomUUID(), type: "success", title: "تم", message: "تم إنشاء سجل الدفعة بنجاح" });
+      addNotification({ id: crypto.randomUUID(), type: "success", title: t("installments.done"), message: t("installments.paymentCreated") });
     } catch (err) {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "فشل إنشاء الدفعة: " + String(err) });
+      addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("installments.createFailed", { error: String(err) }) });
     }
     setSubmitting(false);
   };
@@ -92,9 +94,9 @@ export default function InstallmentTrackingPage() {
     try {
       await invoke("mark_installment_paid", { paymentId });
       await loadPayments();
-      addNotification({ id: crypto.randomUUID(), type: "success", title: "تم", message: "تم تسجيل الدفعة كمدفوعة" });
+      addNotification({ id: crypto.randomUUID(), type: "success", title: t("installments.done"), message: t("installments.markedPaid") });
     } catch (err) {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "فشل تسجيل الدفعة: " + String(err) });
+      addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("installments.markPaidFailed", { error: String(err) }) });
     }
     setPayingId(null);
   };
@@ -104,81 +106,81 @@ export default function InstallmentTrackingPage() {
   const overdueCount = payments.filter((p) => p.status !== "Paid" && new Date(p.due_date) < new Date()).length;
 
   const columns: Column<InstallmentPayment>[] = useMemo(() => [
-    { key: "installment_name", header: "اسم القرض", sortable: true, render: (r) => <span className="font-medium text-white">{r.installment_name || "—"}</span> },
-    { key: "installment_number", header: "رقم القسط", sortable: true, align: "center", render: (r) => <span className="font-mono text-brand-400">{r.installment_number}</span> },
-    { key: "due_date", header: "تاريخ الاستحقاق", sortable: true, render: (r) => {
+    { key: "installment_name", header: t("installments.loanName"), sortable: true, render: (r) => <span className="font-medium text-white">{r.installment_name || "—"}</span> },
+    { key: "installment_number", header: t("installments.installmentNumber"), sortable: true, align: "center", render: (r) => <span className="font-mono text-brand-400">{r.installment_number}</span> },
+    { key: "due_date", header: t("installments.dueDate"), sortable: true, render: (r) => {
       const isOverdue = r.status !== "Paid" && new Date(r.due_date) < new Date();
       return <span className={isOverdue ? "text-red-400 font-medium" : ""}>{formatDate(r.due_date)}</span>;
     }},
-    { key: "amount_milli", header: "المبلغ", sortable: true, align: "left", render: (r) => <span className="font-bold text-gold-400">{formatOMR(r.amount_milli)}</span> },
-    { key: "paid_milli", header: "المدفوع", align: "left", render: (r) => formatOMR(r.paid_milli) },
-    { key: "status", header: "الحالة", render: (r) => {
+    { key: "amount_milli", header: t("installments.amount"), sortable: true, align: "left", render: (r) => <span className="font-bold text-gold-400">{formatOMR(r.amount_milli)}</span> },
+    { key: "paid_milli", header: t("installments.paid"), align: "left", render: (r) => formatOMR(r.paid_milli) },
+    { key: "status", header: t("common.status"), render: (r) => {
       const isOverdue = r.status !== "Paid" && new Date(r.due_date) < new Date();
       return (
         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
           r.status === "Paid" ? "bg-emerald-500/20 text-emerald-400" :
           isOverdue ? "bg-red-500/20 text-red-400" :
           "bg-amber-500/20 text-amber-400"
-        }`}>{r.status === "Paid" ? "مدفوع" : isOverdue ? "متأخر" : "معلق"}</span>
+        }`}>{r.status === "Paid" ? t("installments.paidStatus") : isOverdue ? t("installments.overdue") : t("installments.pending")}</span>
       );
     }},
-    { key: "penalty_milli", header: "الغرامة", align: "left", render: (r) => r.penalty_milli > 0 ? <span className="text-red-400 font-medium">{formatOMR(r.penalty_milli)}</span> : "—" },
+    { key: "penalty_milli", header: t("installments.penalty"), align: "left", render: (r) => r.penalty_milli > 0 ? <span className="text-red-400 font-medium">{formatOMR(r.penalty_milli)}</span> : "—" },
     { key: "id", header: "", align: "center", width: "80px", render: (r) => r.status !== "Paid" ? (
       <Button variant="success" size="sm" loading={payingId === r.id} onClick={(e) => { e.stopPropagation(); handleMarkPaid(r.id); }}>
-        <CheckCircle2 className="w-3 h-3" /> مدفوع
+        <CheckCircle2 className="w-3 h-3" /> {t("installments.markPaid")}
       </Button>
     ) : null },
-  ], [payingId]);
+  ], [t, payingId]);
 
   return (
     <div className="space-y-6" dir="rtl">
       <div className="page-header">
         <div>
-          <h1 className="page-title">تتبع أقساط القروض</h1>
-          <p className="page-subtitle">{payments.length} دفعة مسجلة</p>
+          <h1 className="page-title">{t("installments.title")}</h1>
+          <p className="page-subtitle">{t("installments.subtitle", { count: payments.length })}</p>
         </div>
-        <Button icon={<Plus className="w-4 h-4" />} onClick={() => setShowForm(!showForm)}>جدول دفعة جديد</Button>
+        <Button icon={<Plus className="w-4 h-4" />} onClick={() => setShowForm(!showForm)}>{t("installments.newSchedule")}</Button>
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        <StatCard title="إجمالي المدفوع" value={formatOMR(totalPaid)} icon={<CheckCircle2 className="w-6 h-6" />} />
-        <StatCard title="المتبقي" value={formatOMR(totalPending)} icon={<Clock className="w-6 h-6" />} />
-        <StatCard title="القروض المتأخرة" value={overdueCount} icon={<AlertTriangle className="w-6 h-6" />} className={overdueCount > 0 ? "border-red-500/30" : ""} />
+        <StatCard title={t("installments.totalPaid")} value={formatOMR(totalPaid)} icon={<CheckCircle2 className="w-6 h-6" />} />
+        <StatCard title={t("common.remaining")} value={formatOMR(totalPending)} icon={<Clock className="w-6 h-6" />} />
+        <StatCard title={t("installments.overdueLoans")} value={overdueCount} icon={<AlertTriangle className="w-6 h-6" />} className={overdueCount > 0 ? "border-red-500/30" : ""} />
       </div>
 
       {showForm && (
         <Card className="border-brand-500/30">
-          <h3 className="section-title mb-4"><Plus className="w-4 h-4" /> جدول دفعة جديد</h3>
+          <h3 className="section-title mb-4"><Plus className="w-4 h-4" /> {t("installments.newSchedule")}</h3>
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className="form-label">اسم القرض / القسط *</label>
-              <input className="input-field" value={form.installment_name} onChange={(e) => setForm({ ...form, installment_name: e.target.value })} placeholder="مثال: قرض بنك صحار" aria-label="اسم القرض" />
+              <label className="form-label">{t("installments.loanNameRequired")}</label>
+              <input className="input-field" value={form.installment_name} onChange={(e) => setForm({ ...form, installment_name: e.target.value })} placeholder={t("installments.loanNamePlaceholder")} aria-label={t("installments.loanName")} />
             </div>
             <div>
-              <label className="form-label">رقم القسط</label>
-              <input type="number" className="input-field" value={form.installment_number || ""} onChange={(e) => setForm({ ...form, installment_number: Number(e.target.value) || 0 })} aria-label="رقم القسط" />
+              <label className="form-label">{t("installments.installmentNumber")}</label>
+              <input type="number" className="input-field" value={form.installment_number || ""} onChange={(e) => setForm({ ...form, installment_number: Number(e.target.value) || 0 })} aria-label={t("installments.installmentNumber")} />
             </div>
             <div>
-              <label className="form-label">تاريخ الاستحقاق *</label>
-              <input type="date" className="input-field" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} aria-label="تاريخ الاستحقاق" />
+              <label className="form-label">{t("installments.dueDateRequired")}</label>
+              <input type="date" className="input-field" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} aria-label={t("installments.dueDate")} />
             </div>
             <div>
-              <label className="form-label">المبلغ (ملي) *</label>
-              <input type="number" className="input-field" value={form.amount_milli || ""} onChange={(e) => setForm({ ...form, amount_milli: Number(e.target.value) || 0 })} aria-label="المبلغ" />
+              <label className="form-label">{t("installments.amountMilliRequired")}</label>
+              <input type="number" className="input-field" value={form.amount_milli || ""} onChange={(e) => setForm({ ...form, amount_milli: Number(e.target.value) || 0 })} aria-label={t("installments.amount")} />
             </div>
             <div className="col-span-2">
-              <label className="form-label">ملاحظات</label>
-              <textarea className="input-field" rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} aria-label="ملاحظات" />
+              <label className="form-label">{t("common.notes")}</label>
+              <textarea className="input-field" rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} aria-label={t("common.notes")} />
             </div>
           </div>
           <div className="flex justify-end gap-2 mt-4">
-            <Button variant="ghost" onClick={() => setShowForm(false)}>إلغاء</Button>
-            <Button variant="gold" loading={submitting} onClick={handleCreate} disabled={!form.installment_name || !form.due_date || form.amount_milli <= 0}>إضافة الدفعة</Button>
+            <Button variant="ghost" onClick={() => setShowForm(false)}>{t("common.cancel")}</Button>
+            <Button variant="gold" loading={submitting} onClick={handleCreate} disabled={!form.installment_name || !form.due_date || form.amount_milli <= 0}>{t("installments.addPayment")}</Button>
           </div>
         </Card>
       )}
 
-      <DataTable columns={columns} data={payments} loading={loading} emptyMessage="لا توجد أقساط مسجلة" />
+      <DataTable columns={columns} data={payments} loading={loading} emptyMessage={t("installments.empty")} />
     </div>
   );
 }

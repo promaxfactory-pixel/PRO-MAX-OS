@@ -1,4 +1,5 @@
 import { formatOMR, formatDate, formatDateTime } from "@/lib/utils";
+import i18n from "@/i18n";
 
 export { formatOMR, formatDate, formatDateTime };
 
@@ -6,9 +7,10 @@ export function printComponent(elementId: string) {
   const el = document.getElementById(elementId);
   if (!el) return;
   const html = el.innerHTML;
+  const isRtl = ['ar', 'ur'].includes(i18n.language);
   const win = window.open("", "_blank", "width=900,height=700");
   if (!win) return;
-  win.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>طباعة</title>
+  win.document.write(`<!DOCTYPE html><html lang="${i18n.language}" dir="${isRtl ? "rtl" : "ltr"}"><head><meta charset="utf-8"><title>${esc(i18n.t("print.title"))}</title>
   <style>
     @page{size:A4;margin:12mm 15mm}
     *{margin:0;padding:0;box-sizing:border-box}
@@ -42,4 +44,8 @@ export function printComponent(elementId: string) {
 export function htmlEscape(s: string | null | undefined): string {
   if (!s) return "";
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function esc(s: string | null | undefined): string {
+  return htmlEscape(s);
 }

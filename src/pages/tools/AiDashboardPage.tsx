@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { formatOMR, cn } from "@/lib/utils";
@@ -6,7 +7,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useUIStore } from "@/stores/uiStore";
 import {
   Brain, AlertTriangle, AlertCircle, Info, TrendingUp,
-  Users, Factory, DollarSign, Warehouse, RefreshCw, Loader2
+  Users, Factory, DollarSign, Warehouse, RefreshCw
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
@@ -32,6 +33,7 @@ const SEVERITY_CONFIG = {
 };
 
 export default function AiDashboardPage() {
+  const { t } = useTranslation();
   const addNotification = useUIStore((s) => s.addNotification);
   const [insights, setInsights] = useState<Insight[]>([]);
   const [forecast, setForecast] = useState<Forecast[]>([]);
@@ -47,7 +49,7 @@ export default function AiDashboardPage() {
     try {
       const [i, f, r, c, inv, p] = await Promise.all([
         invoke<Insight[]>("ai_dashboard_insights").catch(() => []),
-        invoke<Forecast[]>("ai_sales_forecast").catch(() => []),
+        invoke<Forecast[]>("ai_sales_forecast", { days: 30 }).catch(() => []),
         invoke<RiskCustomer[]>("ai_customer_risk").catch(() => []),
         invoke<CostItem[]>("ai_cost_analysis").catch(() => []),
         invoke<InventoryAlert[]>("ai_inventory_optimization").catch(() => []),
@@ -55,11 +57,11 @@ export default function AiDashboardPage() {
       ]);
       setInsights(i); setForecast(f); setRisks(r); setCosts(c); setInvAlerts(inv);         setProduction(p);
     } catch (err) {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(err) });
+      addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: String(err) });
     } finally {
       setLoading(false);
     }
-  }, [addNotification]);
+  }, [addNotification, t]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -75,11 +77,11 @@ export default function AiDashboardPage() {
         <div>
           <h1 className="page-title flex items-center gap-2">
             <Brain className="w-6 h-6 text-gold-400" />
-            لوحة التحليلات الذكية
+            {t("tools.aiDashboard.title")}
           </h1>
-          <p className="page-subtitle">رؤى وتوقعات مدعومة بالذكاء الاصطناعي</p>
+          <p className="page-subtitle">{t("tools.aiDashboard.subtitle")}</p>
         </div>
-        <Button variant="outline" icon={<RefreshCw className="w-4 h-4" />} onClick={loadData}>تحديث</Button>
+        <Button variant="outline" icon={<RefreshCw className="w-4 h-4" />} onClick={loadData}>{t("tools.refresh")}</Button>
       </div>
 
       {insights.length > 0 && (
@@ -105,7 +107,7 @@ export default function AiDashboardPage() {
         <Card>
           <h3 className="section-title flex items-center gap-2 mb-4">
             <TrendingUp className="w-5 h-5 text-gold-400" />
-            توقعات المبيعات
+            {t("tools.aiDashboard.salesForecast")}
           </h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -123,8 +125,8 @@ export default function AiDashboardPage() {
                   contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: "12px", color: "#f8fafc" }}
                   formatter={(v: number) => [formatOMR(v), ""]}
                 />
-                <Area type="monotone" dataKey="actual" stroke="#d4af37" strokeWidth={2} fill="url(#predGrad)" name="الفعلي" />
-                <Area type="monotone" dataKey="predicted" stroke="#8b5cf6" strokeWidth={2} strokeDasharray="5 5" fill="none" name="المتوقع" />
+                <Area type="monotone" dataKey="actual" stroke="#d4af37" strokeWidth={2} fill="url(#predGrad)" name={t("tools.aiDashboard.actual")} />
+                <Area type="monotone" dataKey="predicted" stroke="#8b5cf6" strokeWidth={2} strokeDasharray="5 5" fill="none" name={t("tools.aiDashboard.predicted")} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -133,11 +135,11 @@ export default function AiDashboardPage() {
         <Card>
           <h3 className="section-title flex items-center gap-2 mb-4">
             <DollarSign className="w-5 h-5 text-gold-400" />
-            تحليل التكاليف
+            {t("tools.aiDashboard.costAnalysis")}
           </h3>
           <div className="space-y-3">
             {costs.length === 0 ? (
-              <p className="text-center text-surface-500 py-4 text-sm">لا توجد بيانات</p>
+              <p className="text-center text-surface-500 py-4 text-sm">{t("tools.noData")}</p>
             ) : costs.map((c, i) => (
               <div key={i} className="flex items-center justify-between py-2 border-b border-surface-700/30 last:border-0">
                 <div>
@@ -157,21 +159,21 @@ export default function AiDashboardPage() {
         <Card>
           <h3 className="section-title flex items-center gap-2 mb-4">
             <Users className="w-5 h-5 text-brand-400" />
-            مخاطر العملاء
+            {t("tools.aiDashboard.customerRisk")}
           </h3>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-surface-700/50 text-surface-400">
-                  <th className="p-2 text-right">العميل</th>
-                  <th className="p-2 text-center">المبلغ المتأخر</th>
-                  <th className="p-2 text-center">الأيام</th>
-                  <th className="p-2 text-center">المستوى</th>
+                  <th className="p-2 text-right">{t("tools.aiDashboard.customer")}</th>
+                  <th className="p-2 text-center">{t("tools.aiDashboard.overdueAmount")}</th>
+                  <th className="p-2 text-center">{t("tools.aiDashboard.days")}</th>
+                  <th className="p-2 text-center">{t("tools.aiDashboard.level")}</th>
                 </tr>
               </thead>
               <tbody>
                 {risks.length === 0 ? (
-                  <tr><td colSpan={4} className="p-4 text-center text-surface-500">لا توجد مخاطر</td></tr>
+                  <tr><td colSpan={4} className="p-4 text-center text-surface-500">{t("tools.aiDashboard.noRisks")}</td></tr>
                 ) : risks.map((r, i) => (
                   <tr key={i} className="border-b border-surface-700/20">
                     <td className="p-2">{r.name}</td>
@@ -179,7 +181,7 @@ export default function AiDashboardPage() {
                     <td className="p-2 text-center">{r.days_overdue}</td>
                     <td className="p-2 text-center">
                       <span className={cn("px-2 py-0.5 rounded-full text-xs", r.risk === "high" ? "bg-red-500/20 text-red-400" : r.risk === "medium" ? "bg-amber-500/20 text-amber-400" : "bg-emerald-500/20 text-emerald-400")}>
-                        {r.risk === "high" ? "عالي" : r.risk === "medium" ? "متوسط" : "منخفض"}
+                        {r.risk === "high" ? t("tools.aiDashboard.riskHigh") : r.risk === "medium" ? t("tools.aiDashboard.riskMedium") : t("tools.aiDashboard.riskLow")}
                       </span>
                     </td>
                   </tr>
@@ -192,29 +194,29 @@ export default function AiDashboardPage() {
         <Card>
           <h3 className="section-title flex items-center gap-2 mb-4">
             <Factory className="w-5 h-5 text-brand-400" />
-            تحليل الإنتاج
+            {t("tools.aiDashboard.productionAnalysis")}
           </h3>
           {production ? (
             <div className="grid grid-cols-2 gap-4">
               <div className="p-3 bg-surface-800/50 rounded-lg text-center">
-                <p className="text-xs text-surface-500 mb-1">معدل الإنتاج</p>
+                <p className="text-xs text-surface-500 mb-1">{t("tools.aiDashboard.productionRate")}</p>
                 <p className="text-xl font-bold gradient-text">{production.efficiency || 0}%</p>
               </div>
               <div className="p-3 bg-surface-800/50 rounded-lg text-center">
-                <p className="text-xs text-surface-500 mb-1">نسبة الهالك</p>
+                <p className="text-xs text-surface-500 mb-1">{t("tools.aiDashboard.wasteRate")}</p>
                 <p className="text-xl font-bold text-red-400">{production.waste_rate || 0}%</p>
               </div>
               <div className="p-3 bg-surface-800/50 rounded-lg text-center">
-                <p className="text-xs text-surface-500 mb-1">وقت التوقف</p>
-                <p className="text-xl font-bold text-amber-400">{production.downtime_hours || 0} س</p>
+                <p className="text-xs text-surface-500 mb-1">{t("tools.aiDashboard.downtime")}</p>
+                <p className="text-xl font-bold text-amber-400">{t("tools.aiDashboard.downtimeHours", { count: production.downtime_hours || 0 })}</p>
               </div>
               <div className="p-3 bg-surface-800/50 rounded-lg text-center">
-                <p className="text-xs text-surface-500 mb-1">جودة المنتج</p>
+                <p className="text-xs text-surface-500 mb-1">{t("tools.aiDashboard.productQuality")}</p>
                 <p className="text-xl font-bold text-emerald-400">{production.quality_score || 0}%</p>
               </div>
             </div>
           ) : (
-            <p className="text-center text-surface-500 py-4 text-sm">لا توجد بيانات إنتاج</p>
+            <p className="text-center text-surface-500 py-4 text-sm">{t("tools.aiDashboard.noProductionData")}</p>
           )}
         </Card>
       </div>
@@ -223,15 +225,15 @@ export default function AiDashboardPage() {
         <Card>
           <h3 className="section-title flex items-center gap-2 mb-4">
             <Warehouse className="w-5 h-5 text-gold-400" />
-            تحسين المخزون
+            {t("tools.aiDashboard.inventoryOptimization")}
           </h3>
           <div className="grid grid-cols-3 gap-4">
             {invAlerts.map((a, i) => (
               <div key={i} className="p-3 bg-surface-800/50 rounded-lg">
                 <h4 className="text-sm font-medium text-white mb-1">{a.product}</h4>
                 <div className="flex justify-between text-xs text-surface-400 mb-2">
-                  <span>المخزون: {a.current_stock}</span>
-                  <span>الحد الأدنى: {a.min_stock}</span>
+                  <span>{t("tools.aiDashboard.stockLabel", { stock: a.current_stock })}</span>
+                  <span>{t("tools.aiDashboard.minStockLabel", { min: a.min_stock })}</span>
                 </div>
                 <p className="text-xs text-amber-400">{a.suggestion}</p>
               </div>

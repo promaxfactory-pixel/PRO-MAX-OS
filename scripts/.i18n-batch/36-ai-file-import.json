@@ -1,0 +1,57 @@
+{
+  "tools": {
+    "aiFileImport": {
+      "title": { "en": "AI File Import", "ar": "استيراد الملفات بالذكاء الاصطناعي" },
+      "subtitle": { "en": "Upload any document, image or spreadsheet and extract structured business data with AI", "ar": "ارفع أي مستند أو صورة أو جدول واستخرج بيانات الأعمال المنظمة بالذكاء الاصطناعي" },
+      "fileLabel": { "en": "File", "ar": "الملف" },
+      "fileHint": { "en": "PDF, images, Excel, CSV, DOCX, TXT, JSON, XML", "ar": "PDF، صور، Excel، CSV، DOCX، TXT، JSON، XML" },
+      "documentType": { "en": "Document Type", "ar": "نوع المستند" },
+      "docTypes": {
+        "auto": { "en": "Auto Detect", "ar": "كشف تلقائي" },
+        "invoice": { "en": "Sales Invoice", "ar": "فاتورة مبيعات" },
+        "purchase": { "en": "Purchase Invoice", "ar": "فاتورة مشتريات" },
+        "customer": { "en": "Customer", "ar": "عميل" },
+        "product": { "en": "Product", "ar": "منتج" },
+        "supplier": { "en": "Supplier", "ar": "مورد" },
+        "expense": { "en": "Expense", "ar": "مصروف" },
+        "inventory": { "en": "Inventory", "ar": "مخزون" }
+      },
+      "provider": { "en": "AI Provider", "ar": "مزود الذكاء الاصطناعي" },
+      "autoProvider": { "en": "Auto (free first)", "ar": "تلقائي (المجاني أولاً)" },
+      "notConfigured": { "en": "not configured", "ar": "غير مهيأ" },
+      "freeTier": { "en": "free", "ar": "مجاني" },
+      "analyzing": { "en": "Analyzing...", "ar": "جاري التحليل..." },
+      "analyze": { "en": "Analyze Document", "ar": "تحليل المستند" },
+      "byProvider": { "en": "Extracted by {{provider}}", "ar": "تم الاستخراج بواسطة {{provider}}" },
+      "status": {
+        "draft": { "en": "Draft", "ar": "مسودة" },
+        "committed": { "en": "Committed", "ar": "تم الإدراج" },
+        "failed": { "en": "Failed", "ar": "فشل" }
+      },
+      "edit": { "en": "Edit", "ar": "تعديل" },
+      "delete": { "en": "Delete", "ar": "حذف" },
+      "duplicatesFound": { "en": "Possible duplicate records detected", "ar": "تم رصد سجلات مكررة محتملة" },
+      "extractedFields": { "en": "Extracted Fields", "ar": "الحقول المستخرجة" },
+      "checkDuplicate": { "en": "Check duplicates", "ar": "فحص التكرارات" },
+      "jsonEditor": { "en": "JSON Editor", "ar": "محرر JSON" },
+      "reset": { "en": "Reset", "ar": "إعادة تعيين" },
+      "save": { "en": "Save", "ar": "حفظ" },
+      "commitToSystem": { "en": "Commit to System", "ar": "إدراج في النظام" },
+      "commitHint": { "en": "Creates the records in the ERP tables and updates inventory", "ar": "إنشاء السجلات في جداول النظام وتحديث المخزون" },
+      "targetTable": { "en": "Target table", "ar": "الجدول الهدف" },
+      "createdItems": { "en": "{{count}} record(s) created", "ar": "{{count}} سجل تم إنشاؤه" },
+      "resolvedItems": { "en": "{{count}} record(s) resolved", "ar": "{{count}} سجل تمت مطابقته" },
+      "history": { "en": "Extraction History", "ar": "سجل الاستخراج" },
+      "noHistory": { "en": "No extractions yet", "ar": "لا توجد استخراجات بعد" },
+      "colFile": { "en": "File", "ar": "الملف" },
+      "colType": { "en": "Type", "ar": "النوع" },
+      "colProvider": { "en": "Provider", "ar": "المزود" },
+      "colConfidence": { "en": "Confidence", "ar": "الثقة" },
+      "colStatus": { "en": "Status", "ar": "الحالة" },
+      "colDate": { "en": "Date", "ar": "التاريخ" },
+      "analysisFailed": { "en": "Failed to analyze document", "ar": "فشل تحليل المستند" },
+      "commitFailed": { "en": "Failed to commit records", "ar": "فشل إدراج السجلات" },
+      "saved": { "en": "Extraction updated successfully", "ar": "تم تحديث الاستخراج بنجاح" }
+    }
+  }
+}

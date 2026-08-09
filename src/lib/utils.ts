@@ -1,21 +1,31 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import i18n from "@/i18n";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
 export function formatOMR(milli: number): string {
-  return (milli / 1000).toFixed(3) + ' ر.ع';
+  return (milli / 1000).toFixed(3) + ' ' + i18n.t("currency.omrSuffix");
 }
 
 export function formatNumber(n: number): string {
   return new Intl.NumberFormat('en-US').format(n);
 }
 
+function dateLocale(): string {
+  switch (i18n.language) {
+    case 'ar': return 'ar-OM';
+    case 'ur': return 'ur-PK';
+    case 'hi': return 'en-IN';
+    default: return 'en-GB';
+  }
+}
+
 export function formatDate(d: string): string {
   if (!d) return '';
-  return new Date(d).toLocaleDateString('ar-OM', {
+  return new Date(d).toLocaleDateString(dateLocale(), {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -24,7 +34,7 @@ export function formatDate(d: string): string {
 
 export function formatDateTime(d: string): string {
   if (!d) return '';
-  return new Date(d).toLocaleString('ar-OM', {
+  return new Date(d).toLocaleString(dateLocale(), {
     year: 'numeric',
     month: 'short',
     day: 'numeric',

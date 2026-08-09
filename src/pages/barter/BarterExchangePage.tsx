@@ -5,7 +5,8 @@ import Button from "@/components/ui/Button";
 import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { useUIStore } from "@/stores/uiStore";
-import { ArrowLeftRight, Plus, Package, Scale, CheckCircle2 } from "lucide-react";
+import { ArrowLeftRight, Plus, Scale, CheckCircle2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface BarterExchange {
   id: number;
@@ -59,6 +60,7 @@ const EMPTY_FORM = {
 };
 
 export default function BarterExchangePage() {
+  const { t } = useTranslation();
   const { addNotification } = useUIStore();
   const [exchanges, setExchanges] = useState<BarterExchange[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,7 +79,7 @@ export default function BarterExchangePage() {
       const d = await invoke<BarterExchange[]>("list_barter_exchanges");
       setExchanges(d);
     } catch (err) {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات: " + String(err) });
+      addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("barter.loadError", { error: String(err) }) });
     } finally {
       setLoading(false);
     }
@@ -116,9 +118,9 @@ export default function BarterExchangePage() {
       setShowForm(false);
       setForm(EMPTY_FORM);
       await loadExchanges();
-      addNotification({ id: crypto.randomUUID(), type: "success", title: "تم", message: "تم إنشاء عملية المقايضة بنجاح" });
+      addNotification({ id: crypto.randomUUID(), type: "success", title: t("barter.done"), message: t("barter.createdSuccess") });
     } catch (err) {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "فشل إنشاء المقايضة: " + String(err) });
+      addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("barter.createFailed", { error: String(err) }) });
     }
     setSubmitting(false);
   };
@@ -128,104 +130,104 @@ export default function BarterExchangePage() {
   const settledCount = exchanges.filter((e) => e.settlement_status === "Settled").length;
 
   const columns: Column<BarterExchange>[] = useMemo(() => [
-    { key: "exchange_no", header: "رقم العملية", sortable: true, render: (r) => <span className="font-mono text-brand-400">{r.exchange_no || "—"}</span> },
-    { key: "date", header: "التاريخ", sortable: true, render: (r) => formatDate(r.date) },
-    { key: "supplier_name", header: "المورد", sortable: true, render: (r) => r.supplier_name || "—" },
-    { key: "product_name", header: "المنتج", render: (r) => r.product_name || "—" },
-    { key: "cartons_given", header: "كرتون معطى", sortable: true, align: "center", render: (r) => r.cartons_given },
-    { key: "carton_value_milli", header: "قيمة الكرتون", align: "left", render: (r) => formatOMR(r.carton_value_milli) },
-    { key: "bags_received", header: "أكياس مستلمة", sortable: true, align: "center", render: (r) => r.bags_received },
-    { key: "bag_value_milli", header: "قيمة الكيس", align: "left", render: (r) => formatOMR(r.bag_value_milli) },
-    { key: "net_value_milli", header: "الصافي", sortable: true, align: "left", render: (r) => (
+    { key: "exchange_no", header: t("barter.exchangeNo"), sortable: true, render: (r) => <span className="font-mono text-brand-400">{r.exchange_no || "—"}</span> },
+    { key: "date", header: t("common.date"), sortable: true, render: (r) => formatDate(r.date) },
+    { key: "supplier_name", header: t("barter.supplier"), sortable: true, render: (r) => r.supplier_name || "—" },
+    { key: "product_name", header: t("barter.product"), render: (r) => r.product_name || "—" },
+    { key: "cartons_given", header: t("barter.cartonsGiven"), sortable: true, align: "center", render: (r) => r.cartons_given },
+    { key: "carton_value_milli", header: t("barter.cartonValue"), align: "left", render: (r) => formatOMR(r.carton_value_milli) },
+    { key: "bags_received", header: t("barter.bagsReceived"), sortable: true, align: "center", render: (r) => r.bags_received },
+    { key: "bag_value_milli", header: t("barter.bagValue"), align: "left", render: (r) => formatOMR(r.bag_value_milli) },
+    { key: "net_value_milli", header: t("barter.netValue"), sortable: true, align: "left", render: (r) => (
       <span className={`font-bold ${r.net_value_milli >= 0 ? "text-gold-400" : "text-red-400"}`}>{formatOMR(r.net_value_milli)}</span>
     )},
-    { key: "settlement_status", header: "الحالة", render: (r) => (
+    { key: "settlement_status", header: t("common.status"), render: (r) => (
       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
         r.settlement_status === "Settled" ? "bg-emerald-500/20 text-emerald-400" : "bg-amber-500/20 text-amber-400"
-      }`}>{r.settlement_status === "Settled" ? "مسوية" : "مفتوحة"}</span>
+      }`}>{r.settlement_status === "Settled" ? t("barter.settled") : t("barter.open")}</span>
     )},
-  ], []);
+  ], [t]);
 
   return (
     <div className="space-y-6" dir="rtl">
       <div className="page-header">
         <div>
-          <h1 className="page-title">عمليات المقايضة</h1>
-          <p className="page-subtitle">{totalExchanges} عملية مسجلة</p>
+          <h1 className="page-title">{t("barter.title")}</h1>
+          <p className="page-subtitle">{t("barter.subtitle", { count: totalExchanges })}</p>
         </div>
-        <Button icon={<Plus className="w-4 h-4" />} onClick={() => setShowForm(!showForm)}>مقايضة جديدة</Button>
+        <Button icon={<Plus className="w-4 h-4" />} onClick={() => setShowForm(!showForm)}>{t("barter.newExchange")}</Button>
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        <StatCard title="إجمالي العمليات" value={totalExchanges} icon={<ArrowLeftRight className="w-6 h-6" />} />
-        <StatCard title="الرصيد المفتوح" value={formatOMR(openBalance)} icon={<Scale className="w-6 h-6" />} />
-        <StatCard title="العمليات المسوية" value={settledCount} icon={<CheckCircle2 className="w-6 h-6" />} />
+        <StatCard title={t("barter.totalExchanges")} value={totalExchanges} icon={<ArrowLeftRight className="w-6 h-6" />} />
+        <StatCard title={t("barter.openBalance")} value={formatOMR(openBalance)} icon={<Scale className="w-6 h-6" />} />
+        <StatCard title={t("barter.settledExchanges")} value={settledCount} icon={<CheckCircle2 className="w-6 h-6" />} />
       </div>
 
       {selectedSupplier && supplierBalance !== null && (
         <Card className="border-brand-500/30">
-          <p className="text-sm text-surface-400">رصيد المقايضة للمورد المحدد: <span className="font-bold text-gold-400">{formatOMR(supplierBalance)}</span></p>
+          <p className="text-sm text-surface-400">{t("barter.supplierBalance")}<span className="font-bold text-gold-400">{formatOMR(supplierBalance)}</span></p>
         </Card>
       )}
 
       {showForm && (
         <Card className="border-brand-500/30">
-          <h3 className="section-title mb-4"><Plus className="w-4 h-4" /> مقايضة جديدة</h3>
+          <h3 className="section-title mb-4"><Plus className="w-4 h-4" /> {t("barter.newExchange")}</h3>
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className="form-label">المورد المحلي *</label>
-              <select className="input-field" value={form.local_supplier_id} onChange={(e) => { const v = Number(e.target.value); setForm({ ...form, local_supplier_id: v }); setSelectedSupplier(v || null); }} aria-label="المورد">
-                <option value={0}>— اختر المورد —</option>
+              <label className="form-label">{t("barter.localSupplier")}</label>
+              <select className="input-field" value={form.local_supplier_id} onChange={(e) => { const v = Number(e.target.value); setForm({ ...form, local_supplier_id: v }); setSelectedSupplier(v || null); }} aria-label={t("barter.supplier")}>
+                <option value={0}>{t("barter.selectSupplier")}</option>
                 {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
             <div>
-              <label className="form-label">المنتج (كرتون) *</label>
-              <select className="input-field" value={form.product_id} onChange={(e) => setForm({ ...form, product_id: Number(e.target.value) })} aria-label="المنتج">
-                <option value={0}>— اختر المنتج —</option>
+              <label className="form-label">{t("barter.productCartons")}</label>
+              <select className="input-field" value={form.product_id} onChange={(e) => setForm({ ...form, product_id: Number(e.target.value) })} aria-label={t("barter.product")}>
+                <option value={0}>{t("barter.selectProduct")}</option>
                 {products.map((p) => <option key={p.id} value={p.id}>{p.name_ar || p.code}</option>)}
               </select>
             </div>
             <div>
-              <label className="form-label">عدد الكراتين</label>
-              <input type="number" className="input-field" value={form.cartons_given || ""} onChange={(e) => setForm({ ...form, cartons_given: Number(e.target.value) || 0 })} aria-label="الكراتين" />
+              <label className="form-label">{t("barter.cartonsCount")}</label>
+              <input type="number" className="input-field" value={form.cartons_given || ""} onChange={(e) => setForm({ ...form, cartons_given: Number(e.target.value) || 0 })} aria-label={t("barter.cartons")} />
             </div>
             <div>
-              <label className="form-label">قيمة الكرتون (ملي)</label>
-              <input type="number" className="input-field" value={form.carton_value_milli || ""} onChange={(e) => setForm({ ...form, carton_value_milli: Number(e.target.value) || 0 })} aria-label="قيمة الكرتون" />
+              <label className="form-label">{t("barter.cartonValueMilli")}</label>
+              <input type="number" className="input-field" value={form.carton_value_milli || ""} onChange={(e) => setForm({ ...form, carton_value_milli: Number(e.target.value) || 0 })} aria-label={t("barter.cartonValue")} />
             </div>
             <div>
-              <label className="form-label">البند المستلم</label>
-              <select className="input-field" value={form.received_item_id} onChange={(e) => setForm({ ...form, received_item_id: Number(e.target.value) })} aria-label="البند المستلم">
-                <option value={0}>— اختر البند —</option>
+              <label className="form-label">{t("barter.receivedItem")}</label>
+              <select className="input-field" value={form.received_item_id} onChange={(e) => setForm({ ...form, received_item_id: Number(e.target.value) })} aria-label={t("barter.receivedItem")}>
+                <option value={0}>{t("barter.selectItem")}</option>
                 {inventoryItems.map((i) => <option key={i.id} value={i.id}>{i.name_ar} ({i.code})</option>)}
               </select>
             </div>
             <div>
-              <label className="form-label">عدد الأكياس</label>
-              <input type="number" className="input-field" value={form.bags_received || ""} onChange={(e) => setForm({ ...form, bags_received: Number(e.target.value) || 0 })} aria-label="الأكياس" />
+              <label className="form-label">{t("barter.bagsCount")}</label>
+              <input type="number" className="input-field" value={form.bags_received || ""} onChange={(e) => setForm({ ...form, bags_received: Number(e.target.value) || 0 })} aria-label={t("barter.bags")} />
             </div>
             <div>
-              <label className="form-label">قيمة الكيس (ملي)</label>
-              <input type="number" className="input-field" value={form.bag_value_milli || ""} onChange={(e) => setForm({ ...form, bag_value_milli: Number(e.target.value) || 0 })} aria-label="قيمة الكيس" />
+              <label className="form-label">{t("barter.bagValueMilli")}</label>
+              <input type="number" className="input-field" value={form.bag_value_milli || ""} onChange={(e) => setForm({ ...form, bag_value_milli: Number(e.target.value) || 0 })} aria-label={t("barter.bagValue")} />
             </div>
             <div>
-              <label className="form-label">المرجع</label>
-              <input className="input-field" value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} aria-label="المرجع" />
+              <label className="form-label">{t("barter.reference")}</label>
+              <input className="input-field" value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} aria-label={t("barter.reference")} />
             </div>
             <div className="col-span-3">
-              <label className="form-label">ملاحظات</label>
-              <textarea className="input-field" rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} aria-label="ملاحظات" />
+              <label className="form-label">{t("common.notes")}</label>
+              <textarea className="input-field" rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} aria-label={t("common.notes")} />
             </div>
           </div>
           <div className="flex justify-end gap-2 mt-4">
-            <Button variant="ghost" onClick={() => { setShowForm(false); setSelectedSupplier(null); }}>إلغاء</Button>
-            <Button variant="gold" loading={submitting} onClick={handleCreate} disabled={!form.local_supplier_id || !form.product_id}>إنشاء المقايضة</Button>
+            <Button variant="ghost" onClick={() => { setShowForm(false); setSelectedSupplier(null); }}>{t("common.cancel")}</Button>
+            <Button variant="gold" loading={submitting} onClick={handleCreate} disabled={!form.local_supplier_id || !form.product_id}>{t("barter.createExchange")}</Button>
           </div>
         </Card>
       )}
 
-      <DataTable columns={columns} data={exchanges} loading={loading} emptyMessage="لا توجد عمليات مقايضة" />
+      <DataTable columns={columns} data={exchanges} loading={loading} emptyMessage={t("barter.empty")} />
     </div>
   );
 }

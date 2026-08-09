@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 
 export default function LoadingSpinner({ size = 'md', className }: { size?: 'sm' | 'md' | 'lg'; className?: string }) {
@@ -10,11 +11,12 @@ export default function LoadingSpinner({ size = 'md', className }: { size?: 'sm'
 }
 
 export function PageLoader() {
+  const { t } = useTranslation();
   return (
     <div className="flex items-center justify-center h-64">
       <div className="text-center">
         <LoadingSpinner size="lg" />
-        <p className="text-sm text-surface-400 mt-4">جاري التحميل...</p>
+        <p className="text-sm text-surface-400 mt-4">{t("common.loading")}</p>
       </div>
     </div>
   );

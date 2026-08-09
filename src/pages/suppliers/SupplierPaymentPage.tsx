@@ -6,9 +6,11 @@ import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowRight, CreditCard } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
+import { useTranslation } from "react-i18next";
 import { Supplier } from "@/types";
 
 export default function SupplierPaymentPage() {
+  const { t } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
   const addNotification = useUIStore((s) => s.addNotification);
@@ -25,7 +27,7 @@ export default function SupplierPaymentPage() {
   useEffect(() => {
     invoke("get_supplier", { id: Number(id) })
       .then((d) => setSupplier(d as Supplier))
-      .catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
+      .catch((e: unknown) => addNotification({ title: t("common.error"), message: String(e), type: 'error' }))
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -44,10 +46,10 @@ export default function SupplierPaymentPage() {
           notes: notes || null,
         },
       });
-      addNotification({ id: crypto.randomUUID(), type: "success", title: "تم بنجاح", message: "تم تسجيل الدفعة بنجاح" });
+      addNotification({ id: crypto.randomUUID(), type: "success", title: t("common.success"), message: t("supplier.paymentSuccess") });
       navigate(`/suppliers/${id}`);
     } catch (err) {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "فشل في تسجيل الدفعة" });
+      addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("supplier.paymentError") });
     } finally {
       setSubmitting(false);
     }
@@ -63,7 +65,7 @@ export default function SupplierPaymentPage() {
         <div className="flex items-center gap-3">
           <button onClick={() => navigate(`/suppliers/${id}`)} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
           <div>
-            <h1 className="page-title">تسجيل دفعة</h1>
+            <h1 className="page-title">{t("supplier.makePayment")}</h1>
             <p className="page-subtitle">{supplier.name}</p>
           </div>
         </div>
@@ -74,53 +76,53 @@ export default function SupplierPaymentPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm text-surface-400 mb-1">التاريخ</label>
-                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full input-field" required aria-label="التاريخ" />
+                <label className="block text-sm text-surface-400 mb-1">{t("common.date")}</label>
+                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full input-field" required aria-label={t("common.date")} />
               </div>
               <div>
-                <label className="block text-sm text-surface-400 mb-1">المبلغ (بالميلي)</label>
-                <input type="number" value={amountMilli} onChange={(e) => setAmountMilli(e.target.value)} className="w-full input-field" placeholder="0" min="1" required aria-label="المبلغ بالميلي" />
+                <label className="block text-sm text-surface-400 mb-1">{t("supplier.amountMilli")}</label>
+                <input type="number" value={amountMilli} onChange={(e) => setAmountMilli(e.target.value)} className="w-full input-field" placeholder="0" min="1" required aria-label={t("supplier.amountMilliAria")} />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm text-surface-400 mb-1">طريقة الدفع</label>
-                <select value={method} onChange={(e) => setMethod(e.target.value)} className="w-full input-field" aria-label="طريقة الدفع">
-                  <option value="cash">نقدي</option>
-                  <option value="bank_transfer">تحويل بنكي</option>
-                  <option value="cheque">شيك</option>
+                <label className="block text-sm text-surface-400 mb-1">{t("supplier.paymentMethod")}</label>
+                <select value={method} onChange={(e) => setMethod(e.target.value)} className="w-full input-field" aria-label={t("supplier.paymentMethod")}>
+                  <option value="cash">{t("supplier.methodCash")}</option>
+                  <option value="bank_transfer">{t("supplier.methodBankTransfer")}</option>
+                  <option value="cheque">{t("supplier.methodCheque")}</option>
                 </select>
               </div>
               <div>
-                <label className="block text-sm text-surface-400 mb-1">المرجع (اختياري)</label>
-                <input type="text" value={reference} onChange={(e) => setReference(e.target.value)} className="w-full input-field" placeholder="—" aria-label="المرجع" />
+                <label className="block text-sm text-surface-400 mb-1">{t("supplier.referenceOptional")}</label>
+                <input type="text" value={reference} onChange={(e) => setReference(e.target.value)} className="w-full input-field" placeholder="—" aria-label={t("supplier.referenceAria")} />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm text-surface-400 mb-1">ملاحظات (اختياري)</label>
-              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full input-field" rows={3} placeholder="—" aria-label="ملاحظات" />
+              <label className="block text-sm text-surface-400 mb-1">{t("supplier.notesOptional")}</label>
+              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full input-field" rows={3} placeholder="—" aria-label={t("common.notes")} />
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => navigate(`/suppliers/${id}`)}>إلغاء</Button>
-              <Button type="submit" loading={submitting} icon={<CreditCard className="w-4 h-4" />}>تسجيل الدفعة</Button>
+              <Button type="button" variant="outline" onClick={() => navigate(`/suppliers/${id}`)}>{t("common.cancel")}</Button>
+              <Button type="submit" loading={submitting} icon={<CreditCard className="w-4 h-4" />}>{t("supplier.makePayment")}</Button>
             </div>
           </form>
         </Card>
 
         <Card>
-          <h4 className="text-sm text-surface-400 mb-3">معلومات المورد</h4>
+          <h4 className="text-sm text-surface-400 mb-3">{t("supplier.supplierInfo")}</h4>
           <div className="space-y-4">
             <div className="text-center py-4">
               <p className="text-3xl font-bold gradient-text">{formatOMR(supplier.balance_milli)}</p>
-              <p className="text-xs text-surface-400 mt-1">الرصيد الحالي</p>
+              <p className="text-xs text-surface-400 mt-1">{t("supplier.currentBalance")}</p>
             </div>
             <div className="space-y-2">
-              <div className="flex justify-between text-sm"><span className="text-surface-400">الاسم</span><span className="font-medium">{supplier.name}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-surface-400">الكود</span><span className="font-mono text-xs">{supplier.code || "—"}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-surface-400">الهاتف</span><span>{supplier.phone || "—"}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-surface-400">{t("supplier.name")}</span><span className="font-medium">{supplier.name}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-surface-400">{t("supplier.code")}</span><span className="font-mono text-xs">{supplier.code || "—"}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-surface-400">{t("supplier.phone")}</span><span>{supplier.phone || "—"}</span></div>
             </div>
           </div>
         </Card>

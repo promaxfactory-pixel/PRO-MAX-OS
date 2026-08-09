@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { formatOMR, formatDate, htmlEscape } from "@/utils/printUtils";
 
 interface Transaction {
@@ -70,15 +71,19 @@ const S = {
   pf: { position: 'fixed' as const, bottom: '10px', left: 0, right: 0, textAlign: 'center' as const, fontSize: '7px', color: '#cbd5e1' },
 };
 
-const txnLabels: Record<string, string> = {
-  invoice: "فاتورة", payment: "دفعة", credit_note: "إشعار دائن", purchase: "مشتريات",
-};
-
 export default function StatementPrintTemplate({
   title, entityName, entityCode, entityType, openingBalance, transactions, closingBalance, totalDebit, totalCredit, company, fromDate, toDate,
 }: Props) {
+  const { t, i18n } = useTranslation();
+  const isRtl = ['ar', 'ur'].includes(i18n.language);
+  const txnLabels: Record<string, string> = {
+    invoice: t("print.txnInvoice"),
+    payment: t("print.txnPayment"),
+    credit_note: t("print.creditNoteTitle"),
+    purchase: t("print.txnPurchase"),
+  };
   return (
-    <div id="print-area" style={S.c}>
+    <div id="print-area" style={{ ...S.c, direction: isRtl ? 'rtl' : 'ltr' }}>
       <div style={S.bar} />
       <div style={S.hdr}>
         <div>
@@ -87,33 +92,33 @@ export default function StatementPrintTemplate({
           <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 4 }}>{htmlEscape(company.address)}</div>
         </div>
         <div>
-          <div style={S.dt}>{title}</div>
-          <div style={S.dm}>
-            {entityType === "customer" ? "العميل" : "المورد"}: {htmlEscape(entityName)}<br />
-            {entityCode && <>الكود: {htmlEscape(entityCode)}<br /></>}
+          <div style={{ ...S.dt, textAlign: isRtl ? 'right' : 'left' }}>{title}</div>
+          <div style={{ ...S.dm, textAlign: isRtl ? 'right' : 'left' }}>
+            {entityType === "customer" ? t("print.customerLabel") : t("print.supplierLabel")}: {htmlEscape(entityName)}<br />
+            {entityCode && <>{t("customer.code")}: {htmlEscape(entityCode)}<br /></>}
             {fromDate && toDate && <>{formatDate(fromDate)} → {formatDate(toDate)}</>}
           </div>
         </div>
       </div>
 
       <div style={S.summary}>
-        <span>الرصيد الافتتاحي: <strong style={{ color: openingBalance >= 0 ? '#059669' : '#dc2626' }}>{formatOMR(openingBalance)}</strong></span>
-        <span>إجمالي المدين: <strong>{formatOMR(totalDebit)}</strong></span>
-        <span>إجمالي الدائن: <strong>{formatOMR(totalCredit)}</strong></span>
-        <span>عدد المعاملات: <strong>{transactions.length}</strong></span>
+        <span>{t("print.openingBalance")}: <strong style={{ color: openingBalance >= 0 ? '#059669' : '#dc2626' }}>{formatOMR(openingBalance)}</strong></span>
+        <span>{t("print.totalDebit")}: <strong>{formatOMR(totalDebit)}</strong></span>
+        <span>{t("print.totalCredit")}: <strong>{formatOMR(totalCredit)}</strong></span>
+        <span>{t("print.transactionsCount")}: <strong>{transactions.length}</strong></span>
       </div>
 
       <table style={S.tbl}>
         <thead>
           <tr>
-            <th style={{ ...S.th, borderRadius: '0 8px 0 0' }}>#</th>
-            <th style={{ ...S.th, minWidth: 80 }}>التاريخ</th>
-            <th style={S.th}>المرجع</th>
-            <th style={S.th}>النوع</th>
-            <th style={S.th}>مدين</th>
-            <th style={S.th}>دائن</th>
-            <th style={{ ...S.th, minWidth: 80 }}>الرصيد</th>
-            <th style={{ ...S.th, borderRadius: '8px 0 0 0' }}>ملاحظات</th>
+            <th style={{ ...S.th, borderRadius: isRtl ? '0 8px 0 0' : '8px 0 0 0' }}>#</th>
+            <th style={{ ...S.th, minWidth: 80 }}>{t("common.date")}</th>
+            <th style={S.th}>{t("print.reference")}</th>
+            <th style={S.th}>{t("customer.type")}</th>
+            <th style={S.th}>{t("accounting.debit")}</th>
+            <th style={S.th}>{t("accounting.credit")}</th>
+            <th style={{ ...S.th, minWidth: 80 }}>{t("accounting.balance")}</th>
+            <th style={{ ...S.th, borderRadius: isRtl ? '8px 0 0 0' : '0 8px 0 0' }}>{t("common.notes")}</th>
           </tr>
         </thead>
         <tbody>
@@ -133,18 +138,18 @@ export default function StatementPrintTemplate({
       </table>
 
       <div style={S.tb}>
-        <div style={S.tr}><span>إجمالي المدين</span><span style={{ color: '#059669', fontWeight: 700 }}>{formatOMR(totalDebit)}</span></div>
-        <div style={S.tr}><span>إجمالي الدائن</span><span style={{ color: '#dc2626', fontWeight: 700 }}>{formatOMR(totalCredit)}</span></div>
-        <div style={S.gt}><span>الرصيد الختامي</span><span style={{ color: closingBalance >= 0 ? '#059669' : '#dc2626' }}>{formatOMR(closingBalance)}</span></div>
+        <div style={S.tr}><span>{t("print.totalDebit")}</span><span style={{ color: '#059669', fontWeight: 700 }}>{formatOMR(totalDebit)}</span></div>
+        <div style={S.tr}><span>{t("print.totalCredit")}</span><span style={{ color: '#dc2626', fontWeight: 700 }}>{formatOMR(totalCredit)}</span></div>
+        <div style={S.gt}><span>{t("print.closingBalance")}</span><span style={{ color: closingBalance >= 0 ? '#059669' : '#dc2626' }}>{formatOMR(closingBalance)}</span></div>
       </div>
 
       <div style={S.ft}>
-        <div style={S.sg}>ختم الشركة</div>
-        <div style={S.sg}>التوقيع</div>
+        <div style={S.sg}>{t("print.companyStamp")}</div>
+        <div style={S.sg}>{t("print.signature")}</div>
       </div>
 
       <div style={S.pf}>
-        تمت الطباعة من PRO MAX OS © {new Date().getFullYear()} | {title} - {htmlEscape(entityName)}
+        {t("print.statementPrintedFrom", { year: new Date().getFullYear(), title, entity: htmlEscape(entityName) })}
       </div>
 
       <style>{`

@@ -5,9 +5,11 @@ import Button from "@/components/ui/Button";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowRight, Save } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
+import { useTranslation } from "react-i18next";
 import type { Customer } from "@/types";
 
 export default function CustomerFormPage() {
+  const { t } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
@@ -31,7 +33,7 @@ export default function CustomerFormPage() {
           credit_limit_milli: d.credit_limit_milli || 0, payment_terms: d.payment_terms || "",
           opening_balance_milli: d.opening_balance_milli || 0, notes: d.notes || "",
         });
-      }).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false));
+      }).catch((e: unknown) => addNotification({ title: t("common.error"), message: String(e), type: 'error' })).finally(() => setLoading(false));
     }
   }, [id, isEdit]);
 
@@ -39,19 +41,19 @@ export default function CustomerFormPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim()) return addNotification({ id: crypto.randomUUID(), type: "warning", title: "تنبيه", message: "اسم العميل مطلوب" });
+    if (!form.name.trim()) return addNotification({ id: crypto.randomUUID(), type: "warning", title: t("customer.notice"), message: t("customer.nameRequired") });
     setSaving(true);
     try {
       if (isEdit) {
         await invoke("update_customer", { id: Number(id), input: form });
-        addNotification({ id: crypto.randomUUID(), type: "success", title: "تم بنجاح", message: "تم حفظ بيانات العميل بنجاح" });
+        addNotification({ id: crypto.randomUUID(), type: "success", title: t("common.success"), message: t("customer.saveSuccess") });
         navigate(`/customers/${id}`);
       } else {
         const newId = await invoke("create_customer", { input: form });
-        addNotification({ id: crypto.randomUUID(), type: "success", title: "تم بنجاح", message: "تم حفظ بيانات العميل بنجاح" });
+        addNotification({ id: crypto.randomUUID(), type: "success", title: t("common.success"), message: t("customer.saveSuccess") });
         navigate(`/customers/${newId}`);
       }
-    } catch (err: unknown) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "فشل في حفظ بيانات العميل" }); }
+    } catch (err: unknown) { addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("customer.saveError") }); }
     finally { setSaving(false); }
   };
 
@@ -63,8 +65,8 @@ export default function CustomerFormPage() {
         <div className="flex items-center gap-3">
           <button onClick={() => navigate('/customers')} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
           <div>
-            <h1 className="page-title">{isEdit ? "تعديل بيانات العميل" : "عميل جديد"}</h1>
-            <p className="page-subtitle">{isEdit ? `تعديل ${form.name}` : "إضافة عميل جديد"}</p>
+            <h1 className="page-title">{isEdit ? t("customer.editTitle") : t("customer.newCustomer")}</h1>
+            <p className="page-subtitle">{isEdit ? t("customer.editSubtitle", { name: form.name }) : t("customer.addNewSubtitle")}</p>
           </div>
         </div>
       </div>
@@ -73,61 +75,61 @@ export default function CustomerFormPage() {
         <Card>
           <div className="grid grid-cols-2 gap-6">
             <div className="input-group">
-              <label className="input-label">اسم العميل *</label>
-              <input className="input-field" aria-label="اسم العميل" value={form.name} onChange={(e) => set("name", e.target.value)} required />
+              <label className="input-label">{t("customer.nameLabel")}</label>
+              <input className="input-field" aria-label={t("customer.nameAria")} value={form.name} onChange={(e) => set("name", e.target.value)} required />
             </div>
             <div className="input-group">
-              <label className="input-label">الكود</label>
-              <input className="input-field" aria-label="الكود" value={form.code} onChange={(e) => set("code", e.target.value)} />
+              <label className="input-label">{t("customer.code")}</label>
+              <input className="input-field" aria-label={t("customer.code")} value={form.code} onChange={(e) => set("code", e.target.value)} />
             </div>
             <div className="input-group">
-              <label className="input-label">نوع الحساب</label>
-              <select className="input-field" aria-label="نوع الحساب" value={form.ctype} onChange={(e) => set("ctype", e.target.value)}>
-                <option value="credit">آجل</option>
-                <option value="cash">نقد</option>
+              <label className="input-label">{t("customer.accountType")}</label>
+              <select className="input-field" aria-label={t("customer.accountType")} value={form.ctype} onChange={(e) => set("ctype", e.target.value)}>
+                <option value="credit">{t("customer.creditOption")}</option>
+                <option value="cash">{t("customer.cashOption")}</option>
               </select>
             </div>
             <div className="input-group">
-              <label className="input-label">الهاتف</label>
-              <input className="input-field" aria-label="الهاتف" value={form.phone} onChange={(e) => set("phone", e.target.value)} />
+              <label className="input-label">{t("customer.phone")}</label>
+              <input className="input-field" aria-label={t("customer.phone")} value={form.phone} onChange={(e) => set("phone", e.target.value)} />
             </div>
             <div className="input-group">
-              <label className="input-label">جهة الاتصال</label>
-              <input className="input-field" aria-label="جهة الاتصال" value={form.contact} onChange={(e) => set("contact", e.target.value)} />
+              <label className="input-label">{t("customer.contactPerson")}</label>
+              <input className="input-field" aria-label={t("customer.contactPerson")} value={form.contact} onChange={(e) => set("contact", e.target.value)} />
             </div>
             <div className="input-group">
-              <label className="input-label">البريد الإلكتروني</label>
-              <input className="input-field" type="email" aria-label="البريد الإلكتروني" value={form.email} onChange={(e) => set("email", e.target.value)} />
+              <label className="input-label">{t("customer.emailLabel")}</label>
+              <input className="input-field" type="email" aria-label={t("customer.emailLabel")} value={form.email} onChange={(e) => set("email", e.target.value)} />
             </div>
             <div className="input-group col-span-2">
-              <label className="input-label">العنوان</label>
-              <input className="input-field" aria-label="العنوان" value={form.address} onChange={(e) => set("address", e.target.value)} />
+              <label className="input-label">{t("customer.address")}</label>
+              <input className="input-field" aria-label={t("customer.address")} value={form.address} onChange={(e) => set("address", e.target.value)} />
             </div>
             <div className="input-group">
-              <label className="input-label">رقم الضريبة</label>
-              <input className="input-field" aria-label="رقم الضريبة" value={form.vat_number} onChange={(e) => set("vat_number", e.target.value)} />
+              <label className="input-label">{t("customer.vatNumberLabel")}</label>
+              <input className="input-field" aria-label={t("customer.vatNumberLabel")} value={form.vat_number} onChange={(e) => set("vat_number", e.target.value)} />
             </div>
             <div className="input-group">
-              <label className="input-label">الحد الائتماني (مليار)</label>
-              <input className="input-field" type="number" aria-label="الحد الائتماني" value={form.credit_limit_milli} onChange={(e) => set("credit_limit_milli", Number(e.target.value))} />
+              <label className="input-label">{t("customer.creditLimitMilli")}</label>
+              <input className="input-field" type="number" aria-label={t("customer.creditLimitLabel")} value={form.credit_limit_milli} onChange={(e) => set("credit_limit_milli", Number(e.target.value))} />
             </div>
             <div className="input-group">
-              <label className="input-label">الرصيد الافتتاحي (مليار)</label>
-              <input className="input-field" type="number" aria-label="الرصيد الافتتاحي" value={form.opening_balance_milli} onChange={(e) => set("opening_balance_milli", Number(e.target.value))} />
+              <label className="input-label">{t("customer.openingBalanceMilli")}</label>
+              <input className="input-field" type="number" aria-label={t("customer.openingBalance")} value={form.opening_balance_milli} onChange={(e) => set("opening_balance_milli", Number(e.target.value))} />
             </div>
             <div className="input-group">
-              <label className="input-label">شروط الدفع</label>
-              <input className="input-field" aria-label="شروط الدفع" value={form.payment_terms} onChange={(e) => set("payment_terms", e.target.value)} placeholder="مثال: 30 يوم" />
+              <label className="input-label">{t("customer.paymentTerms")}</label>
+              <input className="input-field" aria-label={t("customer.paymentTerms")} value={form.payment_terms} onChange={(e) => set("payment_terms", e.target.value)} placeholder={t("customer.paymentTermsPlaceholder")} />
             </div>
             <div className="input-group col-span-2">
-              <label className="input-label">ملاحظات</label>
-              <textarea className="input-field" rows={3} aria-label="ملاحظات" value={form.notes} onChange={(e) => set("notes", e.target.value)} />
+              <label className="input-label">{t("common.notes")}</label>
+              <textarea className="input-field" rows={3} aria-label={t("common.notes")} value={form.notes} onChange={(e) => set("notes", e.target.value)} />
             </div>
           </div>
         </Card>
         <div className="flex justify-start gap-3 mt-4">
-          <Button type="submit" loading={saving} icon={<Save className="w-4 h-4" />}>{isEdit ? "حفظ التعديلات" : "إضافة العميل"}</Button>
-          <Button variant="outline" type="button" onClick={() => navigate('/customers')}>إلغاء</Button>
+          <Button type="submit" loading={saving} icon={<Save className="w-4 h-4" />}>{isEdit ? t("customer.saveChanges") : t("customer.addCustomer")}</Button>
+          <Button variant="outline" type="button" onClick={() => navigate('/customers')}>{t("common.cancel")}</Button>
         </div>
       </form>
     </div>

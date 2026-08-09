@@ -59,6 +59,7 @@ pub struct CreateShipmentInput {
     pub cbm: Option<f64>,
     pub clearance_agent: Option<String>,
     pub notes: Option<String>,
+    pub created_by: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -231,7 +232,7 @@ pub fn create_shipment(
             input.cbm.unwrap_or(0.0),
             input.clearance_agent,
             input.notes,
-            input.supplier_id.map(|_| "".to_string()),
+            input.created_by,
         ],
     )?;
     let id = conn.last_insert_rowid();

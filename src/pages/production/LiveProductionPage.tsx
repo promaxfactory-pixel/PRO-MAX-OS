@@ -9,6 +9,7 @@ import {
 import { useUIStore } from "@/stores/uiStore";
 import { useAuthStore } from "@/stores/authStore";
 import TemperatureMonitor from "@/components/production/TemperatureMonitor";
+import { useTranslation } from "react-i18next";
 
 interface Product {
   id: number;
@@ -44,6 +45,7 @@ function safeNumber(v: string): number {
 }
 
 export default function LiveProductionPage() {
+  const { t } = useTranslation();
   const [today] = useState(() => new Date().toISOString().split("T")[0]);
   const [shift, setShift] = useState<"صباحي" | "مسائي">("صباحي");
   const [sheetId, setSheetId] = useState<number | null>(null);
@@ -71,7 +73,7 @@ export default function LiveProductionPage() {
       const prods = await invoke<Product[]>("list_products", {});
       setProducts(prods.filter((p: any) => p.active !== 0));
     } catch (e) {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "فشل تحميل المنتجات: " + String(e) });
+      addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("production.loadProductsError", { error: String(e) }) });
     }
   }, [addNotification]);
 
@@ -89,7 +91,7 @@ export default function LiveProductionPage() {
       const shiftLines = await invoke<ShiftLine[]>("get_shift_lines", { sheetId: id });
       setLines(shiftLines);
     } catch (e) {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "فشل تهيئة الوردية: " + String(e) });
+      addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("production.initShiftError", { error: String(e) }) });
     }
   }, [today, shift, addNotification]);
 
@@ -98,7 +100,7 @@ export default function LiveProductionPage() {
       const data = await invoke<DashboardData>("get_live_dashboard", {});
       setDashboard(data);
     } catch {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" });
+      addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("production.dashboardLoadError") });
     }
   }, []);
 
@@ -139,9 +141,9 @@ export default function LiveProductionPage() {
       const shiftLines = await invoke<ShiftLine[]>("get_shift_lines", { sheetId });
       setLines(shiftLines);
       await refreshDashboard();
-      addNotification({ id: crypto.randomUUID(), type: "success", title: "تم", message: "تم تسجيل الإنتاج بنجاح" });
+      addNotification({ id: crypto.randomUUID(), type: "success", title: t("users.page.success"), message: t("production.recordSuccess") });
     } catch (e) {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "فشل تسجيل الإنتاج: " + String(e) });
+      addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("production.recordError", { error: String(e) }) });
     }
     setSaving(false);
   };
@@ -153,9 +155,9 @@ export default function LiveProductionPage() {
       const shiftLines = await invoke<ShiftLine[]>("get_shift_lines", { sheetId });
       setLines(shiftLines);
       await refreshDashboard();
-      addNotification({ id: crypto.randomUUID(), type: "info", title: "تم", message: "تم حذف التسجيل" });
+      addNotification({ id: crypto.randomUUID(), type: "info", title: t("users.page.success"), message: t("production.deleteSuccess") });
     } catch (e) {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "فشل حذف التسجيل: " + String(e) });
+      addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("production.deleteError", { error: String(e) }) });
     }
     setDeletingLine(null);
   };
@@ -168,9 +170,9 @@ export default function LiveProductionPage() {
       setSheetId(null);
       setLines([]);
       await refreshDashboard();
-      addNotification({ id: crypto.randomUUID(), type: "success", title: "تم", message: "تم إقفال الوردية وتحديث المخزون" });
+      addNotification({ id: crypto.randomUUID(), type: "success", title: t("users.page.success"), message: t("production.completeShiftSuccess") });
     } catch (e) {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(e) });
+      addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("production.completeShiftError", { error: String(e) }) });
     }
     setClosingShift(false);
   };
@@ -186,7 +188,7 @@ export default function LiveProductionPage() {
       setLines(shiftLines);
       await refreshDashboard();
     } catch (e) {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "فشل تحديث الكمية: " + String(e) });
+      addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("production.updateQtyError", { error: String(e) }) });
     }
   };
 
@@ -205,28 +207,28 @@ export default function LiveProductionPage() {
             <Factory className="w-6 h-6 text-amber-400" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-white">الإنتاج المباشر</h1>
-            <p className="text-sm text-surface-400">{today} — راقب وسجل الإنتاج لحظة بلحظة</p>
+            <h1 className="text-2xl font-bold text-white">{t("production.liveProduction")}</h1>
+            <p className="text-sm text-surface-400">{t("production.liveSubtitle", { date: today })}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {sheetId && lines.length > 0 && (
             <>
               <button onClick={async () => {
-                try { await invoke("print_shift_report_thermal", { sheetId, printerName: null }); addNotification({ id: crypto.randomUUID(), type: "success", title: "طباعة", message: "تم إرسال تقرير الوردية إلى الطابعة" }); } catch (e) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ في الطباعة", message: String(e) }); }
+                try { await invoke("print_shift_report_thermal", { sheetId, printerName: null }); addNotification({ id: crypto.randomUUID(), type: "success", title: t("common.print"), message: t("production.printShiftSuccess") }); } catch (e) { addNotification({ id: crypto.randomUUID(), type: "error", title: t("production.printErrorTitle"), message: String(e) }); }
               }} className="btn-outline flex items-center gap-2">
                 <Printer className="w-4 h-4" />
-                طباعة الوردية
+                {t("production.printShift")}
               </button>
               <button onClick={handleCompleteShift} disabled={closingShift} className="btn-gold flex items-center gap-2 disabled:opacity-50">
                 {closingShift ? <div className="w-4 h-4 border-2 border-surface-900/30 border-t-surface-900 rounded-full animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                إقفال الوردية
+                {t("production.closeShift")}
               </button>
             </>
           )}
           <button onClick={() => { refreshDashboard(); initShift(); }} className="btn-outline flex items-center gap-2">
             <BarChart3 className="w-4 h-4" />
-            تحديث
+            {t("tools.refresh")}
           </button>
         </div>
       </div>
@@ -240,38 +242,38 @@ export default function LiveProductionPage() {
         <motion.div className="card relative overflow-hidden" whileHover={{ scale: 1.02 }}>
           <div className="flex items-center gap-3 mb-2">
             <TrendingUp className="w-5 h-5 text-emerald-400" />
-            <span className="text-sm text-surface-400">إجمالي اليوم</span>
+            <span className="text-sm text-surface-400">{t("production.totalToday")}</span>
           </div>
           <p className="text-3xl font-bold text-white">{totalCartons.toFixed(0)}</p>
-          <p className="text-xs text-surface-500">كرتون</p>
+          <p className="text-xs text-surface-500">{t("production.cartonsUnit")}</p>
           <div className="absolute top-0 left-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl" />
         </motion.div>
 
         <motion.div className="card" whileHover={{ scale: 1.02 }}>
           <div className="flex items-center gap-3 mb-2">
             <Sun className="w-5 h-5 text-amber-400" />
-            <span className="text-sm text-surface-400">صباحي</span>
+            <span className="text-sm text-surface-400">{t("production.shiftMorning")}</span>
           </div>
           <p className="text-3xl font-bold text-amber-400">{morningCartons.toFixed(0)}</p>
-          <p className="text-xs text-surface-500">كرتون</p>
+          <p className="text-xs text-surface-500">{t("production.cartonsUnit")}</p>
         </motion.div>
 
         <motion.div className="card" whileHover={{ scale: 1.02 }}>
           <div className="flex items-center gap-3 mb-2">
             <Moon className="w-5 h-5 text-indigo-400" />
-            <span className="text-sm text-surface-400">مسائي</span>
+            <span className="text-sm text-surface-400">{t("production.shiftEvening")}</span>
           </div>
           <p className="text-3xl font-bold text-indigo-400">{eveningCartons.toFixed(0)}</p>
-          <p className="text-xs text-surface-500">كرتون</p>
+          <p className="text-xs text-surface-500">{t("production.cartonsUnit")}</p>
         </motion.div>
 
         <motion.div className="card" whileHover={{ scale: 1.02 }}>
           <div className="flex items-center gap-3 mb-2">
             <Package className="w-5 h-5 text-gold-400" />
-            <span className="text-sm text-surface-400">إجمالي الأكواب</span>
+            <span className="text-sm text-surface-400">{t("print.totalCups")}</span>
           </div>
           <p className="text-3xl font-bold gradient-text">{totalCupsFormatted}</p>
-          <p className="text-xs text-surface-500">كوب</p>
+          <p className="text-xs text-surface-500">{t("production.cupUnit")}</p>
         </motion.div>
       </motion.div>
 
@@ -285,7 +287,7 @@ export default function LiveProductionPage() {
           <div className="card">
             <h3 className="section-title mb-4">
               <Clock className="w-4 h-4" />
-              الوردية الحالية
+              {t("production.currentShift")}
             </h3>
             <div className="flex gap-2 mb-4">
               <button
@@ -297,7 +299,7 @@ export default function LiveProductionPage() {
                 }`}
               >
                 <Sun className="w-4 h-4 mx-auto mb-1" />
-                صباحي
+                {t("production.shiftMorning")}
               </button>
               <button
                 onClick={() => setShift("مسائي")}
@@ -308,14 +310,14 @@ export default function LiveProductionPage() {
                 }`}
               >
                 <Moon className="w-4 h-4 mx-auto mb-1" />
-                مسائي
+                {t("production.shiftEvening")}
               </button>
             </div>
 
             {sheetId && (
               <div className="flex items-center gap-2 text-xs text-emerald-400 bg-emerald-500/10 rounded-lg px-3 py-2">
                 <CheckCircle2 className="w-3 h-3" />
-                الوردية مفتوحة — رقم {sheetId}
+                {t("production.shiftOpen", { id: sheetId })}
               </div>
             )}
           </div>
@@ -324,46 +326,46 @@ export default function LiveProductionPage() {
           <div className="card">
             <h3 className="section-title mb-4">
               <Plus className="w-4 h-4" />
-              تسجيل إنتاج
+              {t("production.recordProduction")}
             </h3>
             <div className="space-y-3">
               <div>
-                <label className="form-label">المنتج</label>
+                <label className="form-label">{t("production.product")}</label>
                 <select
                   value={entryForm.product_id}
                   onChange={(e) => setEntryForm({ ...entryForm, product_id: Number(e.target.value) })}
                   className="input-field"
-                  aria-label="المنتج"
+                  aria-label={t("production.product")}
                 >
-                  <option value={0}>— اختر المنتج —</option>
+                  <option value={0}>{t("production.selectProduct")}</option>
                   {products.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.name_ar || p.code || `منتج #${p.id}`}
+                      {p.name_ar || p.code || t("production.productFallback", { id: p.id })}
                     </option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="form-label">العلامة التجارية للعميل</label>
+                <label className="form-label">{t("production.customerBrand")}</label>
                 <input
                   type="text"
                   value={entryForm.customer_brand}
                   onChange={(e) => setEntryForm({ ...entryForm, customer_brand: e.target.value })}
-                  placeholder="مثال: ريشوس"
+                  placeholder={t("production.customerBrandPlaceholder")}
                   className="input-field"
                   dir="rtl"
-                  aria-label="العلامة التجارية للعميل"
+                  aria-label={t("production.customerBrand")}
                 />
               </div>
               <div>
-                <label className="form-label">العامل *</label>
+                <label className="form-label">{t("production.workerLabel")}</label>
                 <select
                   className="input-field"
                   value={workerId || ''}
                   onChange={(e) => setWorkerId(Number(e.target.value) || null)}
-                  aria-label="اختر العامل"
+                  aria-label={t("production.selectWorker")}
                 >
-                  <option value="">اختر العامل...</option>
+                  <option value="">{t("production.selectWorkerPlaceholder")}</option>
                   {workers.map((w) => (
                     <option key={w.id} value={w.id}>{w.name} ({w.code || w.job})</option>
                   ))}
@@ -371,7 +373,7 @@ export default function LiveProductionPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="form-label">كرتون منتج</label>
+                  <label className="form-label">{t("production.cartonsProduced")}</label>
                   <input
                     type="number"
                     value={entryForm.cartons_produced || ""}
@@ -379,11 +381,11 @@ export default function LiveProductionPage() {
                     className="input-field"
                     min="0"
                     placeholder="0"
-                    aria-label="كرتون منتج"
+                    aria-label={t("production.cartonsProduced")}
                   />
                 </div>
                 <div>
-                  <label className="form-label">تالف (كرتون)</label>
+                  <label className="form-label">{t("production.wasteCartonsLabel")}</label>
                   <input
                     type="number"
                     value={entryForm.waste_cartons || ""}
@@ -391,7 +393,7 @@ export default function LiveProductionPage() {
                     className="input-field"
                     min="0"
                     placeholder="0"
-                    aria-label="تالف كرتون"
+                    aria-label={t("production.wasteCartonsAria")}
                   />
                 </div>
               </div>
@@ -407,7 +409,7 @@ export default function LiveProductionPage() {
                 ) : (
                   <>
                     <Plus className="w-4 h-4" />
-                    تسجيل الإنتاج
+                    {t("production.saveProduction")}
                   </>
                 )}
               </motion.button>
@@ -420,10 +422,10 @@ export default function LiveProductionPage() {
           <div className="card">
             <div className="flex items-center justify-between mb-4">
               <h3 className="section-title">
-                سجل إنتاج الوردية {shift}
+                {t("production.shiftEntriesTitle", { shift })}
               </h3>
               <span className="text-sm text-surface-400">
-                {loading ? "جارٍ التحميل..." : `${lines.length} تسجيل${lines.length !== 1 ? "ات" : ""}`}
+                {loading ? t("production.loading") : `${lines.length} ${t("production.record")}${lines.length !== 1 ? t("production.recordsSuffix") : ""}`}
               </span>
             </div>
 
@@ -434,8 +436,8 @@ export default function LiveProductionPage() {
             ) : lines.length === 0 ? (
               <div className="text-center py-12 text-surface-500">
                 <Package className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                <p>لا يوجد إنتاج مسجل في هذه الوردية</p>
-                <p className="text-xs mt-1">سجل أول إنتاج من النموذج على اليسار</p>
+                <p>{t("production.shiftEmpty")}</p>
+                <p className="text-xs mt-1">{t("production.shiftEmptyHint")}</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -452,7 +454,7 @@ export default function LiveProductionPage() {
                         <span className="text-xs font-bold text-brand-400 w-6">#</span>
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-white truncate">
-                            {line.product_name || `منتج #${line.product_id}`}
+                            {line.product_name || t("production.productFallback", { id: line.product_id })}
                           </p>
                           {line.customer_brand && (
                             <p className="text-xs text-gold-400/80">{line.customer_brand}</p>
@@ -470,7 +472,7 @@ export default function LiveProductionPage() {
                                 onChange={(e) => setEditingQty({ id: line.id, val: safeNumber(e.target.value) })}
                                 className="w-20 text-center input-field text-sm py-1"
                                 autoFocus
-                                aria-label="تعديل الكمية"
+                                aria-label={t("production.editQty")}
                                 onBlur={() => handleUpdateLine(line.id, editingQty.val)}
                                 onKeyDown={(e) => {
                                   if (e.key === "Enter") handleUpdateLine(line.id, editingQty.val);
@@ -486,17 +488,17 @@ export default function LiveProductionPage() {
                               </span>
                             )}
                           </p>
-                          <p className="text-xs text-surface-500">كرتون</p>
+                          <p className="text-xs text-surface-500">{t("production.cartonsUnit")}</p>
                         </div>
                         <div className="text-center">
                           <p className="text-sm font-bold text-surface-300">{line.cups_per_carton}</p>
-                          <p className="text-xs text-surface-500">كوب/كرتون</p>
+                          <p className="text-xs text-surface-500">{t("print.cupsPerCarton")}</p>
                         </div>
                         <div className="text-center">
                           <p className="text-sm font-bold text-surface-300">
                             {(line.cartons_produced * line.cups_per_carton).toLocaleString()}
                           </p>
-                          <p className="text-xs text-surface-500">كوب</p>
+                          <p className="text-xs text-surface-500">{t("production.cupUnit")}</p>
                         </div>
                         <button
                           onClick={() => handleDeleteLine(line.id)}
@@ -522,17 +524,17 @@ export default function LiveProductionPage() {
             <div className="card">
               <h3 className="section-title mb-4">
                 <BarChart3 className="w-4 h-4" />
-                ملخص الإنتاج اليوم — حسب المنتج
+                {t("production.dailySummary")}
               </h3>
               <div className="overflow-hidden rounded-xl border border-surface-700/50">
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>المنتج</th>
-                      <th>العلامة التجارية</th>
-                      <th>كرتون</th>
-                      <th>أكواب</th>
-                      <th>تالف</th>
+                      <th>{t("production.product")}</th>
+                      <th>{t("production.brandColumn")}</th>
+                      <th>{t("production.cartonsUnit")}</th>
+                      <th>{t("production.cupsColumn")}</th>
+                      <th>{t("production.wasteColumn")}</th>
                     </tr>
                   </thead>
                   <tbody>

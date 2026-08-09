@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { AlertTriangle, Shield, Info } from "lucide-react";
 import Button from "@/components/ui/Button";
 
@@ -30,13 +31,16 @@ export default function ConfirmDialog({
   open,
   title,
   message,
-  confirmLabel = "تأكيد",
-  cancelLabel = "إلغاء",
+  confirmLabel,
+  cancelLabel,
   variant = "danger",
   onConfirm,
   onCancel,
   loading = false,
 }: ConfirmDialogProps) {
+  const { t } = useTranslation();
+  const resolvedConfirmLabel = confirmLabel ?? t("common.confirm");
+  const resolvedCancelLabel = cancelLabel ?? t("common.cancel");
   const overlayRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const confirmBtnRef = useRef<HTMLButtonElement>(null);
@@ -92,20 +96,20 @@ export default function ConfirmDialog({
       aria-modal="true"
       aria-labelledby={titleId}
       aria-describedby={messageId}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      className="modal-overlay"
       onClick={onCancel}
     >
       <div
-        className="bg-surface-800 rounded-2xl border border-surface-700 p-6 max-w-md w-full mx-4 shadow-xl"
+        className="modal-content max-w-md"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start gap-4 mb-4">
-          <div className={`shrink-0 rounded-xl p-3 ${variantStyles[variant]}`} aria-hidden="true">
+          <div className={`shrink-0 rounded-xl p-3 shadow-lg ${variantStyles[variant]}`} aria-hidden="true">
             <Icon className="h-6 w-6" />
           </div>
           <div className="min-w-0">
-            <h3 id={titleId} className="text-lg font-bold text-white">{title}</h3>
-            <p id={messageId} className="mt-1 text-sm text-surface-400 leading-relaxed">{message}</p>
+            <h3 id={titleId} className="text-lg font-bold text-[var(--text-primary)] font-display">{title}</h3>
+            <p id={messageId} className="mt-1 text-sm text-[var(--text-secondary)] leading-relaxed">{message}</p>
           </div>
         </div>
 
@@ -114,19 +118,18 @@ export default function ConfirmDialog({
             variant="outline"
             onClick={onCancel}
             disabled={loading}
-            aria-label={cancelLabel}
-            className="border-surface-700 text-surface-400 hover:text-white hover:border-surface-500"
+            aria-label={resolvedCancelLabel}
           >
-            {cancelLabel}
+            {resolvedCancelLabel}
           </Button>
           <button
             ref={confirmBtnRef}
             onClick={onConfirm}
             disabled={loading}
-            aria-label={loading ? "جاري..." : confirmLabel}
-            className={`rounded-xl px-5 py-2.5 text-sm font-semibold transition-colors disabled:opacity-50 ${variantStyles[variant]}`}
+            aria-label={loading ? t("common.processing") : resolvedConfirmLabel}
+            className={`rounded-xl px-5 py-2.5 text-sm font-semibold transition-all duration-200 hover:brightness-110 active:scale-[0.97] disabled:opacity-50 ${variantStyles[variant]}`}
           >
-            {loading ? "جاري..." : confirmLabel}
+            {loading ? t("common.processing") : resolvedConfirmLabel}
           </button>
         </div>
       </div>

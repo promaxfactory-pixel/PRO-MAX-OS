@@ -7,6 +7,7 @@ interface AuthState {
   isLoading: boolean;
   error: string | null;
   login: (username: string, password: string) => Promise<void>;
+  quickLogin: () => Promise<void>;
   logout: () => void;
   setUser: (user: User) => void;
   clearError: () => void;
@@ -27,6 +28,19 @@ export const useAuthStore = create<AuthState>((set) => {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         const result = await invoke<{ user: User; token: string }>('login', { username, password });
+        localStorage.setItem('auth_token', result.token);
+        localStorage.setItem('auth_user', JSON.stringify(result.user));
+        set({ user: result.user, isAuthenticated: true, isLoading: false });
+      } catch (err: unknown) {
+        set({ error: err instanceof Error ? err.message : String(err), isLoading: false });
+        throw err;
+      }
+    },
+    quickLogin: async () => {
+      set({ isLoading: true, error: null });
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const result = await invoke<{ user: User; token: string }>('quick_login');
         localStorage.setItem('auth_token', result.token);
         localStorage.setItem('auth_user', JSON.stringify(result.user));
         set({ user: result.user, isAuthenticated: true, isLoading: false });

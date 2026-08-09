@@ -5,6 +5,7 @@ import Card from "@/components/ui/Card";
 import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowRight, Plus, Save, Trash2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useUIStore } from "@/stores/uiStore";
 
 interface Line {
@@ -24,6 +25,7 @@ interface InventoryItem {
 }
 
 export default function PurchaseCreatePage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const addNotification = useUIStore((s) => s.addNotification);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -39,9 +41,9 @@ export default function PurchaseCreatePage() {
   ]);
 
   useEffect(() => {
-    invoke("list_suppliers").then((d) => setSuppliers(d as Supplier[])).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }));
-    invoke("list_inventory_items").then((d) => setItems(d as InventoryItem[])).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }));
-  }, []);
+    invoke("list_suppliers").then((d) => setSuppliers(d as Supplier[])).catch((e: unknown) => addNotification({ title: t('common.error'), message: String(e), type: 'error' }));
+    invoke("list_inventory_items").then((d) => setItems(d as InventoryItem[])).catch((e: unknown) => addNotification({ title: t('common.error'), message: String(e), type: 'error' }));
+  }, [t]);
 
   const updateLine = (index: number, field: keyof Line, value: number) => {
     setLines((prev) =>
@@ -82,7 +84,7 @@ export default function PurchaseCreatePage() {
       });
       navigate("/purchases");
     } catch (err) {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء الحفظ" });
+      addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("purchase.saveError") });
     } finally {
       setSubmitting(false);
     }
@@ -92,25 +94,25 @@ export default function PurchaseCreatePage() {
     <div className="space-y-6">
       <div className="page-header">
         <div>
-          <h1 className="page-title">مشتريات جديدة</h1>
-          <p className="page-subtitle">إنشاء أمر شراء جديد</p>
+          <h1 className="page-title">{t("purchase.newPurchase")}</h1>
+          <p className="page-subtitle">{t("purchase.createSubtitle")}</p>
         </div>
         <Button variant="ghost" icon={<ArrowRight className="w-4 h-4" />} onClick={() => navigate("/purchases")}>
-          العودة
+          {t("common.back")}
         </Button>
       </div>
 
       <Card className="p-6">
         <div className="grid grid-cols-2 gap-6">
           <div className="input-group">
-            <label className="input-label">المورد *</label>
+            <label className="input-label">{t("purchase.supplierReq")}</label>
             <select
               className="input-field"
               value={supplierId}
               onChange={(e) => setSupplierId(Number(e.target.value))}
-              aria-label="المورد"
+              aria-label={t("purchase.supplier")}
             >
-              <option value={0}>— اختر المورد —</option>
+              <option value={0}>{t("purchase.selectSupplier")}</option>
               {suppliers.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
@@ -118,39 +120,39 @@ export default function PurchaseCreatePage() {
           </div>
 
           <div className="input-group">
-            <label className="input-label">التاريخ *</label>
+            <label className="input-label">{t("purchase.dateReq")}</label>
             <input
               type="date"
               className="input-field"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              aria-label="التاريخ"
+              aria-label={t("common.date")}
             />
           </div>
 
           <div className="input-group">
-            <label className="input-label">رقم فاتورة المورد</label>
+            <label className="input-label">{t("purchase.supplierInvoiceNo")}</label>
             <input
               type="text"
               className="input-field"
               value={supplierInvoiceNo}
               onChange={(e) => setSupplierInvoiceNo(e.target.value)}
-              placeholder="اختياري"
-              aria-label="رقم فاتورة المورد"
+              placeholder={t("purchase.optional")}
+              aria-label={t("purchase.supplierInvoiceNoAria")}
             />
           </div>
 
           <div className="input-group">
-            <label className="input-label">الضريبة 5%</label>
+            <label className="input-label">{t("purchase.vat5")}</label>
             <label className="flex items-center gap-2 mt-2 cursor-pointer">
               <input
                 type="checkbox"
                 className="w-4 h-4 rounded bg-surface-700 border-surface-500 text-brand-500 focus:ring-brand-500"
                 checked={vatEnabled}
                 onChange={(e) => setVatEnabled(e.target.checked)}
-                aria-label="تفعيل الضريبة"
+                aria-label={t("purchase.enableVat")}
               />
-              <span className="text-surface-300 text-sm">تفعيل الضريبة</span>
+              <span className="text-surface-300 text-sm">{t("purchase.enableVat")}</span>
             </label>
           </div>
         </div>
@@ -158,9 +160,9 @@ export default function PurchaseCreatePage() {
 
       <Card className="p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-white">بنود الطلب</h2>
+          <h2 className="text-lg font-semibold text-white">{t("purchase.orderLines")}</h2>
           <Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={addLine}>
-            إضافة بند
+            {t("purchase.addLine")}
           </Button>
         </div>
 
@@ -168,14 +170,14 @@ export default function PurchaseCreatePage() {
           {lines.map((line, idx) => (
             <div key={idx} className="grid grid-cols-[2fr_1fr_1fr_auto] gap-3 items-end">
               <div className="input-group">
-                {idx === 0 && <label className="input-label">الصنف *</label>}
+                {idx === 0 && <label className="input-label">{t("purchase.itemReq")}</label>}
                 <select
                   className="input-field"
                   value={line.item_id}
                   onChange={(e) => updateLine(idx, "item_id", Number(e.target.value))}
-                  aria-label="الصنف"
+                  aria-label={t("purchase.item")}
                 >
-                  <option value={0}>— اختر الصنف —</option>
+                  <option value={0}>{t("purchase.selectItem")}</option>
                   {items.map((item) => (
                     <option key={item.id} value={item.id}>{item.name}</option>
                   ))}
@@ -183,26 +185,26 @@ export default function PurchaseCreatePage() {
               </div>
 
               <div className="input-group">
-                {idx === 0 && <label className="input-label">الكمية *</label>}
+                {idx === 0 && <label className="input-label">{t("purchase.qtyReq")}</label>}
                 <input
                   type="number"
                   className="input-field"
                   min={1}
                   value={line.qty}
                   onChange={(e) => updateLine(idx, "qty", Number(e.target.value))}
-                  aria-label="الكمية"
+                  aria-label={t("invoice.qty")}
                 />
               </div>
 
               <div className="input-group">
-                {idx === 0 && <label className="input-label">سعر الوحدة (ملي) *</label>}
+                {idx === 0 && <label className="input-label">{t("purchase.unitCostMilli")}</label>}
                 <input
                   type="number"
                   className="input-field"
                   min={0}
                   value={line.unit_cost_milli}
                   onChange={(e) => updateLine(idx, "unit_cost_milli", Number(e.target.value))}
-                  aria-label="سعر الوحدة بالملي"
+                  aria-label={t("purchase.unitCostAria")}
                 />
               </div>
 
@@ -226,26 +228,26 @@ export default function PurchaseCreatePage() {
       <Card className="p-6">
         <div className="space-y-2 ml-auto max-w-xs">
           <div className="flex justify-between text-surface-400">
-            <span>الإجمالي قبل الضريبة</span>
+            <span>{t("purchase.subtotal")}</span>
             <span className="text-white font-mono">{formatOMR(totalNet)}</span>
           </div>
           {vatEnabled && (
             <div className="flex justify-between text-surface-400">
-              <span>الضريبة 5%</span>
+              <span>{t("purchase.vat5")}</span>
               <span className="text-white font-mono">{formatOMR(vatAmount)}</span>
             </div>
           )}
           <div className="border-t border-surface-600 pt-2 flex justify-between">
-            <span className="text-lg font-semibold text-white">الإجمالي</span>
+            <span className="text-lg font-semibold text-white">{t("purchase.grandTotal")}</span>
             <span className="text-lg font-bold text-gold-400 font-mono">{formatOMR(grandTotal)}</span>
           </div>
         </div>
       </Card>
 
       <div className="flex justify-end gap-3">
-        <Button variant="ghost" onClick={() => navigate("/purchases")}>إلغاء</Button>
+        <Button variant="ghost" onClick={() => navigate("/purchases")}>{t("common.cancel")}</Button>
         <Button icon={<Save className="w-4 h-4" />} onClick={handleSubmit} disabled={submitting}>
-          {submitting ? "جاري الحفظ..." : "حفظ أمر الشراء"}
+          {submitting ? t("purchase.saving") : t("purchase.saveOrder")}
         </Button>
       </div>
     </div>

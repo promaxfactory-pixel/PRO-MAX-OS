@@ -1,0 +1,30 @@
+{
+  "print": {
+    "statementPrintedFrom": { "en": "Printed from PRO MAX OS © {{year}} | {{title}} - {{entity}}", "ar": "تمت الطباعة من PRO MAX OS © {{year}} | {{title}} - {{entity}}" },
+    "supplierLabel": { "en": "Supplier", "ar": "المورد" },
+    "openingBalance": { "en": "Opening Balance", "ar": "الرصيد الافتتاحي" },
+    "totalDebit": { "en": "Total Debit", "ar": "إجمالي المدين" },
+    "totalCredit": { "en": "Total Credit", "ar": "إجمالي الدائن" },
+    "transactionsCount": { "en": "Transactions Count", "ar": "عدد المعاملات" },
+    "closingBalance": { "en": "Closing Balance", "ar": "الرصيد الختامي" },
+    "reference": { "en": "Reference", "ar": "المرجع" },
+    "txnInvoice": { "en": "Invoice", "ar": "فاتورة" },
+    "txnPayment": { "en": "Payment", "ar": "دفعة" },
+    "txnPurchase": { "en": "Purchases", "ar": "مشتريات" },
+    "creditNoteTitle": { "en": "Credit Note", "ar": "إشعار دائن" },
+    "deliveryNoteTitle": { "en": "Delivery Note", "ar": "إيصال توصيل" },
+    "receiptTitle": { "en": "Receipt", "ar": "سند قبض" },
+    "factories": { "en": "Factories", "ar": "المصانع" },
+    "totalInCups": { "en": "Total (Cups)", "ar": "الإجمالي (كوب)" },
+    "totalCartons": { "en": "Total Cartons", "ar": "إجمالي الكراتين" },
+    "totalCups": { "en": "Total Cups", "ar": "إجمالي الأكواب" },
+    "receivedBy": { "en": "Received By", "ar": "توقيع المستلم" },
+    "driverSignature": { "en": "Driver Signature", "ar": "توقيع السائق" },
+    "price": { "en": "Price", "ar": "السعر" },
+    "reason": { "en": "Reason", "ar": "السبب" },
+    "referenceInvoice": { "en": "Reference Invoice", "ar": "الفاتورة المرجعية" },
+    "issuedBy": { "en": "Issued By", "ar": "توقيع المسؤول" },
+    "amount": { "en": "Amount", "ar": "المبلغ" },
+    "paymentMethod": { "en": "Payment Method", "ar": "طريقة الدفع" }
+  }
+}

@@ -47,6 +47,7 @@ pub struct Employee {
 #[derive(Debug, Deserialize)]
 pub struct CreateEmployeeInput {
     pub name: String,
+    pub code: Option<String>,
     pub nationality: Option<String>,
     pub job: Option<String>,
     pub salary_milli: Option<i64>,
@@ -84,6 +85,7 @@ pub struct CreateEmployeeInput {
 #[derive(Debug, Deserialize)]
 pub struct UpdateEmployeeInput {
     pub name: Option<String>,
+    pub code: Option<String>,
     pub nationality: Option<String>,
     pub job: Option<String>,
     pub salary_milli: Option<i64>,
@@ -264,7 +266,10 @@ pub fn create_employee(
         "INSERT INTO doc_sequences(doc_type, year, last_number) VALUES('EMP',?,?) ON CONFLICT(doc_type, year) DO UPDATE SET last_number=excluded.last_number",
         rusqlite::params![year, seq],
     ).map_err(|e| format!("Failed to increment employee sequence: {}", e))?;
-    let emp_code = format!("EMP-{}-{:04}", year, seq);
+    let emp_code = match input.code {
+        Some(c) if !c.trim().is_empty() => c.trim().to_string(),
+        _ => format!("EMP-{}-{:04}", year, seq),
+    };
 
     conn.execute(
         "INSERT INTO employees(code, name, nationality, job, salary_milli, allowances_milli, phone, passport_no, passport_expiry, residence_expiry, visa_expiry, workpermit_expiry, insurance_expiry, contract_end, id_number, date_of_birth, gender, marital_status, email, bank_name, bank_account_no, basic_salary_milli, housing_allowance_milli, transport_allowance_milli, food_allowance_milli, other_allowances_milli, overtime_rate_milli, insurance_policy_no, insurance_premium_milli, ticket_allowance_milli, sponsor_name, sponsor_id, joining_date, notes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -322,6 +327,10 @@ pub fn update_employee(
 
     if let Some(v) = &input.name {
         sets.push("name=?");
+        params.push(Box::new(v.clone()));
+    }
+    if let Some(v) = &input.code {
+        sets.push("code=?");
         params.push(Box::new(v.clone()));
     }
     if let Some(v) = &input.nationality {

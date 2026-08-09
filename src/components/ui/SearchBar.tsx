@@ -1,4 +1,5 @@
 import { Search, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 
 interface SearchBarProps {
@@ -12,11 +13,13 @@ interface SearchBarProps {
 export default function SearchBar({
   value,
   onChange,
-  placeholder = "بحث...",
+  placeholder,
   className,
   id,
 }: SearchBarProps) {
-  const inputId = id || `search-${placeholder.replace(/\s+/g, '-').toLowerCase()}`;
+  const { t } = useTranslation();
+  const resolvedPlaceholder = placeholder ?? `${t("common.search")}...`;
+  const inputId = id || `search-${resolvedPlaceholder.replace(/\s+/g, '-').toLowerCase()}`;
 
   return (
     <div className={cn("relative", className)}>
@@ -26,14 +29,14 @@ export default function SearchBar({
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        aria-label={placeholder}
+        placeholder={resolvedPlaceholder}
+        aria-label={resolvedPlaceholder}
         className="input-field w-full pr-10 pl-9"
       />
       {value && (
         <button
           onClick={() => onChange("")}
-          aria-label="مسح البحث"
+          aria-label={t("common.clearSearch")}
           className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 hover:text-white transition-colors"
         >
           <X className="h-4 w-4" aria-hidden="true" />

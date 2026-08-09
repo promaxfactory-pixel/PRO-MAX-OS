@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { formatOMR, formatDate, htmlEscape } from "@/utils/printUtils";
 
 const S = {
@@ -97,10 +98,12 @@ const S = {
 };
 
 export default function InvoicePrintTemplate({ data }: Props) {
+  const { t, i18n } = useTranslation();
   if (!data) return null;
   const { invoice, customer, lines, company } = data;
+  const isRtl = ['ar', 'ur'].includes(i18n.language);
   return (
-    <div id="print-area" style={S.c}>
+    <div id="print-area" style={{ ...S.c, direction: isRtl ? 'rtl' : 'ltr' }}>
       <div style={S.bar} />
       <div style={S.wm}>PRO MAX OS</div>
 
@@ -114,40 +117,40 @@ export default function InvoicePrintTemplate({ data }: Props) {
           </div>
         </div>
         <div>
-          <div style={S.dt}>فاتورة مبيعات</div>
+          <div style={S.dt}>{t("print.invoiceSalesTitle")}</div>
           <div style={S.dm}>
-            <strong>رقم:</strong> {htmlEscape(invoice.inv_no)}<br />
-            <strong>التاريخ:</strong> {formatDate(invoice.date)}<br />
+            <strong>{t("print.invoiceNoLabel")}</strong> {htmlEscape(invoice.inv_no)}<br />
+            <strong>{t("print.dateLabel")}</strong> {formatDate(invoice.date)}<br />
             <span style={{
               ...S.bd,
               background: invoice.paid_milli >= invoice.total_milli ? '#d1fae5' : '#fef3c7',
               color: invoice.paid_milli >= invoice.total_milli ? '#065f46' : '#92400e',
               marginTop: 4, display: 'inline-block',
             }}>
-              {invoice.paid_milli >= invoice.total_milli ? 'مدفوعة' : 'غير مدفوعة'}
+              {invoice.paid_milli >= invoice.total_milli ? t("print.paid") : t("print.unpaid")}
             </span>
           </div>
         </div>
       </div>
 
       <div style={S.cg}>
-        <div><div style={S.lb}>العميل</div><div style={S.vl}>{htmlEscape(invoice.customer_name)}</div></div>
-        <div><div style={S.lb}>طريقة الدفع</div><div style={S.vl}>{htmlEscape(invoice.payment_type) || 'نقداً'}</div></div>
-        <div><div style={S.lb}>العنوان</div><div style={S.vl}>{htmlEscape(customer?.address || '')}</div></div>
-        <div><div style={S.lb}>الرقم الضريبي</div><div style={S.vl}>{htmlEscape(customer?.vat_number || '')}</div></div>
+        <div><div style={S.lb}>{t("print.customerLabel")}</div><div style={S.vl}>{htmlEscape(invoice.customer_name)}</div></div>
+        <div><div style={S.lb}>{t("invoice.paymentType")}</div><div style={S.vl}>{htmlEscape(invoice.payment_type) || t("print.cashLabel")}</div></div>
+        <div><div style={S.lb}>{t("customer.address")}</div><div style={S.vl}>{htmlEscape(customer?.address || '')}</div></div>
+        <div><div style={S.lb}>{t("customer.vatNumber")}</div><div style={S.vl}>{htmlEscape(customer?.vat_number || '')}</div></div>
       </div>
 
       <table style={S.tbl}>
         <thead>
           <tr>
-            <th style={{ ...S.th, borderRadius: '0 8px 0 0' }}>#</th>
-            <th style={{ ...S.th, textAlign: 'right' }}>المنتج</th>
-            <th style={S.th}>الكراتين</th>
-            <th style={S.th}>كوب/كرتون</th>
-            <th style={S.th}>الإجمالي</th>
-            <th style={S.th}>السعر</th>
-            <th style={S.th}>الصافي</th>
-            <th style={{ ...S.th, borderRadius: '8px 0 0 0' }}>الضريبة</th>
+            <th style={{ ...S.th, borderRadius: isRtl ? '0 8px 0 0' : '8px 0 0 0' }}>#</th>
+            <th style={{ ...S.th, textAlign: 'right' }}>{t("print.productLabel")}</th>
+            <th style={S.th}>{t("print.cartons")}</th>
+            <th style={S.th}>{t("print.cupsPerCarton")}</th>
+            <th style={S.th}>{t("common.total")}</th>
+            <th style={S.th}>{t("invoice.unitPrice")}</th>
+            <th style={S.th}>{t("print.net")}</th>
+            <th style={{ ...S.th, borderRadius: isRtl ? '8px 0 0 0' : '0 8px 0 0' }}>{t("common.vat")}</th>
           </tr>
         </thead>
         <tbody>
@@ -167,37 +170,37 @@ export default function InvoicePrintTemplate({ data }: Props) {
       </table>
 
       <div style={S.tb}>
-        <div style={S.tr}><span>المجموع الفرعي</span><span>{formatOMR(invoice.net_milli)}</span></div>
-        <div style={S.tr}><span>الضريبة (5%)</span><span style={{ color: '#dc2626' }}>{formatOMR(invoice.vat_milli)}</span></div>
+        <div style={S.tr}><span>{t("common.subtotal")}</span><span>{formatOMR(invoice.net_milli)}</span></div>
+        <div style={S.tr}><span>{t("print.vat5")}</span><span style={{ color: '#dc2626' }}>{formatOMR(invoice.vat_milli)}</span></div>
         {invoice.discount_milli > 0 && (
-          <div style={S.tr}><span>الخصم {invoice.discount_reason ? `(${htmlEscape(invoice.discount_reason)})` : ''}</span><span style={{ color: '#059669' }}>- {formatOMR(invoice.discount_milli)}</span></div>
+          <div style={S.tr}><span>{t("common.discount")} {invoice.discount_reason ? `(${htmlEscape(invoice.discount_reason)})` : ''}</span><span style={{ color: '#059669' }}>- {formatOMR(invoice.discount_milli)}</span></div>
         )}
-        <div style={S.gt}><span>الإجمالي</span><span>{formatOMR(invoice.total_milli)}</span></div>
+        <div style={S.gt}><span>{t("common.total")}</span><span>{formatOMR(invoice.total_milli)}</span></div>
         {invoice.paid_milli > 0 && (
-          <div style={{ ...S.tr, color: '#059669', fontWeight: 700, marginTop: 4 }}><span>المدفوع</span><span>{formatOMR(invoice.paid_milli)}</span></div>
+          <div style={{ ...S.tr, color: '#059669', fontWeight: 700, marginTop: 4 }}><span>{t("common.paid")}</span><span>{formatOMR(invoice.paid_milli)}</span></div>
         )}
         {invoice.total_milli > invoice.paid_milli && (
-          <div style={{ ...S.tr, color: '#dc2626', fontWeight: 700 }}><span>المتبقي</span><span>{formatOMR(invoice.total_milli - invoice.paid_milli)}</span></div>
+          <div style={{ ...S.tr, color: '#dc2626', fontWeight: 700 }}><span>{t("common.remaining")}</span><span>{formatOMR(invoice.total_milli - invoice.paid_milli)}</span></div>
         )}
       </div>
 
       {invoice.notes && (
-        <div style={S.nt}><strong>ملاحظات: </strong>{htmlEscape(invoice.notes)}</div>
+        <div style={S.nt}><strong>{t("common.notes")}: </strong>{htmlEscape(invoice.notes)}</div>
       )}
 
       {company.bank_details && (
         <div style={{ ...S.nt, background: '#f0f9ff', border: '1px solid #e0f2fe' }}>
-          <strong>بيانات التحويل: </strong>{htmlEscape(company.bank_details)}
+          <strong>{t("print.bankTransferLabel")}: </strong>{htmlEscape(company.bank_details)}
         </div>
       )}
 
       <div style={S.ft}>
-        <div style={S.sg}>التوقيع</div>
-        <div style={S.sg}>ختم الشركة</div>
+        <div style={S.sg}>{t("print.signature")}</div>
+        <div style={S.sg}>{t("print.companyStamp")}</div>
       </div>
 
       <div style={S.pf}>
-        تمت الطباعة من PRO MAX OS © {new Date().getFullYear()} | فاتورة رقم {htmlEscape(invoice.inv_no)}
+        {t("print.printedFrom", { year: new Date().getFullYear(), invNo: htmlEscape(invoice.inv_no) })}
       </div>
 
       <style>{`

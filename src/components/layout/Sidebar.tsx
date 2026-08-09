@@ -4,14 +4,14 @@ import { useTranslation } from "react-i18next";
 import {
   LayoutDashboard, FileText, Users, Package, Factory,
   Calculator, UserCog, ClipboardList, Wrench, BarChart3,
-  Settings, ChevronLeft, ChevronRight, Briefcase, Banknote,
+  Settings, ChevronLeft, ChevronRight, Banknote,
   Truck, Shield, Database, FileSearch, TrendingUp,
-  Receipt, CreditCard, CircleDollarSign, Landmark, BookOpen,
-  Cog, Eye, ShoppingCart, Wallet, Coins, Boxes, ListChecks,
-  ClipboardCheck, Award, RefreshCw, Bell, Search,
-  GitBranch,   HandCoins, FileClock, FileWarning, Clock,
+  Receipt, CreditCard, Landmark, BookOpen,
+  Cog, Eye, ShoppingCart, Wallet, Coins, ListChecks,
+  ClipboardCheck, RefreshCw, Bell,
+  HandCoins, FileClock, FileWarning, Clock,
   Building2, ScrollText, IdCard, Globe,
-  Ship, ArrowLeftRight
+  Ship, ArrowLeftRight, Sparkles
 } from "lucide-react";
 import LanguageSwitcher from "./LanguageSwitcher";
 
@@ -45,7 +45,7 @@ const menuSections = (t: (key: string) => string) => [
       { label: t("nav.products"), icon: Package, path: '/products' },
       { label: t("nav.inventory"), icon: Database, path: '/inventory' },
       { label: t("inventory.transfer"), icon: RefreshCw, path: '/stock-transfers' },
-      { label: "BOM", icon: ListChecks, path: '/bom' },
+      { label: t("common.bom"), icon: ListChecks, path: '/bom' },
       { label: t("production.liveProduction"), icon: TrendingUp, path: '/live-production' },
       { label: t("production.orders"), icon: Factory, path: '/production' },
     ],
@@ -58,9 +58,10 @@ const menuSections = (t: (key: string) => string) => [
       { label: t("accounting.trialBalance"), icon: Calculator, path: '/accounting/trial-balance' },
       { label: t("reports.title"), icon: TrendingUp, path: '/accounting/statements' },
       { label: t("nav.expenses"), icon: Wallet, path: '/expenses' },
-      { label: "الحسابات النقدية والبنكية", icon: Landmark, path: '/cashbank' },
-      { label: "الصرفات النثرية", icon: Coins, path: '/petty-cash' },
-      { label: "الشيكات", icon: FileWarning, path: '/cheques' },
+      { label: t("nav.cashBankAccounts"), icon: Landmark, path: '/cashbank' },
+      { label: t("nav.pettyCash"), icon: Coins, path: '/petty-cash' },
+      { label: t("nav.cheques"), icon: FileWarning, path: '/cheques' },
+      { label: t("nav.operatingAdvances"), icon: HandCoins, path: '/operating-advances' },
     ],
   },
   {
@@ -68,8 +69,8 @@ const menuSections = (t: (key: string) => string) => [
     items: [
       { label: t("hr.employees"), icon: UserCog, path: '/hr/employees' },
       { label: t("nav.payroll"), icon: Banknote, path: '/payroll' },
-      { label: "العمل الإضافي", icon: Clock, path: '/overtime' },
-      { label: " سلف الموظفين", icon: HandCoins, path: '/employee-advances' },
+      { label: t("nav.overtime"), icon: Clock, path: '/overtime' },
+      { label: t("nav.employeeAdvances"), icon: HandCoins, path: '/employee-advances' },
       { label: t("nav.operations"), icon: ClipboardList, path: '/operations' },
       { label: t("nav.maintenance"), icon: Wrench, path: '/maintenance' },
       { label: t("nav.machines"), icon: Cog, path: '/machines' },
@@ -77,20 +78,20 @@ const menuSections = (t: (key: string) => string) => [
     ],
   },
   {
-    title: "الحكومة",
+    title: t("nav.government"),
     items: [
-      { label: "بوابة الحكومة", icon: Building2, path: '/government' },
-      { label: "وزارة العمل", icon: ScrollText, path: '/government/labour' },
-      { label: "الإقامة والجوازات", icon: IdCard, path: '/government/residency' },
-      { label: "التكامل الحكومي", icon: Globe, path: '/government/integrations' },
+      { label: t("nav.governmentPortal"), icon: Building2, path: '/government' },
+      { label: t("nav.ministryOfLabour"), icon: ScrollText, path: '/government/labour' },
+      { label: t("nav.residencyPassports"), icon: IdCard, path: '/government/residency' },
+      { label: t("nav.governmentIntegration"), icon: Globe, path: '/government/integrations' },
     ],
   },
   {
-    title: "الاستيراد والتعاملات",
+    title: t("nav.imports"),
     items: [
-      { label: "تتبع الشحنات", icon: Ship, path: '/imports' },
-      { label: "المبادلة والمقايضة", icon: ArrowLeftRight, path: '/barter' },
-      { label: "الأقساط والقروض", icon: CreditCard, path: '/installments' },
+      { label: t("nav.shipmentTracking"), icon: Ship, path: '/imports' },
+      { label: t("nav.barter"), icon: ArrowLeftRight, path: '/barter' },
+      { label: t("nav.installments"), icon: CreditCard, path: '/installments' },
     ],
   },
   {
@@ -102,22 +103,23 @@ const menuSections = (t: (key: string) => string) => [
   {
     title: t("nav.tools"),
     items: [
-      { label: "مسح ضوئي", icon: FileSearch, path: '/tools/ocr' },
-      { label: "مساعد الذكاء الاصطناعي", icon: TrendingUp, path: '/tools/ai' },
-      { label: "استيراد تاريخي", icon: Database, path: '/tools/historical-import' },
-      { label: "استيراد Excel", icon: Database, path: '/tools/excel-import' },
-      { label: "الفواتير الإلكترونية", icon: Receipt, path: '/tools/einvoice' },
-      { label: "النسخ الاحتياطي", icon: Database, path: '/tools/backup' },
-      { label: "التكاملات", icon: CreditCard, path: '/tools/integrations' },
+      { label: t("nav.scan"), icon: FileSearch, path: '/tools/ocr' },
+      { label: t("nav.aiAssistant"), icon: TrendingUp, path: '/tools/ai' },
+      { label: t("nav.aiFileImport"), icon: Sparkles, path: '/tools/ai-file-import' },
+      { label: t("nav.historicalImport"), icon: Database, path: '/tools/historical-import' },
+      { label: t("nav.excelImport"), icon: Database, path: '/tools/excel-import' },
+      { label: t("nav.einvoice"), icon: Receipt, path: '/tools/einvoice' },
+      { label: t("nav.backup"), icon: Database, path: '/tools/backup' },
+      { label: t("nav.integrations"), icon: CreditCard, path: '/tools/integrations' },
     ],
   },
   {
     title: t("nav.settings"),
     items: [
-      { label: "الإعدادات", icon: Settings, path: '/settings' },
-      { label: "إدارة المستخدمين", icon: Shield, path: '/settings/users' },
-      { label: "التجديدات", icon: FileClock, path: '/renewals' },
-      { label: "سجل التدقيق", icon: ClipboardCheck, path: '/audit-log' },
+      { label: t("nav.settings"), icon: Settings, path: '/settings' },
+      { label: t("nav.userManagement"), icon: Shield, path: '/settings/users' },
+      { label: t("nav.renewals"), icon: FileClock, path: '/renewals' },
+      { label: t("nav.auditLog"), icon: ClipboardCheck, path: '/audit-log' },
     ],
   },
 ];
@@ -134,9 +136,9 @@ const Sidebar = memo(function Sidebar({ collapsed, onToggle, currentPath }: Side
   return (
     <aside
       role="navigation"
-      aria-label="القائمة الرئيسية"
+      aria-label={t("common.mainMenu")}
       className="fixed right-0 top-0 h-full bg-surface-900/80 backdrop-blur-xl border-l border-surface-700/50 z-40 flex flex-col"
-      style={{ width: collapsed ? '72px' : '260px', transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)' }}
+      style={{ width: collapsed ? '72px' : 'var(--sidebar-width, 260px)', transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)' }}
     >
       <div className="h-16 flex items-center px-4 border-b border-surface-700/50">
         {!collapsed ? (
@@ -154,7 +156,7 @@ const Sidebar = memo(function Sidebar({ collapsed, onToggle, currentPath }: Side
           </div>
         ) : (
           <div className="flex flex-col items-center gap-1">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-700 to-brand-900 flex items-center justify-center shadow-glow mx-auto cursor-pointer" onClick={() => navigate('/')} aria-label="الصفحة الرئيسية">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-700 to-brand-900 flex items-center justify-center shadow-glow mx-auto cursor-pointer" onClick={() => navigate('/')} aria-label={t("common.home")}>
               <Factory className="w-5 h-5 text-gold-400" aria-hidden="true" />
             </div>
             <LanguageSwitcher />
@@ -162,7 +164,7 @@ const Sidebar = memo(function Sidebar({ collapsed, onToggle, currentPath }: Side
         )}
       </div>
 
-      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1" aria-label="التنقل">
+      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1" aria-label={t("common.navigation")}>
         {menuSections(t).map((section) => (
           <div key={section.title} role="group" aria-label={section.title}>
             {!collapsed && (
@@ -192,7 +194,7 @@ const Sidebar = memo(function Sidebar({ collapsed, onToggle, currentPath }: Side
       <div className="p-2 border-t border-surface-700/50">
         <button
           onClick={onToggle}
-          aria-label={collapsed ? "توسيع القائمة" : "طي القائمة"}
+          aria-label={collapsed ? t("common.expandMenu") : t("common.collapseMenu")}
           aria-expanded={!collapsed}
           className="btn-ghost w-full flex items-center justify-center gap-2 py-2"
         >

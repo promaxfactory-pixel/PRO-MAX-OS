@@ -162,6 +162,44 @@ pub fn login(
 }
 
 #[tauri::command]
+pub fn quick_login(state: State<'_, DbState>) -> Result<LoginResult, AppError> {
+    let conn = state.0.lock()?;
+
+    let row = conn
+        .query_row(
+            "SELECT id, username, full_name, role, active, must_change_password, created_at, password_hash FROM users WHERE role='admin' AND active=1 ORDER BY id LIMIT 1",
+            [],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, i64>(4)?,
+                    row.get::<_, i64>(5)?,
+                    row.get::<_, Option<String>>(6)?,
+                    row.get::<_, String>(7)?,
+                ))
+            },
+        )
+        .map_err(|_| AppError::auth("لا يوجد حساب مدير نشط للدخول السريع"))?;
+
+    let user = User {
+        id: row.0,
+        username: row.1.clone(),
+        full_name: row.2,
+        role: row.3.clone(),
+        active: row.4,
+        must_change_password: row.5,
+        created_at: row.6,
+    };
+
+    let token = crypto::create_tauri_token(row.0, &row.1, &row.3);
+
+    Ok(LoginResult { user, token })
+}
+
+#[tauri::command]
 pub fn get_current_user(state: State<'_, DbState>, user_id: i64) -> Result<User, AppError> {
     let conn = state.0.lock()?;
     conn.query_row(

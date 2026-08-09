@@ -35,6 +35,7 @@ pub fn run() {
             commands::auth::get_current_user,
             commands::auth::change_password,
             commands::auth::validate_token,
+            commands::auth::quick_login,
             // Dashboard
             commands::dashboard::get_dashboard_stats,
             commands::dashboard::get_daily_brief,
@@ -45,6 +46,7 @@ pub fn run() {
             commands::customers::update_customer,
             commands::customers::delete_customer,
             commands::customers::get_customer_statement,
+            commands::customers::create_customer_payment,
             // Invoices
             commands::invoices::list_invoices,
             commands::invoices::get_invoice,
@@ -161,6 +163,7 @@ pub fn run() {
             commands::bom::list_boms,
             commands::bom::create_bom,
             // Stock Transfers
+            commands::stock_transfers::list_warehouses,
             commands::stock_transfers::list_stock_transfers,
             commands::stock_transfers::create_stock_transfer,
             // Payroll
@@ -266,14 +269,38 @@ pub fn run() {
             commands::ai_assistant::get_ai_settings,
             commands::ai_assistant::ai_chat,
             commands::ai_assistant::chat_with_ai,
+            commands::ai_assistant::ai_chat_with_provider,
             commands::ai_assistant::test_ai_connection,
             commands::ai_assistant::save_ai_provider_settings,
             commands::ai_assistant::ai_analyze_entity,
             commands::ai_assistant::ai_suggest_actions,
+            // AI Provider Layer
+            commands::ai_providers::ai_provider_catalog,
+            commands::ai_providers::ai_provider_statuses,
+            commands::ai_providers::ai_get_provider_settings,
+            commands::ai_providers::ai_save_provider_config,
+            commands::ai_providers::ai_test_provider,
+            commands::ai_providers::ai_failover_chat,
+            commands::ai_providers::ai_get_available_models,
+            // AI File Import
+            commands::ai_file_import::ai_analyze_document,
+            commands::ai_file_import::ai_list_extractions,
+            commands::ai_file_import::ai_get_extraction,
+            commands::ai_file_import::ai_delete_extraction,
+            commands::ai_file_import::ai_update_extraction,
+            commands::ai_file_import::ai_commit_extraction,
+            commands::ai_file_import::ai_duplicate_check,
             // Historical Import
             commands::historical_import::preview_import,
             commands::historical_import::execute_import,
             commands::historical_import::get_import_templates,
+            commands::historical_import::import_get_history,
+            // Integrations
+            commands::integrations::integrations_get_settings,
+            commands::integrations::integrations_save_settings,
+            commands::integrations::integrations_test_whatsapp,
+            commands::integrations::integrations_test_email,
+            commands::integrations::integrations_test_printer,
             // File Reader
             commands::file_reader::file_read_text,
             commands::file_reader::file_read_spreadsheet,
@@ -319,6 +346,7 @@ pub fn run() {
             commands::barter_exchange::create_barter_exchange,
             commands::barter_exchange::get_barter_balance,
             // Installment Payments
+            commands::installment_payments::list_installments,
             commands::installment_payments::list_installment_payments,
             commands::installment_payments::create_installment_payment,
             commands::installment_payments::mark_installment_paid,

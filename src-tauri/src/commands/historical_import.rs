@@ -691,9 +691,23 @@ pub fn preview_import(
 #[tauri::command]
 pub fn execute_import(
     state: State<'_, DbState>,
-    input: ImportRequest,
+    file_path: String,
+    entity_type: String,
+    mappings: Vec<FieldMapping>,
+    skip_first_row: Option<bool>,
 ) -> Result<ImportResult, AppError> {
     let conn = state.0.lock()?;
+
+    let (_headers, raw_data) = read_file_data(&file_path)?;
+    let all_rows: Vec<Vec<String>> = raw_data.iter().map(|row| row_data_to_strings(row)).collect();
+
+    let input = ImportRequest {
+        entity_type,
+        data: all_rows,
+        mappings,
+        skip_first_row,
+    };
+
     let skip_header = input.skip_first_row.unwrap_or(true);
     let data = if skip_header && !input.data.is_empty() {
         &input.data[1..]
@@ -1344,12 +1358,69 @@ pub fn execute_import(
         }
     }
 
+    let file_name = Path::new(&file_path)
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| file_path.clone());
+    let _ = conn.execute(
+        "INSERT INTO import_history (import_type, file_name, total_rows, imported, skipped, status) VALUES(?1, ?2, ?3, ?4, ?5, 'completed')",
+        rusqlite::params![
+            input.entity_type,
+            file_name,
+            (imported + skipped) as i64,
+            imported as i64,
+            skipped as i64,
+        ],
+    );
+
     Ok(ImportResult {
         entity_type: input.entity_type,
         imported,
         skipped,
         errors,
     })
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ImportHistoryEntry {
+    pub id: i64,
+    pub entity_type: String,
+    pub file_name: String,
+    pub rows_imported: i64,
+    pub rows_skipped: i64,
+    pub created_at: Option<String>,
+}
+
+#[tauri::command]
+pub fn import_get_history(state: State<'_, DbState>) -> Result<Vec<ImportHistoryEntry>, AppError> {
+    let conn = state.0.lock()?;
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS import_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            import_type TEXT NOT NULL,
+            file_name TEXT NOT NULL,
+            total_rows INTEGER NOT NULL DEFAULT 0,
+            imported INTEGER NOT NULL DEFAULT 0,
+            skipped INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'completed',
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            created_by TEXT NOT NULL DEFAULT 'system'
+        );",
+    )?;
+    let mut stmt = conn.prepare(
+        "SELECT id, import_type, file_name, imported, skipped, created_at FROM import_history ORDER BY id DESC LIMIT 200",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(ImportHistoryEntry {
+            id: row.get(0)?,
+            entity_type: row.get(1)?,
+            file_name: row.get(2)?,
+            rows_imported: row.get(3)?,
+            rows_skipped: row.get(4)?,
+            created_at: row.get(5)?,
+        })
+    })?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(AppError::from)
 }
 
 #[tauri::command]

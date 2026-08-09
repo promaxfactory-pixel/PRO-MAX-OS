@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { Search, X, User, Package, FileText, Truck, UserCog } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
@@ -14,32 +15,32 @@ interface SearchResult {
 
 const typeMeta: Record<
   SearchResult["type"],
-  { label: string; icon: typeof User; route: (id: number) => string }
+  { labelKey: string; icon: typeof User; route: (id: number) => string }
 > = {
   customer: {
-    label: "العملاء",
+    labelKey: "nav.customers",
     icon: User,
     route: (id) => `/customers/${id}`,
   },
   product: {
-    label: "المنتجات",
+    labelKey: "nav.products",
     icon: Package,
     route: (id) => `/products/${id}`,
   },
   invoice: {
-    label: "الفواتير",
+    labelKey: "nav.invoices",
     icon: FileText,
     route: (id) => `/invoices/${id}`,
   },
   supplier: {
-    label: "الموردين",
+    labelKey: "nav.suppliers",
     icon: Truck,
     route: (id) => `/suppliers/${id}`,
   },
   employee: {
-    label: "الموظفين",
+    labelKey: "nav.employees",
     icon: UserCog,
-    route: (id) => `/employees/${id}`,
+    route: (id) => `/hr/employees/${id}`,
   },
 };
 
@@ -61,6 +62,7 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { addNotification } = useUIStore();
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -177,12 +179,12 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
         setResults(all);
       } catch (e) {
         setResults([]);
-        addNotification({ type: "error", title: "خطأ", message: "فشل البحث" });
+        addNotification({ type: "error", title: t("common.error"), message: t("search.searchFailed") });
       } finally {
         setLoading(false);
       }
     },
-    [],
+    [t],
   );
 
   useEffect(() => {
@@ -218,7 +220,7 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="بحث..."
+            placeholder={`${t("common.search")}...`}
             className="flex-1 bg-transparent text-white text-sm placeholder-surface-400 outline-none"
           />
           <kbd className="hidden sm:inline text-[10px] text-surface-400 border border-surface-700 rounded px-1.5 py-0.5">
@@ -238,18 +240,18 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
           {!query && (
             <div className="flex flex-col items-center justify-center py-12 text-surface-400">
               <Search className="h-10 w-10 mb-3 opacity-30" />
-              <p className="text-sm">اكتب للبحث...</p>
+              <p className="text-sm">{t("search.typeToSearch")}</p>
             </div>
           )}
 
           {query && !loading && results.length === 0 && (
             <div className="py-12 text-center text-surface-400 text-sm">
-              لا توجد نتائج لـ &quot;{query}&quot;
+              {t("search.noResultsFor", { query })}
             </div>
           )}
 
           {loading && (
-            <div className="py-12 text-center text-surface-400 text-sm">جاري البحث...</div>
+            <div className="py-12 text-center text-surface-400 text-sm">{t("search.searching")}</div>
           )}
 
           {Object.entries(groupedResults).map(([type, items]) => {
@@ -262,7 +264,7 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
                 <div className="flex items-center gap-2 px-3 py-1.5">
                   <Icon className="h-3.5 w-3.5 text-surface-400" />
                   <span className="text-xs font-semibold text-surface-400 uppercase tracking-wider">
-                    {meta.label}
+                    {t(meta.labelKey)}
                   </span>
                 </div>
                 {items.map((item) => (

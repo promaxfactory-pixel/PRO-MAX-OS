@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { formatDate, htmlEscape } from "@/utils/printUtils";
 
 interface Props {
@@ -6,12 +7,14 @@ interface Props {
 
 export default function DeliveryNotePrintTemplate({ data }: Props) {
   if (!data) return null;
+  const { t, i18n } = useTranslation();
   const { invoice, customer, lines, company } = data;
+  const isRtl = ['ar', 'ur'].includes(i18n.language);
   return (
-    <div id="print-area">
+    <div id="print-area" style={{ direction: isRtl ? 'rtl' : 'ltr' }}>
       <div className="print-header">
         <div>
-          <div className="company-name">{htmlEscape(company.name) || "المصانع"}</div>
+          <div className="company-name">{htmlEscape(company.name) || t("print.factories")}</div>
           <div className="factory-name">{htmlEscape(company.factory_name)}</div>
           <div style={{ fontSize: 9, color: "#6b7280", marginTop: 4 }}>
             {htmlEscape(company.address)}<br />
@@ -19,28 +22,28 @@ export default function DeliveryNotePrintTemplate({ data }: Props) {
           </div>
         </div>
         <div>
-          <div className="doc-title">إيصال توصيل</div>
+          <div className="doc-title">{t("print.deliveryNoteTitle")}</div>
           <div className="doc-meta">
-            رقم الفاتورة: {htmlEscape(invoice.inv_no)}<br />
-            التاريخ: {formatDate(invoice.date)}
+            {t("invoice.invoiceNo")}: {htmlEscape(invoice.inv_no)}<br />
+            {t("print.dateLabel")} {formatDate(invoice.date)}
           </div>
         </div>
       </div>
 
       <div className="info-grid">
-        <div><span className="label">العميل: </span><span className="value">{htmlEscape(invoice.customer_name)}</span></div>
-        <div><span className="label">العنوان: </span><span className="value">{htmlEscape(customer.address)}</span></div>
-        <div><span className="label">الهاتف: </span><span className="value">{htmlEscape(customer.phone)}</span></div>
+        <div><span className="label">{t("print.customerLabel")}: </span><span className="value">{htmlEscape(invoice.customer_name)}</span></div>
+        <div><span className="label">{t("customer.address")}: </span><span className="value">{htmlEscape(customer.address)}</span></div>
+        <div><span className="label">{t("customer.phone")}: </span><span className="value">{htmlEscape(customer.phone)}</span></div>
       </div>
 
       <table>
         <thead>
           <tr>
             <th>#</th>
-            <th>المنتج</th>
-            <th>الكراتين</th>
-            <th>كوب/كرتون</th>
-            <th>الإجمالي (كوب)</th>
+            <th>{t("print.productLabel")}</th>
+            <th>{t("print.cartons")}</th>
+            <th>{t("print.cupsPerCarton")}</th>
+            <th>{t("print.totalInCups")}</th>
           </tr>
         </thead>
         <tbody>
@@ -57,20 +60,20 @@ export default function DeliveryNotePrintTemplate({ data }: Props) {
       </table>
 
       <div style={{ marginTop: 16, padding: "8px 12px", background: "#f8f9fc", borderRadius: 6, fontSize: 10 }}>
-        <strong>إجمالي الكراتين: </strong>{lines.reduce((s: number, l: any) => s + (l.cartons || 0), 0)}
+        <strong>{t("print.totalCartons")}: </strong>{lines.reduce((s: number, l: any) => s + (l.cartons || 0), 0)}
         &nbsp;&nbsp;|&nbsp;&nbsp;
-        <strong>إجمالي الأكواب: </strong>{lines.reduce((s: number, l: any) => s + (l.qty_cups || 0), 0).toLocaleString()}
+        <strong>{t("print.totalCups")}: </strong>{lines.reduce((s: number, l: any) => s + (l.qty_cups || 0), 0).toLocaleString()}
       </div>
 
       <div className="footer">
         <div className="sig-box">
           <div className="sig-line"></div>
-          <div>توقيع المستلم</div>
+          <div>{t("print.receivedBy")}</div>
         </div>
-        <div className="stamp-box">ختم الشركة</div>
+        <div className="stamp-box">{t("print.companyStamp")}</div>
         <div className="sig-box">
           <div className="sig-line"></div>
-          <div>توقيع السائق</div>
+          <div>{t("print.driverSignature")}</div>
         </div>
       </div>
     </div>

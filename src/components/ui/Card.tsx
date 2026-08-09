@@ -42,18 +42,26 @@ export function StatCard({ title, value, subtitle, icon, trend, trendValue, clas
     <div className={cn('stat-card', className)}>
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-sm text-surface-400 font-medium">{title}</p>
-          <p className="text-2xl font-bold text-white mt-1">{value}</p>
-          {subtitle && <p className="text-xs text-surface-400 mt-1">{subtitle}</p>}
+          <p className="text-sm text-[var(--text-secondary)] font-medium">{title}</p>
+          <p className="text-2xl font-bold text-[var(--text-primary)] mt-1 font-display">{value}</p>
+          {subtitle && <p className="text-xs text-[var(--text-muted)] mt-1">{subtitle}</p>}
           {trend && trendValue && (
-            <div className={`flex items-center gap-1 mt-2 text-xs font-medium ${trend === 'up' ? 'text-emerald-400' : trend === 'down' ? 'text-red-400' : 'text-surface-400'}`}>
+            <div className={`flex items-center gap-1 mt-2 text-xs font-medium ${trend === 'up' ? 'text-emerald-400' : trend === 'down' ? 'text-red-400' : 'text-[var(--text-muted)]'}`}>
               <span>{trend === 'up' ? '↑' : trend === 'down' ? '↓' : '→'}</span>
               <span>{trendValue}</span>
             </div>
           )}
         </div>
         {icon && (
-          <div className="w-12 h-12 rounded-xl bg-brand-800/30 border border-brand-500/20 flex items-center justify-center text-brand-400">
+          <div
+            className="w-12 h-12 rounded-xl border flex items-center justify-center"
+            style={{
+              background: "color-mix(in srgb, var(--mode-accent) 14%, transparent)",
+              borderColor: "color-mix(in srgb, var(--mode-accent) 22%, transparent)",
+              color: "var(--mode-accent)",
+              boxShadow: "0 0 18px var(--mode-glow)",
+            }}
+          >
             {icon}
           </div>
         )}

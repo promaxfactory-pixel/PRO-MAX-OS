@@ -223,27 +223,38 @@ pub fn sales_by_customer_report(state: State<'_, DbState>, date_from: String, da
 }
 
 #[tauri::command]
-pub fn unpaid_invoices_report(state: State<'_, DbState>) -> Result<serde_json::Value, AppError> {
+pub fn unpaid_invoices_report(
+    state: State<'_, DbState>,
+    as_of: Option<String>,
+) -> Result<serde_json::Value, AppError> {
     let conn = state.0.lock()?;
-    let mut stmt = conn.prepare(
+    let mut sql = String::from(
         "SELECT si.id, si.inv_no, c.name, si.date, si.total_milli, si.paid_milli, si.total_milli - si.paid_milli
          FROM sales_invoices si
          JOIN customers c ON c.id = si.customer_id
-         WHERE si.total_milli > si.paid_milli AND si.status IN ('Posted', 'Issued')
-         ORDER BY si.date ASC"
-    )?;
-    let data: Vec<serde_json::Value> = stmt.query_map([], |r| {
-        Ok(serde_json::json!({
+         WHERE si.total_milli > si.paid_milli AND si.status IN ('Posted', 'Issued')",
+    );
+    let mut params_vec: Vec<String> = Vec::new();
+    if let Some(as_of_date) = as_of {
+        if !as_of_date.trim().is_empty() {
+            sql.push_str(" AND si.date <= ?1");
+            params_vec.push(as_of_date);
+        }
+    }
+    sql.push_str(" ORDER BY si.date ASC");
+    let mut stmt = conn.prepare(&sql)?;
+    let mut rows = stmt.query(rusqlite::params_from_iter(params_vec.iter()))?;
+    let mut data: Vec<serde_json::Value> = Vec::new();
+    while let Some(r) = rows.next()? {
+        data.push(serde_json::json!({
             "id": r.get::<_, i64>(0)?,
             "inv_no": r.get::<_, Option<String>>(1)?,
             "customer_name": r.get::<_, String>(2)?,
             "date": r.get::<_, String>(3)?,
             "total_milli": r.get::<_, i64>(4)?,
             "due_milli": r.get::<_, i64>(6)?,
-        }))
-    })?
-    .filter_map(|r| r.ok())
-    .collect();
+        }));
+    }
     Ok(serde_json::json!({ "invoices": data, "total_due": data.iter().map(|d| d["due_milli"].as_i64().unwrap_or(0)).sum::<i64>() }))
 }
 

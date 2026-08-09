@@ -1,0 +1,9 @@
+{
+  "auth": {
+    "copyright": { "en": "Mayadeen Bahla National Company. All rights reserved.", "ar": "شركة ميادين بهلا الوطنية. جميع الحقوق محفوظة." },
+    "admin": { "en": "Admin", "ar": "المدير" }
+  },
+  "common": {
+    "bom": { "en": "BOM", "ar": "قائمة التكوين (BOM)" }
+  }
+}

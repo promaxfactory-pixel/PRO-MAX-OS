@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import i18n from '@/i18n';
 
 interface LicenseInfo {
   customer_name: string;
@@ -37,7 +38,7 @@ export const useLicenseStore = create<LicenseState>((set) => ({
         message: result.message,
       });
     } catch {
-      set({ isLicensed: false, isChecking: false, message: 'تعذر التحقق من الترخيص' });
+      set({ isLicensed: false, isChecking: false, message: i18n.t('license.verifyFailed') });
     }
   },
   activateLicense: async (key: string) => {

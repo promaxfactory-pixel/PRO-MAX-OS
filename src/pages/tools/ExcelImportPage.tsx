@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
@@ -19,14 +20,13 @@ type ImportType = "journal" | "customers" | "products" | "inventory";
 interface PreviewRow { [key: string]: any; }
 interface ColumnMapping { source: string; target: string; }
 interface ValidationResult { row: number; column: string; message: string; severity: "error" | "warning"; }
-interface ImportRecord { id: number; type: string; file_name: string; rows_imported: number; created_at: string; }
-
-const IMPORT_TYPES: { value: ImportType; label: string }[] = [
-  { value: "journal", label: "القيود اليومية" },
-  { value: "customers", label: "العملاء" },
-  { value: "products", label: "المنتجات" },
-  { value: "inventory", label: "المخزون" },
-];
+interface ImportRecord { id: number; import_type: string; file_name: string; imported: number; created_at: string; }
+interface ExcelAnalysisResponse {
+  total_rows: number;
+  headers: string[];
+  validation_errors: { row: number; column: string; value: string; error_type: string; message: string; suggestion: string }[];
+  warnings: string[];
+}
 
 const TARGET_FIELDS: Record<ImportType, string[]> = {
   journal: ["date", "account_code", "debit", "credit", "memo"],
@@ -36,7 +36,15 @@ const TARGET_FIELDS: Record<ImportType, string[]> = {
 };
 
 export default function ExcelImportPage() {
+  const { t } = useTranslation();
   const addNotification = useUIStore((s) => s.addNotification);
+
+  const IMPORT_TYPES: { value: ImportType; label: string }[] = [
+    { value: "journal", label: t("tools.excelImport.typeJournal") },
+    { value: "customers", label: t("tools.excelImport.typeCustomers") },
+    { value: "products", label: t("tools.excelImport.typeProducts") },
+    { value: "inventory", label: t("tools.excelImport.typeInventory") },
+  ];
   const [file, setFile] = useState<File | null>(null);
   const [importType, setImportType] = useState<ImportType>("journal");
   const [headers, setHeaders] = useState<string[]>([]);
@@ -62,12 +70,18 @@ export default function ExcelImportPage() {
     setErrors([]);
     try {
       const path = (selected as FileWithPath).path || selected.name;
-      const data = await invoke<{ headers: string[]; rows: PreviewRow[] }>("excel_read_preview", { filePath: path, importType });
+      const data = await invoke<{ headers: string[]; rows: (string | number | null)[][]; total_rows: number }>("excel_read_preview", { file_path: path });
       setHeaders(data.headers);
-      setRows(data.rows.slice(0, 5));
+      setRows(
+        data.rows.slice(0, 5).map((row) => {
+          const obj: PreviewRow = {};
+          data.headers.forEach((h, i) => { obj[h] = row[i] ?? ""; });
+          return obj;
+        })
+      );
       setMappings(data.headers.map((h) => ({ source: h, target: "" })));
     } catch (err) {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" });
+      addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("tools.loadError") });
     }
   };
 
@@ -79,14 +93,24 @@ export default function ExcelImportPage() {
     if (!file) return;
     try {
       const path = (file as FileWithPath).path || file.name;
-      const mapped = mappings.filter((m) => m.target);
-      const data = await invoke<ValidationResult[]>("excel_analyze_data", {
-        filePath: path, importType, mappings: mapped,
+      const data = await invoke<ExcelAnalysisResponse>("excel_analyze_data", {
+        input: {
+          file_path: path,
+          sheet_name: "",
+          import_type: importType,
+        },
       });
-      setErrors(data);
+      setErrors(
+        data.validation_errors.map((v) => ({
+          row: v.row,
+          column: v.column,
+          message: v.message,
+          severity: v.error_type === "error" ? "error" : "warning",
+        }))
+      );
       setStep("review");
     } catch (err) {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" });
+      addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("tools.loadError") });
     }
   };
 
@@ -103,12 +127,21 @@ export default function ExcelImportPage() {
         inventory: "excel_import_inventory",
       };
       await invoke(commandMap[importType], {
-        filePath: path, mappings: mapped, dryRun,
+        input: {
+          file_path: path,
+          sheet_name: "",
+          import_type: importType,
+          column_mapping: {
+            mappings: mapped.map((m) => ({ excel_column: m.source, system_field: m.target })),
+          },
+          skip_first_row: true,
+          dry_run: dryRun,
+        },
       });
       setStep("done");
       loadHistory();
     } catch (err) {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء الحفظ" });
+      addNotification({ id: crypto.randomUUID(), type: "error", title: t("common.error"), message: t("tools.saveError") });
     } finally {
       setImporting(false);
     }
@@ -120,7 +153,6 @@ export default function ExcelImportPage() {
 
   const targetFields = TARGET_FIELDS[importType];
   const errorCount = errors.filter((e) => e.severity === "error").length;
-  const warningCount = errors.filter((e) => e.severity === "warning").length;
 
   return (
     <div className="space-y-6">
@@ -128,12 +160,12 @@ export default function ExcelImportPage() {
         <div>
           <h1 className="page-title flex items-center gap-2">
             <FileSpreadsheet className="w-6 h-6 text-gold-400" />
-            استيراد Excel
+            {t("tools.excelImport.title")}
           </h1>
-          <p className="page-subtitle">استيراد البيانات من ملفات Excel</p>
+          <p className="page-subtitle">{t("tools.excelImport.subtitle")}</p>
         </div>
         {step !== "upload" && (
-          <Button variant="ghost" icon={<RotateCcw className="w-4 h-4" />} onClick={reset}>بدء من جديد</Button>
+          <Button variant="ghost" icon={<RotateCcw className="w-4 h-4" />} onClick={reset}>{t("tools.restart")}</Button>
         )}
       </div>
 
@@ -143,18 +175,18 @@ export default function ExcelImportPage() {
             <Card>
               <div className="space-y-4">
                 <div>
-                  <label className="form-label">نوع البيانات</label>
-                  <select value={importType} onChange={(e) => setImportType(e.target.value as ImportType)} className="input-field w-64" aria-label="نوع البيانات">
-                    {IMPORT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  <label className="form-label">{t("tools.excelImport.dataType")}</label>
+                  <select value={importType} onChange={(e) => setImportType(e.target.value as ImportType)} className="input-field w-64" aria-label={t("tools.excelImport.dataType")}>
+                    {IMPORT_TYPES.map((it) => <option key={it.value} value={it.value}>{it.label}</option>)}
                   </select>
                 </div>
                 <div
                   className="border-2 border-dashed rounded-xl p-8 text-center cursor-pointer border-surface-600 hover:border-brand-500/50 transition-all"
                   onClick={() => document.getElementById("excel-input")?.click()}
                 >
-                  <input id="excel-input" type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileChange} aria-label="اختر ملف Excel" />
+                  <input id="excel-input" type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileChange} aria-label={t("tools.excelImport.chooseFileAria")} />
                   <Upload className="w-12 h-12 mx-auto mb-3 text-surface-500" />
-                  <p className="text-surface-400">اختر ملف Excel أو CSV</p>
+                  <p className="text-surface-400">{t("tools.excelImport.chooseExcelCsv")}</p>
                 </div>
               </div>
             </Card>
@@ -163,7 +195,7 @@ export default function ExcelImportPage() {
           {step === "map" && (
             <>
               <Card>
-                <h3 className="section-title mb-4">تعيين الأعمدة</h3>
+                <h3 className="section-title mb-4">{t("tools.columnMapping")}</h3>
                 <div className="space-y-3">
                   {mappings.map((m, i) => (
                     <div key={i} className="flex items-center gap-4">
@@ -174,19 +206,19 @@ export default function ExcelImportPage() {
                         onChange={(e) => handleMappingChange(i, e.target.value)}
                         className="input-field flex-1"
                       >
-                        <option value="">— تخطي —</option>
+                        <option value="">{t("tools.skipOption")}</option>
                         {targetFields.map((f) => <option key={f} value={f}>{f}</option>)}
                       </select>
                     </div>
                   ))}
                 </div>
                 <div className="mt-4 flex justify-end">
-                  <Button icon={<CheckCircle2 className="w-4 h-4" />} onClick={handleAnalyze}>تحليل البيانات</Button>
+                  <Button icon={<CheckCircle2 className="w-4 h-4" />} onClick={handleAnalyze}>{t("tools.excelImport.analyzeData")}</Button>
                 </div>
               </Card>
 
               <Card>
-                <h3 className="section-title mb-3">معاينة البيانات ({rows.length} صف)</h3>
+                <h3 className="section-title mb-3">{t("tools.excelImport.dataPreviewCount", { count: rows.length })}</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
@@ -209,18 +241,18 @@ export default function ExcelImportPage() {
 
           {step === "review" && (
             <Card>
-              <h3 className="section-title mb-4">نتائج التحليل</h3>
+              <h3 className="section-title mb-4">{t("tools.excelImport.analysisResults")}</h3>
               {errors.length === 0 ? (
                 <div className="text-center py-6">
                   <CheckCircle2 className="w-12 h-12 mx-auto mb-3 text-emerald-400" />
-                  <p className="text-surface-300">البيانات صالحة للاستيراد</p>
+                  <p className="text-surface-300">{t("tools.excelImport.dataValid")}</p>
                 </div>
               ) : (
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {errors.map((e, i) => (
                     <div key={i} className={cn("flex items-center gap-2 p-2 rounded-lg text-sm", e.severity === "error" ? "bg-red-500/10 text-red-400" : "bg-amber-500/10 text-amber-400")}>
                       {e.severity === "error" ? <XCircle className="w-4 h-4 flex-shrink-0" /> : <AlertTriangle className="w-4 h-4 flex-shrink-0" />}
-                      <span>صف {e.row}: {e.column} - {e.message}</span>
+                      <span>{t("tools.excelImport.rowColumnError", { row: e.row, column: e.column, message: e.message })}</span>
                     </div>
                   ))}
                 </div>
@@ -228,7 +260,7 @@ export default function ExcelImportPage() {
               <div className="mt-4 flex items-center justify-between">
                 <label className="flex items-center gap-2 text-sm text-surface-400 cursor-pointer">
                   <input type="checkbox" checked={dryRun} onChange={(e) => setDryRun(e.target.checked)} className="rounded" />
-                  تشغيل تجريبي فقط
+                  {t("tools.excelImport.dryRunOnly")}
                 </label>
                 <Button
                   icon={<Download className="w-4 h-4" />}
@@ -236,7 +268,7 @@ export default function ExcelImportPage() {
                   loading={importing}
                   disabled={errorCount > 0}
                 >
-                  {dryRun ? "تجربة الاستيراد" : "استيراد البيانات"}
+                  {dryRun ? t("tools.excelImport.tryImport") : t("tools.excelImport.importData")}
                 </Button>
               </div>
             </Card>
@@ -246,17 +278,17 @@ export default function ExcelImportPage() {
             <Card>
               <div className="text-center py-8">
                 <CheckCircle2 className="w-16 h-16 mx-auto mb-4 text-emerald-400" />
-                <h3 className="text-lg font-bold text-white mb-2">تم الاستيراد بنجاح</h3>
-                <Button variant="outline" onClick={reset} icon={<RotateCcw className="w-4 h-4" />}>استيراد ملف آخر</Button>
+                <h3 className="text-lg font-bold text-white mb-2">{t("tools.importSuccess")}</h3>
+                <Button variant="outline" onClick={reset} icon={<RotateCcw className="w-4 h-4" />}>{t("tools.excelImport.importAnotherFile")}</Button>
               </div>
             </Card>
           )}
         </div>
 
         <Card>
-          <h3 className="section-title mb-4">سجل الاستيراد</h3>
+          <h3 className="section-title mb-4">{t("tools.importHistory")}</h3>
           {history.length === 0 ? (
-            <p className="text-center text-surface-500 py-4 text-sm">لا توجد سجلات</p>
+            <p className="text-center text-surface-500 py-4 text-sm">{t("tools.noRecords")}</p>
           ) : (
             <div className="space-y-3">
               {history.map((h) => (
@@ -266,8 +298,8 @@ export default function ExcelImportPage() {
                     <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                   </div>
                   <div className="flex justify-between text-xs text-surface-500">
-                    <span>{IMPORT_TYPES.find((t) => t.value === h.type)?.label || h.type}</span>
-                    <span>{h.rows_imported} صف</span>
+                    <span>{IMPORT_TYPES.find((it) => it.value === h.import_type)?.label || h.import_type}</span>
+                    <span>{t("tools.rowsCount", { count: h.imported })}</span>
                   </div>
                 </div>
               ))}

@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import Card from "@/components/ui/Card";
 import { Building2, ScrollText, IdCard, Globe, Clock, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
+import { useTranslation } from "react-i18next";
 
 interface GovDashboard {
   entities_count: number;
@@ -48,6 +49,7 @@ interface DocStatus {
 }
 
 export default function GovernmentDashboardPage() {
+  const { t } = useTranslation();
   const { addNotification } = useUIStore();
   const [dashboard, setDashboard] = useState<GovDashboard | null>(null);
   const [docStatus, setDocStatus] = useState<DocStatus | null>(null);
@@ -60,7 +62,7 @@ export default function GovernmentDashboardPage() {
     ]).then(([d, ds]) => {
       setDashboard(d);
       setDocStatus(ds);
-    }).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false));
+    }).catch((e: unknown) => addNotification({ title: t("common.error"), message: String(e), type: 'error' })).finally(() => setLoading(false));
   }, []);
 
   if (loading) {
@@ -72,26 +74,26 @@ export default function GovernmentDashboardPage() {
   }
 
   const stats = [
-    { label: "الجهات الحكومية", value: dashboard?.entities_count || 0, icon: Building2, color: "text-blue-400" },
-    { label: "التكاملات النشطة", value: dashboard?.active_integrations || 0, icon: Globe, color: "text-emerald-400" },
-    { label: "قيد الانتظار", value: dashboard?.pending_submissions || 0, icon: Clock, color: "text-amber-400" },
-    { label: "تم الإرسال", value: dashboard?.successful_submissions || 0, icon: CheckCircle2, color: "text-emerald-400" },
-    { label: "فشل", value: dashboard?.failed_submissions || 0, icon: XCircle, color: "text-red-400" },
+    { label: t("government.entities"), value: dashboard?.entities_count || 0, icon: Building2, color: "text-blue-400" },
+    { label: t("government.activeIntegrations"), value: dashboard?.active_integrations || 0, icon: Globe, color: "text-emerald-400" },
+    { label: t("government.pending"), value: dashboard?.pending_submissions || 0, icon: Clock, color: "text-amber-400" },
+    { label: t("government.submitted"), value: dashboard?.successful_submissions || 0, icon: CheckCircle2, color: "text-emerald-400" },
+    { label: t("government.failed"), value: dashboard?.failed_submissions || 0, icon: XCircle, color: "text-red-400" },
   ];
 
   const docAlerts = [
-    { label: "جوازات منتهية / وشيكة", value: docStatus?.expiring_passports || 0, icon: IdCard, color: "text-red-400" },
-    { label: "إقامات منتهية / وشيكة", value: docStatus?.expiring_residence || 0, icon: ScrollText, color: "text-amber-400" },
-    { label: "تأشيرات منتهية / وشيكة", value: docStatus?.expiring_visa || 0, icon: IdCard, color: "text-amber-400" },
-    { label: "تصاريح عمل وشيكة", value: docStatus?.expiring_work_permits || 0, icon: ScrollText, color: "text-amber-400" },
+    { label: t("government.expiringPassports"), value: docStatus?.expiring_passports || 0, icon: IdCard, color: "text-red-400" },
+    { label: t("government.expiringResidence"), value: docStatus?.expiring_residence || 0, icon: ScrollText, color: "text-amber-400" },
+    { label: t("government.expiringVisas"), value: docStatus?.expiring_visa || 0, icon: IdCard, color: "text-amber-400" },
+    { label: t("government.expiringWorkPermits"), value: docStatus?.expiring_work_permits || 0, icon: ScrollText, color: "text-amber-400" },
   ];
 
   return (
     <div className="space-y-6">
       <div className="page-header">
         <div>
-          <h1 className="page-title">بوابة التكامل الحكومي</h1>
-          <p className="page-subtitle">ربط تلقائي مع الجهات الحكومية العمانية</p>
+          <h1 className="page-title">{t("government.title")}</h1>
+          <p className="page-subtitle">{t("government.subtitle")}</p>
         </div>
       </div>
 
@@ -107,7 +109,7 @@ export default function GovernmentDashboardPage() {
 
       <div className="grid grid-cols-2 gap-6">
         <Card>
-          <h3 className="section-title">تنبيهات الوثائق الحكومية</h3>
+          <h3 className="section-title">{t("government.docAlerts")}</h3>
           <div className="space-y-3">
             {docAlerts.map((a) => (
               <div key={a.label} className="flex items-center justify-between p-3 bg-surface-800/50 rounded-xl">
@@ -122,7 +124,7 @@ export default function GovernmentDashboardPage() {
         </Card>
 
         <Card>
-          <h3 className="section-title">آخر الإرساليات الحكومية</h3>
+          <h3 className="section-title">{t("government.recentSubmissions")}</h3>
           <div className="space-y-2">
             {dashboard?.recent_submissions.length ? (
               dashboard.recent_submissions.map((sub) => (
@@ -132,19 +134,19 @@ export default function GovernmentDashboardPage() {
                     <p className="text-xs text-surface-500">{sub.created_at}</p>
                   </div>
                   <span className={`badge-${sub.status === 'submitted' ? 'success' : sub.status === 'pending' ? 'warning' : 'danger'}`}>
-                    {sub.status === 'submitted' ? 'تم الإرسال' : sub.status === 'pending' ? 'قيد الانتظار' : 'فشل'}
+                    {sub.status === 'submitted' ? t("government.submitted") : sub.status === 'pending' ? t("government.pending") : t("government.failed")}
                   </span>
                 </div>
               ))
             ) : (
-              <p className="text-sm text-surface-500 text-center py-4">لا توجد إرساليات بعد</p>
+              <p className="text-sm text-surface-500 text-center py-4">{t("government.noSubmissions")}</p>
             )}
           </div>
         </Card>
       </div>
 
       <Card>
-        <h3 className="section-title">الجهات الحكومية المسجلة</h3>
+        <h3 className="section-title">{t("government.registeredEntities")}</h3>
         <div className="grid grid-cols-5 gap-3">
           {dashboard?.entities.map((e) => (
             <div key={e.id} className="p-3 bg-surface-800/50 rounded-xl text-center hover:bg-surface-700/50 transition-colors">

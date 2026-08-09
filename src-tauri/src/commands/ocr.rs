@@ -134,10 +134,82 @@ fn try_run_tesseract(path: &str) -> Option<String> {
     None
 }
 
-fn extract_text_from_image(path: &str) -> (String, f64) {
+fn try_windows_ocr(path: &str) -> Option<String> {
+    #[cfg(target_os = "windows")]
+    {
+        let script = r#"
+$ErrorActionPreference = 'Stop'
+try {
+    Add-Type -AssemblyName System.Runtime.WindowsRuntime
+    $null = [Windows.Foundation.IAsyncOperation`1, Windows.Foundation, ContentType = WindowsRuntime]
+    $null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType = WindowsRuntime]
+    $null = [Windows.Storage.StorageFile, Windows.Storage, ContentType = WindowsRuntime]
+    $null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Graphics, ContentType = WindowsRuntime]
+    $null = [Windows.Graphics.Imaging.SoftwareBitmap, Windows.Graphics, ContentType = WindowsRuntime]
+    $null = [Windows.Storage.Streams.RandomAccessStream, Windows.Storage.Streams, ContentType = WindowsRuntime]
+
+    $asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
+        $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and
+        $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1'
+    })[0]
+
+    function Await($WinRtTask, $ResultType) {
+        $asTask = $asTaskGeneric.MakeGenericMethod($ResultType)
+        $netTask = $asTask.Invoke($null, @($WinRtTask))
+        $netTask.Wait(-1) | Out-Null
+        $netTask.Result
+    }
+
+    $file = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($args[0])) ([Windows.Storage.StorageFile])
+    $stream = Await ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])
+    $decoder = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])
+    $bitmap = Await ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
+    $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
+    if ($null -eq $engine) { exit 0 }
+    $result = Await ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
+    $result.Text
+    $stream.Dispose()
+} catch {
+    exit 1
+}
+"#;
+        let script_path = std::env::temp_dir().join("promax_winocr.ps1");
+        if fs::write(&script_path, script).is_err() {
+            return None;
+        }
+        if let Ok(output) = std::process::Command::new("powershell")
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                script_path.to_str().unwrap_or(""),
+                path,
+            ])
+            .output()
+        {
+            if output.status.success() {
+                let text = String::from_utf8_lossy(&output.stdout).to_string();
+                let text = text.trim().to_string();
+                if text.len() > 20 {
+                    return Some(text);
+                }
+            }
+        }
+    }
+    None
+}
+
+pub fn extract_text_from_image(path: &str) -> (String, f64) {
     if let Some(tesseract_text) = try_run_tesseract(path) {
         if tesseract_text.trim().len() > 20 {
             return (tesseract_text, 70.0);
+        }
+    }
+    if let Some(windows_text) = try_windows_ocr(path) {
+        if windows_text.trim().len() > 20 {
+            return (windows_text, 65.0);
         }
     }
 
@@ -887,4 +959,36 @@ pub fn ocr_detect_language(text: String) -> Result<String, AppError> {
     if total == 0.0 { return Ok("unknown".into()); }
     let arabic_pct = arabic_chars as f64 / total;
     Ok(if arabic_pct > 0.3 { "ara".into() } else { "eng".into() })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_test_image(path: &str) {
+        let mut img = image::RgbImage::new(400, 200);
+        for p in img.pixels_mut() {
+            *p = image::Rgb([250, 250, 250]);
+        }
+        // Draw a few high-contrast blocks so the image is non-trivial.
+        for y in 20..40 {
+            for x in 20..120 {
+                img.put_pixel(x, y, image::Rgb([0, 0, 0]));
+            }
+        }
+        img.save(path).unwrap();
+    }
+
+    #[test]
+    fn test_windows_ocr_pipeline_does_not_panic() {
+        if cfg!(not(target_os = "windows")) {
+            return;
+        }
+        let test_path = std::env::temp_dir().join("promax_ocr_pipeline_test.png");
+        let path_str = test_path.to_str().unwrap();
+        make_test_image(path_str);
+        let result = std::panic::catch_unwind(|| try_windows_ocr(path_str));
+        let _ = fs::remove_file(&test_path);
+        assert!(result.is_ok(), "try_windows_ocr must not panic");
+    }
 }

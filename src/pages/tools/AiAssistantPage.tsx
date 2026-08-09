@@ -1,14 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import Card from "@/components/ui/Card";
+import { useTranslation } from "react-i18next";
 import Button from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
-import { useNavigate } from "react-router-dom";
 import {
   Send, Bot, User, Settings, MessageSquare, Plus, Trash2,
-  Eye, EyeOff, Loader2, Zap, TrendingUp, Warehouse,
-  DollarSign, BarChart3, Lightbulb, X, ChevronDown, Sparkles,
-  TestTube, Save, History, PanelRightOpen, CheckCircle2, AlertCircle
+  Eye, EyeOff, Loader2,
+  X, Sparkles,
+  TestTube, Save, PanelRightOpen, CheckCircle2, AlertCircle
 } from "lucide-react";
 
 type ContextType = "general" | "financial" | "production" | "inventory" | "hr";
@@ -28,11 +27,26 @@ interface ChatSession {
   created_at: Date;
 }
 
-interface AiSettings {
-  api_key: string;
+interface ProviderStatus {
+  id: string;
+  label: string;
   model: string;
-  max_tokens: number;
-  temperature: number;
+  configured: boolean;
+  enabled: boolean;
+  requires_key: boolean;
+  free_tier: boolean;
+  message: string;
+}
+
+interface ProviderSettings {
+  provider: string;
+  label: string;
+  model: string;
+  base_url: string;
+  enabled: boolean;
+  has_key: boolean;
+  requires_key: boolean;
+  models: string[];
 }
 
 interface Suggestion {
@@ -40,29 +54,6 @@ interface Suggestion {
   label: string;
   prompt: string;
 }
-
-const CONTEXTS: { value: ContextType; label: string }[] = [
-  { value: "general", label: "عام" },
-  { value: "financial", label: "مالي" },
-  { value: "production", label: "إنتاج" },
-  { value: "inventory", label: "مخزون" },
-  { value: "hr", label: "موارد بشرية" },
-];
-
-const QUICK_ACTIONS: Suggestion[] = [
-  { id: "sales", label: "تحليل المبيعات", prompt: "حلل بيانات المبيعات الحالية وقدم تقريراً مفصلاً" },
-  { id: "inventory", label: "مراجعة المخزون", prompt: "راجع حالة المخزون وحدد المنتجات التي تحتاج إعادة طلب" },
-  { id: "profit", label: "تحليل الأرباح", prompt: "حلل الأرباح والخسائر للفترة الحالية" },
-  { id: "performance", label: "تقييم الأداء", prompt: "قدم تقييماً شاملاً لأداء الشركة" },
-  { id: "improve", label: "اقتراحات التحسين", prompt: "اقترح تحسينات لتطوير العمليات التشغيلية" },
-];
-
-const DEFAULT_SETTINGS: AiSettings = {
-  api_key: "",
-  model: "gpt-4o",
-  max_tokens: 2048,
-  temperature: 0.7,
-};
 
 function generateId() {
   return Math.random().toString(36).substring(2, 11);
@@ -117,7 +108,23 @@ function renderMessageContent(content: string) {
 }
 
 export default function AiAssistantPage() {
-  const navigate = useNavigate();
+  const { t } = useTranslation();
+
+  const CONTEXTS: { value: ContextType; label: string }[] = [
+    { value: "general", label: t("tools.aiAssistant.contextGeneral") },
+    { value: "financial", label: t("tools.aiAssistant.contextFinancial") },
+    { value: "production", label: t("tools.aiAssistant.contextProduction") },
+    { value: "inventory", label: t("tools.aiAssistant.contextInventory") },
+    { value: "hr", label: t("tools.aiAssistant.contextHr") },
+  ];
+
+  const QUICK_ACTIONS: Suggestion[] = [
+    { id: "sales", label: t("tools.aiAssistant.actionSalesLabel"), prompt: t("tools.aiAssistant.actionSalesPrompt") },
+    { id: "inventory", label: t("tools.aiAssistant.actionInventoryLabel"), prompt: t("tools.aiAssistant.actionInventoryPrompt") },
+    { id: "profit", label: t("tools.aiAssistant.actionProfitLabel"), prompt: t("tools.aiAssistant.actionProfitPrompt") },
+    { id: "performance", label: t("tools.aiAssistant.actionPerformanceLabel"), prompt: t("tools.aiAssistant.actionPerformancePrompt") },
+    { id: "improve", label: t("tools.aiAssistant.actionImproveLabel"), prompt: t("tools.aiAssistant.actionImprovePrompt") },
+  ];
 
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -126,14 +133,22 @@ export default function AiAssistantPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [settings, setSettings] = useState<AiSettings>(DEFAULT_SETTINGS);
-  const [settingsLoaded, setSettingsLoaded] = useState(false);
-  const [testing, setTesting] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [showHistory, setShowHistory] = useState(true);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const [providers, setProviders] = useState<ProviderStatus[]>([]);
+  const [chatProvider, setChatProvider] = useState("auto");
+  const [activeProviderTab, setActiveProviderTab] = useState<string | null>(null);
+  const [providerSettings, setProviderSettings] = useState<ProviderSettings | null>(null);
+  const [providerApiKey, setProviderApiKey] = useState("");
+  const [providerModel, setProviderModel] = useState("");
+  const [providerBaseUrl, setProviderBaseUrl] = useState("");
+  const [providerEnabled, setProviderEnabled] = useState(true);
+  const [providerTesting, setProviderTesting] = useState(false);
+  const [lastUsedProvider, setLastUsedProvider] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -149,12 +164,9 @@ export default function AiAssistantPage() {
   }, [activeSession?.messages, isTyping, scrollToBottom]);
 
   useEffect(() => {
-    invoke<Partial<AiSettings>>("get_ai_settings")
-      .then((s) => {
-        setSettings((prev) => ({ ...prev, ...s }));
-        setSettingsLoaded(true);
-      })
-      .catch(() => setSettingsLoaded(true));
+    invoke<ProviderStatus[]>("ai_provider_statuses")
+      .then(setProviders)
+      .catch(() => setProviders([]));
   }, []);
 
   useEffect(() => {
@@ -172,10 +184,10 @@ export default function AiAssistantPage() {
 
   const createNewSession = useCallback(() => {
     const id = generateId();
-    const ctxLabel = CONTEXTS.find((c) => c.value === contextType)?.label || "عام";
+    const ctxLabel = CONTEXTS.find((c) => c.value === contextType)?.label || t("tools.aiAssistant.contextGeneral");
     const session: ChatSession = {
       id,
-      title: `محادثة ${ctxLabel}`,
+      title: t("tools.aiAssistant.sessionTitle", { context: ctxLabel }),
       contextType,
       messages: [],
       created_at: new Date(),
@@ -183,13 +195,13 @@ export default function AiAssistantPage() {
     setSessions((prev) => [session, ...prev]);
     setActiveSessionId(id);
     setTimeout(() => inputRef.current?.focus(), 100);
-  }, [contextType]);
+  }, [contextType, t]);
 
   useEffect(() => {
-    if (!activeSessionId && sessions.length === 0 && settingsLoaded) {
+    if (!activeSessionId && sessions.length === 0) {
       createNewSession();
     }
-  }, [settingsLoaded, activeSessionId, sessions.length, createNewSession]);
+  }, [activeSessionId, sessions.length, createNewSession]);
 
   const handleSend = async () => {
     const text = input.trim();
@@ -205,7 +217,6 @@ export default function AiAssistantPage() {
     };
 
     if (!activeSessionId) {
-      const ctxLabel = CONTEXTS.find((c) => c.value === contextType)?.label || "عام";
       const sessionId = generateId();
       setSessions([{
         id: sessionId,
@@ -229,9 +240,11 @@ export default function AiAssistantPage() {
     setIsTyping(true);
 
     try {
-      const result: { reply: string; model: string; provider: string; token_estimate: number } =
-        await invoke("chat_with_ai", {
-          input: { message: text, context_type: contextType, provider: "openai" },
+      const result: { reply: string; model: string; provider: string; provider_label: string; used_fallback: boolean; attempts: string[] } =
+        await invoke("ai_chat_with_provider", {
+          message: text,
+          context_type: contextType,
+          provider: chatProvider === "auto" ? null : chatProvider,
         });
 
       const assistantMsg: ChatMessage = {
@@ -241,6 +254,8 @@ export default function AiAssistantPage() {
         timestamp: new Date(),
       };
 
+      setLastUsedProvider(`${result.provider_label} · ${result.model}${result.used_fallback ? ` (${t("tools.aiAssistant.fallbackUsed")})` : ""}`);
+
       setSessions((prev) =>
         prev.map((s) => s.id === activeSessionId ? { ...s, messages: [...s.messages, assistantMsg] } : s)
       );
@@ -248,7 +263,7 @@ export default function AiAssistantPage() {
       const errMsg: ChatMessage = {
         id: generateId(),
         role: "system",
-        content: err instanceof Error ? err.message : String(err) || "حدث خطأ غير متوقع",
+        content: err instanceof Error ? err.message : String(err) || t("tools.aiAssistant.unexpectedError"),
         timestamp: new Date(),
       };
       setSessions((prev) =>
@@ -265,35 +280,63 @@ export default function AiAssistantPage() {
     setTimeout(() => handleSend(), 100);
   };
 
-  const handleSaveSettings = async () => {
+  const loadProviderSettings = useCallback(async (id: string) => {
     try {
-      await invoke("save_ai_provider_settings", {
-        provider: "openai",
-        apiKey: settings.api_key,
-        model: settings.model,
+      const s = await invoke<ProviderSettings>("ai_get_provider_settings", { provider: id });
+      setProviderSettings(s);
+      setProviderModel(s.model);
+      setProviderBaseUrl(s.base_url);
+      setProviderEnabled(s.enabled);
+      setProviderApiKey("");
+      setShowApiKey(false);
+    } catch (err: unknown) {
+      setStatusMessage({ type: "error", text: err instanceof Error ? err.message : String(err) });
+    }
+  }, []);
+
+  const openSettings = useCallback(async () => {
+    setShowSettings(true);
+    setStatusMessage(null);
+    const first = providers.find((p) => p.configured)?.id || providers[0]?.id || "openai";
+    setActiveProviderTab(first);
+    await loadProviderSettings(first);
+  }, [providers, loadProviderSettings]);
+
+  const handleSaveProviderSettings = async () => {
+    if (!providerSettings) return;
+    try {
+      await invoke("ai_save_provider_config", {
+        provider: providerSettings.provider,
+        apiKey: providerApiKey || null,
+        model: providerModel,
+        baseUrl: providerBaseUrl,
+        enabled: providerEnabled,
       });
-      setStatusMessage({ type: "success", text: "تم حفظ الإعدادات بنجاح" });
+      const statuses = await invoke<ProviderStatus[]>("ai_provider_statuses");
+      setProviders(statuses);
+      await loadProviderSettings(providerSettings.provider);
+      setStatusMessage({ type: "success", text: t("tools.aiAssistant.settingsSaved") });
       setTimeout(() => setStatusMessage(null), 3000);
     } catch (err: unknown) {
-      setStatusMessage({ type: "error", text: err instanceof Error ? err.message : String(err) || "فشل حفظ الإعدادات" });
+      setStatusMessage({ type: "error", text: err instanceof Error ? err.message : String(err) || t("tools.aiAssistant.settingsSaveFailed") });
     }
   };
 
-  const handleTestConnection = async () => {
-    setTesting(true);
+  const handleTestProvider = async () => {
+    if (!providerSettings) return;
+    setProviderTesting(true);
     setError(null);
     try {
-      const result: { configured: boolean; provider: string; model: string; message: string } =
-        await invoke("test_ai_connection", { provider: "openai" });
+      const result = await invoke<ProviderStatus>("ai_test_provider", { provider: providerSettings.provider });
       setStatusMessage({
-        type: result.configured ? "success" : "error",
+        type: result.configured && (result.message.startsWith("Connection successful") || result.message.startsWith("OK")) ? "success" : "error",
         text: result.message,
       });
       setTimeout(() => setStatusMessage(null), 5000);
     } catch (err: unknown) {
-      setStatusMessage({ type: "error", text: err instanceof Error ? err.message : String(err) || "فشل الاتصال" });
+      setStatusMessage({ type: "error", text: err instanceof Error ? err.message : String(err) || t("tools.connectionFailed") });
     } finally {
-      setTesting(false);
+      setProviderTesting(false);
     }
   };
 
@@ -321,9 +364,9 @@ export default function AiAssistantPage() {
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
               <MessageSquare className="w-4 h-4 text-gold-400" />
-              المحادثات
+              {t("tools.aiAssistant.conversations")}
             </h3>
-            <Button variant="ghost" size="sm" onClick={() => setShowSettings(true)}>
+            <Button variant="ghost" size="sm" onClick={openSettings}>
               <Settings className="w-4 h-4 text-surface-400" />
             </Button>
           </div>
@@ -332,7 +375,7 @@ export default function AiAssistantPage() {
             value={contextType}
             onChange={(e) => setContextType(e.target.value as ContextType)}
             className="input-field w-full text-sm"
-            aria-label="نوع السياق"
+            aria-label={t("tools.aiAssistant.contextAria")}
           >
             {CONTEXTS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
           </select>
@@ -344,10 +387,10 @@ export default function AiAssistantPage() {
             icon={<Plus className="w-4 h-4" />}
             onClick={() => {
               const id = generateId();
-              const ctxLabel = CONTEXTS.find((c) => c.value === contextType)?.label || "عام";
+              const ctxLabel = CONTEXTS.find((c) => c.value === contextType)?.label || t("tools.aiAssistant.contextGeneral");
               setSessions((prev) => [{
                 id,
-                title: `محادثة ${ctxLabel}`,
+                title: t("tools.aiAssistant.sessionTitle", { context: ctxLabel }),
                 contextType,
                 messages: [],
                 created_at: new Date(),
@@ -355,7 +398,7 @@ export default function AiAssistantPage() {
               setActiveSessionId(id);
             }}
           >
-            محادثة جديدة
+            {t("tools.aiAssistant.newConversation")}
           </Button>
 
           <div className="space-y-1">
@@ -378,7 +421,7 @@ export default function AiAssistantPage() {
               </div>
             ))}
             {sessions.length === 0 && (
-              <p className="text-xs text-surface-500 text-center py-4">لا توجد محادثات</p>
+              <p className="text-xs text-surface-500 text-center py-4">{t("tools.aiAssistant.noConversations")}</p>
             )}
           </div>
 
@@ -386,7 +429,7 @@ export default function AiAssistantPage() {
             <div className="pt-2">
               <h4 className="text-xs text-surface-500 mb-2 flex items-center gap-1">
                 <Sparkles className="w-3 h-3" />
-                الإجراءات المقترحة
+                {t("tools.suggestedActions")}
               </h4>
               {suggestions.map((s) => (
                 <button
@@ -404,7 +447,7 @@ export default function AiAssistantPage() {
             onClick={() => setShowHistory(false)}
             className="w-full text-xs text-surface-500 hover:text-surface-300 py-2"
           >
-            إخفاء الشريط الجانبي
+            {t("tools.aiAssistant.hideSidebar")}
           </button>
         </div>
       )}
@@ -422,9 +465,9 @@ export default function AiAssistantPage() {
         {currentMessages.length === 0 && !isTyping && (
           <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
             <Bot className="w-16 h-16 text-gold-400/30 mb-4" />
-            <h2 className="text-xl font-bold text-white mb-2">المساعد الذكي</h2>
+            <h2 className="text-xl font-bold text-white mb-2">{t("tools.aiAssistant.title")}</h2>
             <p className="text-surface-400 text-sm mb-6">
-              اسأل عن أي شيء يتعلق بنظام إدارة الشركة
+              {t("tools.aiAssistant.subtitle")}
             </p>
             <div className="flex flex-wrap gap-2 justify-center max-w-lg">
               {QUICK_ACTIONS.map((action) => (
@@ -515,26 +558,46 @@ export default function AiAssistantPage() {
             </div>
           )}
           <div className="flex items-center gap-3">
+            <select
+              value={chatProvider}
+              onChange={(e) => setChatProvider(e.target.value)}
+              className="input-field w-44 flex-shrink-0 text-xs"
+              aria-label={t("tools.aiAssistant.chatProviderAria")}
+              dir="rtl"
+            >
+              <option value="auto">{t("tools.aiAssistant.autoProvider")}</option>
+              {providers.map((p) => (
+                <option key={p.id} value={p.id} disabled={!p.configured}>
+                  {p.label}{p.configured ? "" : ` (${t("tools.aiAssistant.notConfigured")})`}
+                </option>
+              ))}
+            </select>
             <input
               ref={inputRef}
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="اكتب رسالتك هنا..."
+              placeholder={t("tools.aiAssistant.inputPlaceholder")}
               className="input-field flex-1"
               disabled={isLoading}
               dir="rtl"
-              aria-label="اكتب رسالتك هنا"
+              aria-label={t("tools.aiAssistant.inputAria")}
             />
             <Button
               onClick={handleSend}
               disabled={!input.trim() || isLoading}
               icon={isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             >
-              إرسال
+              {t("tools.aiAssistant.send")}
             </Button>
           </div>
+          {lastUsedProvider && (
+            <p className="mt-2 text-[11px] text-surface-500 flex items-center gap-1.5">
+              <Sparkles className="w-3 h-3 text-gold-400/70" />
+              {t("tools.aiAssistant.respondedBy", { provider: lastUsedProvider })}
+            </p>
+          )}
         </div>
       </div>
 
@@ -547,7 +610,7 @@ export default function AiAssistantPage() {
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Settings className="w-5 h-5 text-gold-400" />
-                إعدادات الذكاء الاصطناعي
+                {t("tools.aiAssistant.settingsTitle")}
               </h3>
               <button onClick={() => setShowSettings(false)} className="text-surface-500 hover:text-white">
                 <X className="w-5 h-5" />
@@ -566,85 +629,125 @@ export default function AiAssistantPage() {
               </div>
             )}
 
-            <div className="space-y-4">
-              <div className="input-group">
-                <label className="input-label">مفتاح API</label>
-                <div className="relative">
+            {/* Provider tabs */}
+            <div className="flex flex-wrap gap-1.5 mb-5">
+              {providers.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => { setActiveProviderTab(p.id); loadProviderSettings(p.id); }}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border transition-all",
+                    activeProviderTab === p.id
+                      ? "bg-brand-800/40 border-brand-500/50 text-white"
+                      : "border-surface-700 text-surface-400 hover:text-surface-200 hover:border-surface-500"
+                  )}
+                >
+                  {p.configured
+                    ? <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                    : <AlertCircle className="w-3 h-3 text-surface-600" />}
+                  <span className="truncate max-w-[110px]">{p.label}</span>
+                  {p.free_tier && <span className="opacity-60">{t("tools.aiFileImport.freeTier")}</span>}
+                </button>
+              ))}
+            </div>
+
+            {providerSettings && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between text-xs text-surface-400">
+                  <span className="flex items-center gap-1.5">
+                    {providerSettings.requires_key
+                      ? t("tools.aiAssistant.requiresKey")
+                      : t("tools.aiAssistant.noKeyRequired")}
+                  </span>
+                  <span className={cn(
+                    "px-2 py-0.5 rounded-md",
+                    providerSettings.has_key || !providerSettings.requires_key
+                      ? "bg-emerald-500/10 text-emerald-400"
+                      : "bg-amber-500/10 text-amber-400"
+                  )}>
+                    {providerSettings.has_key || !providerSettings.requires_key
+                      ? t("tools.aiAssistant.hasKey")
+                      : t("tools.aiAssistant.notConfigured")}
+                  </span>
+                </div>
+
+                {providerSettings.requires_key && (
+                  <div className="input-group">
+                    <label className="input-label">{t("tools.aiAssistant.apiKeyLabel")}</label>
+                    <div className="relative">
+                      <input
+                        type={showApiKey ? "text" : "password"}
+                        value={providerApiKey}
+                        onChange={(e) => setProviderApiKey(e.target.value)}
+                        className="input-field w-full ltr text-left"
+                        dir="ltr"
+                        placeholder={providerSettings.has_key ? "••••••••••••••••" : "sk-..."}
+                        aria-label={t("tools.aiAssistant.apiKeyAria")}
+                      />
+                      <button
+                        onClick={() => setShowApiKey(!showApiKey)}
+                        className="absolute left-2 top-1/2 -translate-y-1/2 text-surface-500 hover:text-surface-300"
+                      >
+                        {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    {providerSettings.has_key && (
+                      <p className="text-[11px] text-surface-500 mt-1">{t("tools.aiAssistant.enterNewKey")}</p>
+                    )}
+                  </div>
+                )}
+
+                <div className="input-group">
+                  <label className="input-label">{t("tools.aiAssistant.modelLabel")}</label>
+                  <select
+                    value={providerModel}
+                    onChange={(e) => setProviderModel(e.target.value)}
+                    className="input-field w-full"
+                    aria-label={t("tools.aiAssistant.modelAria")}
+                  >
+                    {providerSettings.models.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="input-group">
+                  <label className="input-label">{t("tools.aiAssistant.baseUrlLabel")}</label>
                   <input
-                    type={showApiKey ? "text" : "password"}
-                    value={settings.api_key}
-                    onChange={(e) => setSettings((prev) => ({ ...prev, api_key: e.target.value }))}
+                    type="text"
+                    value={providerBaseUrl}
+                    onChange={(e) => setProviderBaseUrl(e.target.value)}
                     className="input-field w-full ltr text-left"
                     dir="ltr"
-                    placeholder="sk-..."
-                    aria-label="مفتاح API"
+                    aria-label={t("tools.aiAssistant.baseUrlAria")}
                   />
-                  <button
-                    onClick={() => setShowApiKey(!showApiKey)}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 text-surface-500 hover:text-surface-300"
+                </div>
+
+                <label className="flex items-center gap-2 text-sm text-surface-300 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={providerEnabled}
+                    onChange={(e) => setProviderEnabled(e.target.checked)}
+                    className="accent-emerald-500 w-4 h-4"
+                  />
+                  {t("tools.aiAssistant.enabledLabel")}
+                </label>
+
+                <div className="flex items-center gap-3 pt-2">
+                  <Button onClick={handleSaveProviderSettings} icon={<Save className="w-4 h-4" />}>
+                    {t("common.save")}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleTestProvider}
+                    loading={providerTesting}
+                    icon={<TestTube className="w-4 h-4" />}
                   >
-                    {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
+                    {t("tools.aiAssistant.testConnection")}
+                  </Button>
                 </div>
               </div>
-
-              <div className="input-group">
-                <label className="input-label">النموذج</label>
-                <select
-                  value={settings.model}
-                  onChange={(e) => setSettings((prev) => ({ ...prev, model: e.target.value }))}
-                  className="input-field w-full"
-                  aria-label="النموذج"
-                >
-                  <option value="gpt-4o">GPT-4o</option>
-                  <option value="gpt-4o-mini">GPT-4o Mini</option>
-                  <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="input-group">
-                  <label className="input-label">الحد الأقصى للرموز</label>
-                  <input
-                    type="number"
-                    value={settings.max_tokens}
-                    onChange={(e) => setSettings((prev) => ({ ...prev, max_tokens: Number(e.target.value) }))}
-                    className="input-field w-full"
-                    min={256}
-                    max={8192}
-                    aria-label="الحد الأقصى للرموز"
-                  />
-                </div>
-                <div className="input-group">
-                  <label className="input-label">الحرارة (Temperature)</label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="2"
-                    step="0.1"
-                    value={settings.temperature}
-                    onChange={(e) => setSettings((prev) => ({ ...prev, temperature: Number(e.target.value) }))}
-                    className="w-full"
-                    aria-label="الحرارة"
-                  />
-                  <span className="text-xs text-surface-500">{settings.temperature.toFixed(1)}</span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 pt-2">
-                <Button onClick={handleSaveSettings} icon={<Save className="w-4 h-4" />}>
-                  حفظ
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleTestConnection}
-                  loading={testing}
-                  icon={<TestTube className="w-4 h-4" />}
-                >
-                  اختبار الاتصال
-                </Button>
-              </div>
-            </div>
+            )}
           </div>
         </div>
       )}

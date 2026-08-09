@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
@@ -9,6 +10,7 @@ import { Plus, Cog, AlertCircle } from "lucide-react";
 import { Machine } from "@/types";
 
 export default function MachineListPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [machines, setMachines] = useState<Machine[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,19 +24,19 @@ export default function MachineListPage() {
   }, []);
 
   const statusMap: Record<string, { label: string; variant: BadgeVariant }> = {
-    active: { label: "نشط", variant: "success" },
-    maintenance: { label: "صيانة", variant: "warning" },
-    inactive: { label: "غير نشط", variant: "danger" },
+    active: { label: t("common.active"), variant: "success" },
+    maintenance: { label: t("machineForm.status.maintenance"), variant: "warning" },
+    inactive: { label: t("common.inactive"), variant: "danger" },
   };
 
   return (
     <div className="space-y-6">
       <div className="page-header">
         <div>
-          <h1 className="page-title">الآلات</h1>
-          <p className="page-subtitle">{machines.length} آلة مسجلة</p>
+          <h1 className="page-title">{t("nav.machines")}</h1>
+          <p className="page-subtitle">{t("machineList.subtitle", { count: machines.length })}</p>
         </div>
-        <Button icon={<Plus className="w-4 h-4" />}>إضافة آلة</Button>
+        <Button icon={<Plus className="w-4 h-4" />}>{t("machineList.addMachine")}</Button>
       </div>
 
       {loading ? (
@@ -42,8 +44,8 @@ export default function MachineListPage() {
       ) : error ? (
         <div className="flex flex-col items-center justify-center h-64 text-surface-400">
           <AlertCircle className="w-12 h-12 mb-4 text-surface-500" />
-          <p className="text-lg font-medium">إدارة الآلات قيد التطوير</p>
-          <p className="text-sm text-surface-500 mt-1">سيتم إضافة هذه الميزة قريباً</p>
+          <p className="text-lg font-medium">{t("machineList.devTitle")}</p>
+          <p className="text-sm text-surface-500 mt-1">{t("machineList.devMessage")}</p>
         </div>
       ) : (
         <div className="grid grid-cols-3 gap-4">
@@ -67,13 +69,13 @@ export default function MachineListPage() {
                 </div>
               </div>
               <div className="mt-3 flex items-center justify-between text-xs text-surface-400">
-                <span>{machine.capacity_cpm ? `${machine.capacity_cpm} كوب/دقيقة` : "—"}</span>
+                <span>{machine.capacity_cpm ? `${machine.capacity_cpm} ${t("machineList.capacityUnit")}` : "—"}</span>
                 <span className="truncate max-w-[120px]">{machine.supported_products || "—"}</span>
               </div>
             </Card>
           ))}
           {machines.length === 0 && (
-            <div className="col-span-3 text-center py-12 text-surface-500">لا توجد آلات مسجلة</div>
+            <div className="col-span-3 text-center py-12 text-surface-500">{t("machineList.empty")}</div>
           )}
         </div>
       )}

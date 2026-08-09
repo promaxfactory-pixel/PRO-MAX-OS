@@ -33,6 +33,7 @@ pub struct CreateSupplierInput {
     pub vat_number: Option<String>,
     pub currency: Option<String>,
     pub payment_terms: Option<String>,
+    pub opening_balance_milli: Option<i64>,
     pub notes: Option<String>,
 }
 
@@ -47,6 +48,7 @@ pub struct UpdateSupplierInput {
     pub vat_number: Option<String>,
     pub currency: Option<String>,
     pub payment_terms: Option<String>,
+    pub opening_balance_milli: Option<i64>,
     pub notes: Option<String>,
     pub active: Option<i64>,
 }
@@ -122,12 +124,13 @@ pub fn get_supplier(state: State<'_, DbState>, id: i64) -> Result<Supplier, AppE
 #[tauri::command]
 pub fn create_supplier(state: State<'_, DbState>, input: CreateSupplierInput) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    let opening = input.opening_balance_milli.unwrap_or(0);
     conn.execute(
-        "INSERT INTO suppliers(code, name, contact, phone, email, address, vat_number, currency, payment_terms, notes) VALUES(?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO suppliers(code, name, contact, phone, email, address, vat_number, currency, payment_terms, opening_balance_milli, balance_milli, notes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
         rusqlite::params![
             input.code, input.name, input.contact, input.phone, input.email,
             input.address, input.vat_number, input.currency.unwrap_or_else(|| "OMR".into()),
-            input.payment_terms, input.notes
+            input.payment_terms, opening, opening, input.notes
         ],
     )?;
     let sid = conn.last_insert_rowid();
@@ -150,6 +153,7 @@ pub fn update_supplier(state: State<'_, DbState>, id: i64, input: UpdateSupplier
     if let Some(v) = &input.vat_number { sets.push("vat_number=?"); params.push(Box::new(v.clone())); }
     if let Some(v) = &input.currency { sets.push("currency=?"); params.push(Box::new(v.clone())); }
     if let Some(v) = &input.payment_terms { sets.push("payment_terms=?"); params.push(Box::new(v.clone())); }
+    if let Some(v) = input.opening_balance_milli { sets.push("opening_balance_milli=?"); params.push(Box::new(v)); }
     if let Some(v) = &input.notes { sets.push("notes=?"); params.push(Box::new(v.clone())); }
     if let Some(v) = input.active { sets.push("active=?"); params.push(Box::new(v)); }
 

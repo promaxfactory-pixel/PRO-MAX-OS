@@ -41,6 +41,7 @@ pub struct CreateBarterInput {
     pub bag_value_milli: Option<i64>,
     pub reference: Option<String>,
     pub notes: Option<String>,
+    pub created_by: Option<String>,
 }
 
 const BARTER_COLUMNS: &str = "e.id, e.exchange_no, e.date, e.local_supplier_id, sp.name AS supplier_name, e.product_id, p.name AS product_name, e.cartons_given, e.carton_value_milli, e.received_item_id, ii.name AS received_item_name, e.bags_received, e.bag_value_milli, e.net_value_milli, e.balance_milli, e.settlement_status, e.reference, e.notes, e.status, e.created_by, e.created_at";
@@ -116,7 +117,7 @@ pub fn create_barter_exchange(
     let net_value = carton_total - bag_total;
 
     conn.execute(
-        "INSERT INTO local_supplier_exchanges(exchange_no, date, local_supplier_id, product_id, cartons_given, carton_value_milli, received_item_id, bags_received, bag_value_milli, net_value_milli, balance_milli, reference, notes, status, created_by, created_at) VALUES(?,date('now'),?,?,?,?,?,?,?,?,?,?,?,?, 'Draft', '', datetime('now'))",
+        "INSERT INTO local_supplier_exchanges(exchange_no, date, local_supplier_id, product_id, cartons_given, carton_value_milli, received_item_id, bags_received, bag_value_milli, net_value_milli, balance_milli, reference, notes, status, created_by, created_at) VALUES(?,date('now'),?,?,?,?,?,?,?,?,?,?,?,?, 'Draft', ?, datetime('now'))",
         rusqlite::params![
             exchange_no,
             input.local_supplier_id,
@@ -130,6 +131,7 @@ pub fn create_barter_exchange(
             net_value,
             input.reference,
             input.notes,
+            input.created_by,
         ],
     )?;
     let id = conn.last_insert_rowid();
