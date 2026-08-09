@@ -23,8 +23,10 @@ Built with **Tauri 2** (Rust backend + React/TypeScript frontend), PRO MAX OS de
 | **Region** | Oman (Omani Labor Law Compliant) |
 | **License** | B2B Commercial |
 | **Tech Stack** | Tauri 2, Rust, React 18, TypeScript, Tailwind CSS, SQLite, Recharts, Framer Motion |
-| **Database** | SQLite (WAL mode, 22 migrations) |
+| **Database** | SQLite (WAL mode, 24 migrations) |
 | **Authentication** | JWT with Argon2id hashing + RBAC |
+| **Mobile** | PWA (`mobile/`) + signed Android APK |
+| **Extras** | REST API (`promax-api`) · MCP server (`promax-mcp`) |
 
 ---
 
@@ -113,6 +115,22 @@ Built with **Tauri 2** (Rust backend + React/TypeScript frontend), PRO MAX OS de
 - Profitability analysis per product line and customer
 - Smart alerts for at-risk orders and delays
 
+### AI Any-File Import
+- Upload any document/image/PDF — extraction, structure analysis, and mapping to business records
+- Commits into customers, suppliers, products, inventory, invoices, purchases, or expenses
+- Duplicate detection and full review-before-commit workflow
+- Provider failover across 7 AI engines (Ollama, Groq, Gemini, DeepSeek, Mistral, OpenAI, Anthropic)
+
+### Mobile Manager (PWA + Android)
+- Self-contained Arabic RTL PWA, served by the built-in API server
+- KPI dashboard, invoices/purchases/expenses, approvals, alerts and notifications
+- Products, customers, activity, company data, change password, and expense creation
+- Offline-ready with a versioned service worker; signed release APK in `mobile/`
+
+### REST API & MCP
+- `promax-api`: hardened REST API v3 (JWT, RBAC, rate limiting, audit trail, security headers)
+- `promax-mcp`: MCP (JSON-RPC) server exposing database tools to AI clients
+
 ### OCR Receipt Scanning
 - Upload receipt images for automatic data extraction
 - OCR-powered vendor, date, total, and item recognition
@@ -155,41 +173,46 @@ Built with **Tauri 2** (Rust backend + React/TypeScript frontend), PRO MAX OS de
 | **Animations** | Framer Motion | Smooth UI transitions and micro-interactions |
 | **Authentication** | JWT + Argon2id | Secure token-based auth with modern hashing |
 | **Encryption** | AES-256-GCM | At-rest encryption for sensitive data |
-| **OCR** | Tesseract.js | Client-side receipt text extraction |
-| **Excel Parsing** | SheetJS (xlsx) | Browser-side spreadsheet processing |
+| **OCR** | Tesseract (Rust backend) | Receipt image text extraction |
+| **Excel Parsing** | calamine (Rust) | Spreadsheet parsing in the backend |
+| **REST API** | actix-web | Hardened API server (`promax-api`) |
+| **AI** | reqwest (rustls) | Multi-provider AI calls with failover |
+| **Mobile** | PWA + Tauri Android | `mobile/` app and signed APK |
 
 ---
 
 ## Project Structure
 
 ```
-D:\PRO MAX OS\
-├── src-tauri\           Rust backend (Tauri 2)
-│   ├── src\             Rust source files (commands, state, handlers)
-│   ├── Cargo.toml       Rust dependencies manifest
-│   └── tauri.conf.json  Tauri application configuration
-├── src\                 React frontend
-│   ├── components\      Reusable UI components
-│   ├── pages\           Route-level page components
-│   ├── hooks\           Custom React hooks and contexts
-│   ├── services\        API and backend communication layers
-│   ├── utils\           Utility functions and helpers
-│   ├── types\           TypeScript type definitions and interfaces
-│   └── styles\          Global styles and Tailwind overrides
-├── docs\                Documentation (design docs, API reference)
-├── build\               Compiled binaries and release artifacts
-├── scripts\             Build, deploy, and database migration scripts
-├── database\            SQL migrations and schema documentation
-│   ├── migrations\      SQL migration files (1 → 22)
-│   └── schema.md        Database schema reference
-├── tests\               Unit, integration, and E2E test files
-├── .env.example         Template environment variables
-├── .gitignore           Git ignore rules
-├── package.json         Node.js project dependencies and scripts
-├── tsconfig.json        TypeScript configuration
-├── tailwind.config.js   Tailwind CSS configuration
-├── vite.config.ts       Vite build configuration
-└── README.md            This file
+PRO-MAX-OS\
+├── src-tauri\            Rust backend (Tauri 2)
+│   ├── src\              Rust source (commands, crypto, db, lib)
+│   │   └── bin\          Binary entrypoints (api_server, mcp_server)
+│   ├── icons\            App icons (desktop + Android/iOS)
+│   └── Cargo.toml        Rust dependencies manifest
+├── src\                  React frontend
+│   ├── components\       Reusable UI components
+│   ├── pages\            Route-level page components (per domain)
+│   ├── stores\           Zustand stores (auth, ui, license)
+│   ├── i18n\             Arabic/English locale files (2143 keys each)
+│   ├── hooks\            Custom React hooks
+│   ├── lib\              Utilities and helpers
+│   ├── types\            TypeScript type definitions
+│   └── utils\            Formatting and print helpers
+├── mobile\               Self-contained PWA (no build step)
+│   ├── app.js            Application logic
+│   ├── styles.css        Styling
+│   ├── sw.js             Versioned service worker
+│   ├── manifest.webmanifest
+│   └── PRO-MAX-OS.apk    Signed Android release APK
+├── scripts\              Tooling (build, i18n checks, project export)
+├── database\             Schema documentation
+├── .github\              CI workflows
+├── package.json          Node.js dependencies and scripts
+├── tsconfig.json         TypeScript configuration
+├── tailwind.config.js    Tailwind CSS configuration
+├── vite.config.ts        Vite build configuration
+└── README.md             This file
 ```
 
 ---
@@ -230,6 +253,31 @@ npm run tauri build
 - The development server hot-reloads both frontend (Vite) and backend (Tauri) on code changes.
 - The SQLite database is auto-created on first launch in the user's AppData directory.
 - A developer PIN is auto-generated per machine on first run for quick local access.
+
+### REST API & Mobile PWA
+
+```bash
+# Run the API server (serves the mobile PWA at http://127.0.0.1:8080)
+cd src-tauri
+PROMAX_DB_PATH=path/to/app.db PROMAX_JWT_SECRET=change-me cargo run --bin promax-api -- --port 8080 --mobile-dir ../mobile
+
+# Expose to the local network (e.g. to reach it from a phone)
+#   add --expose  (binds 0.0.0.0)
+```
+
+### Quality Gates
+
+Run these before every release:
+
+| Check | Command |
+|---|---|
+| Rust build + tests | `cargo check --lib --bins` · `cargo test --lib` (in `src-tauri/`) |
+| Lint (Rust) | `cargo clippy --lib --bins -- -D warnings` (in `src-tauri/`) |
+| TypeScript | `npx tsc --noEmit` |
+| ESLint | `npx eslint src/ --ext .ts,.tsx --max-warnings 0` |
+| i18n parity | `node scripts/check-i18n.mjs` (expect `OK: i18n keys consistent`) |
+| Production build | `npm run build` |
+| Export for AI dev | `node scripts/export-project.mjs` (writes `dist/export/`) |
 
 ---
 
@@ -281,8 +329,8 @@ On first launch, the system auto-generates a unique developer PIN tied to the ma
 | Attribute | Detail |
 |---|---|
 | **Engine** | SQLite |
-| **Schema Version** | 22 |
-| **Migration Files** | 22 (sequential, numbered) |
+| **Schema Version** | 24 |
+| **Migration Files** | 24 (sequential, numbered) |
 | **Journal Mode** | WAL (Write-Ahead Logging) |
 | **Busy Timeout** | 5 seconds |
 | **Monetary Unit** | Milli (1/1000 OMR) — stored as integers |
