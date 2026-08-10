@@ -143,7 +143,7 @@ export default function EInvoicePage() {
         setSEndpoint(set.tax_authority_endpoint || "");
       }
     } catch {
-        addNotification({ type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" });
+      addNotification({ type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" });
     }
     finally { setLoading(false); }
   }, [statusFilter]);

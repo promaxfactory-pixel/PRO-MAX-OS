@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { invoke } from "@tauri-apps/api/core";
-import { ArrowRight, Save, Plus, Trash2, Upload } from "lucide-react";
+import { ArrowRight, Save, Plus, Trash2 } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
 interface PartUsed {

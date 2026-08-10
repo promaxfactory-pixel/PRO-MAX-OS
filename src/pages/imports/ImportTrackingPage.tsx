@@ -5,7 +5,7 @@ import Button from "@/components/ui/Button";
 import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { useUIStore } from "@/stores/uiStore";
-import { Ship, Plus, Package, Truck, CheckCircle2, Anchor } from "lucide-react";
+import { Ship, Plus, Truck, CheckCircle2, Anchor } from "lucide-react";
 
 interface Shipment {
   id: number;

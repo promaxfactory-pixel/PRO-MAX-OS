@@ -15,7 +15,7 @@ export default function ProductDetailPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    invoke("get_product", { id: Number(id) }).then((d) => setProduct(d as Product)).catch((e: unknown) => addNotification({ title: 'ط®ط·ط£', message: String(e), type: 'error' })).finally(() => setLoading(false));
+    invoke("get_product", { id: Number(id) }).then((d) => setProduct(d as Product)).catch((e: unknown) => addNotification({ title: "ط®ط·ط£", message: String(e), type: "error" })).finally(() => setLoading(false));
   }, [id]);
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="w-12 h-12 border-2 border-brand-800 border-t-gold-400 rounded-full animate-spin" /></div>;
@@ -26,7 +26,7 @@ export default function ProductDetailPage() {
     <div className="space-y-6">
       <div className="page-header">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/products')} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
+          <button onClick={() => navigate("/products")} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
           <div>
             <h1 className="page-title">{product.name_ar || product.name_en}</h1>
             <p className="page-subtitle font-mono">{product.code}</p>
@@ -45,7 +45,7 @@ export default function ProductDetailPage() {
             <div className="space-y-3">
               <div className="flex justify-between text-sm"><span className="text-surface-400">ط§ظ„ط³ط¹ط± ط§ظ„ط§ظپطھط±ط§ط¶ظٹ</span><span className="font-bold gradient-text">{formatOMR(product.default_price_milli)}</span></div>
               <div className="flex justify-between text-sm"><span className="text-surface-400">ط§ظ„طھظƒظ„ظپط©</span><span>{formatOMR(product.default_cost_milli)}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-surface-400">ط§ظ„ظ‡ط§ظ…ط´</span><span className={product.default_price_milli > product.default_cost_milli ? 'text-emerald-400' : 'text-red-400'}>{product.default_price_milli > 0 ? ((1 - product.default_cost_milli / product.default_price_milli) * 100).toFixed(1) : '0'}%</span></div>
+              <div className="flex justify-between text-sm"><span className="text-surface-400">ط§ظ„ظ‡ط§ظ…ط´</span><span className={product.default_price_milli > product.default_cost_milli ? "text-emerald-400" : "text-red-400"}>{product.default_price_milli > 0 ? ((1 - product.default_cost_milli / product.default_price_milli) * 100).toFixed(1) : "0"}%</span></div>
               <div className="flex justify-between text-sm"><span className="text-surface-400">ط§ظ„ط¨ط§ط±ظƒظˆط¯</span><span className="font-mono text-xs">{product.barcode || "â€”"}</span></div>
             </div>
           </div>

@@ -1,5 +1,5 @@
-﻿import { create } from 'zustand';
-import { User } from '@/types';
+﻿import { create } from "zustand";
+import { User } from "@/types";
 
 interface AuthState {
   user: User | null;
@@ -15,26 +15,26 @@ interface AuthState {
 
 function isTokenExpired(): boolean {
   try {
-    const token = localStorage.getItem('auth_token');
+    const token = localStorage.getItem("auth_token");
     if (!token) return true;
-    const payload = JSON.parse(atob(token.split('.')[1]));
+    const payload = JSON.parse(atob(token.split(".")[1]));
     return payload.exp ? Date.now() >= payload.exp * 1000 : false;
   } catch {
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('auth_user');
+    localStorage.removeItem("auth_token");
+    localStorage.removeItem("auth_user");
     return true;
   }
 }
 
 export const useAuthStore = create<AuthState>((set) => {
-  const storedToken = localStorage.getItem('auth_token');
-  const storedUser = localStorage.getItem('auth_user');
+  const storedToken = localStorage.getItem("auth_token");
+  const storedUser = localStorage.getItem("auth_user");
   const initialUser = storedUser ? JSON.parse(storedUser) : null;
   const tokenExpired = storedToken ? isTokenExpired() : true;
 
   if (tokenExpired && storedToken) {
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('auth_user');
+    localStorage.removeItem("auth_token");
+    localStorage.removeItem("auth_user");
   }
 
   return {
@@ -57,23 +57,23 @@ export const useAuthStore = create<AuthState>((set) => {
       }
     },
     logout: () => {
-      localStorage.removeItem('auth_token');
-      localStorage.removeItem('auth_user');
+      localStorage.removeItem("auth_token");
+      localStorage.removeItem("auth_user");
       set({ user: null, isAuthenticated: false });
     },
     setUser: (user) => {
-      const token = localStorage.getItem('auth_token');
-      localStorage.setItem('auth_user', JSON.stringify(user));
+      const token = localStorage.getItem("auth_token");
+      localStorage.setItem("auth_user", JSON.stringify(user));
       set({ user, isAuthenticated: !!token && !isTokenExpired() });
     },
     clearError: () => set({ error: null }),
     validateToken: async () => {
       try {
-        const token = localStorage.getItem('auth_token');
+        const token = localStorage.getItem("auth_token");
         if (!token) return false;
         if (isTokenExpired()) {
-          localStorage.removeItem('auth_token');
-          localStorage.removeItem('auth_user');
+          localStorage.removeItem("auth_token");
+          localStorage.removeItem("auth_user");
           set({ user: null, isAuthenticated: false });
           return false;
         }
@@ -81,8 +81,8 @@ export const useAuthStore = create<AuthState>((set) => {
         await invoke("validate_token", { token });
         return true;
       } catch {
-        localStorage.removeItem('auth_token');
-        localStorage.removeItem('auth_user');
+        localStorage.removeItem("auth_token");
+        localStorage.removeItem("auth_user");
         set({ user: null, isAuthenticated: false });
         return false;
       }

@@ -9,7 +9,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { ArrowRight, Check, Ban } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useUIStore } from "../../stores/uiStore";
-import type { ProductionLine, ProductionOrder } from "@/types";
+import type { ProductionLine } from "@/types";
 
 export default function ProductionOrderDetailPage() {
   const { addNotification } = useUIStore();
@@ -25,7 +25,7 @@ export default function ProductionOrderDetailPage() {
     Promise.all([
       invoke("get_production_order", { id: Number(id) }),
       invoke("get_production_lines", { orderId: Number(id) }),
-    ]).then(([o, l]) => { setOrder(o); setLines(l as ProductionLine[]); }).catch((e: unknown) => addNotification({ title: 'ط®ط·ط£', message: String(e), type: 'error' })).finally(() => setLoading(false));
+    ]).then(([o, l]) => { setOrder(o); setLines(l as ProductionLine[]); }).catch((e: unknown) => addNotification({ title: "ط®ط·ط£", message: String(e), type: "error" })).finally(() => setLoading(false));
   }, [id]);
 
   const handleApprove = async () => {
@@ -49,7 +49,7 @@ export default function ProductionOrderDetailPage() {
     <div className="space-y-6">
       <div className="page-header">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/production')} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
+          <button onClick={() => navigate("/production")} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
           <div>
             <h1 className="page-title flex items-center gap-3">
               <span className="font-mono text-brand-400">{order.prod_no}</span>

@@ -32,25 +32,25 @@ export default function ModeSelector({ showLabel = false }: { showLabel?: boolea
         className="btn-ghost flex items-center gap-2 px-3 py-1.5"
         title={t("mode." + workMode)}
       >
-        <Icon className="w-4 h-4" style={{ color: 'var(--brand-500)' }} />
-        {showLabel && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{t("mode." + workMode)}</span>}
+        <Icon className="w-4 h-4" style={{ color: "var(--brand-500)" }} />
+        {showLabel && <span className="text-xs" style={{ color: "var(--text-muted)" }}>{t("mode." + workMode)}</span>}
       </button>
 
       {open && (
         <div
           className="absolute right-0 top-full mt-2 w-64 rounded-2xl overflow-hidden animate-scale-in z-50"
           style={{
-            background: 'var(--surface-card)',
-            border: '1px solid var(--border)',
-            boxShadow: 'var(--shadow-modal)',
+            background: "var(--surface-card)",
+            border: "1px solid var(--border)",
+            boxShadow: "var(--shadow-modal)",
           }}
         >
           <div
             className="p-3 border-b"
-            style={{ borderColor: 'var(--border)' }}
+            style={{ borderColor: "var(--border)" }}
           >
-            <p className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{t("mode.title")}</p>
-            <p className="text-[10px]" style={{ color: 'var(--text-muted)', marginTop: '0.125rem' }}>{t("mode.subtitle")}</p>
+            <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>{t("mode.title")}</p>
+            <p className="text-[10px]" style={{ color: "var(--text-muted)", marginTop: "0.125rem" }}>{t("mode.subtitle")}</p>
           </div>
           <div className="p-1.5">
             {modeIds.map((id) => {
@@ -62,26 +62,26 @@ export default function ModeSelector({ showLabel = false }: { showLabel?: boolea
                   onClick={() => { setWorkMode(id); setOpen(false); }}
                   className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200"
                   style={{
-                    color: isActive ? 'var(--brand-500)' : 'var(--text-muted)',
-                    background: isActive ? 'color-mix(in srgb, var(--brand-500) 10%, transparent)' : 'transparent',
+                    color: isActive ? "var(--brand-500)" : "var(--text-muted)",
+                    background: isActive ? "color-mix(in srgb, var(--brand-500) 10%, transparent)" : "transparent",
                   }}
-                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'color-mix(in srgb, var(--border) 40%, transparent)'; }}
-                  onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "color-mix(in srgb, var(--border) 40%, transparent)"; }}
+                  onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
                 >
                   <div
                     className="w-8 h-8 rounded-lg flex items-center justify-center"
-                    style={{ background: 'color-mix(in srgb, var(--brand-500) 10%, transparent)' }}
+                    style={{ background: "color-mix(in srgb, var(--brand-500) 10%, transparent)" }}
                   >
-                    <ModeIcon className="w-4 h-4" style={{ color: 'var(--brand-500)' }} />
+                    <ModeIcon className="w-4 h-4" style={{ color: "var(--brand-500)" }} />
                   </div>
                   <div className="text-right flex-1">
-                    <p className="font-medium text-xs" style={{ color: isActive ? 'var(--text-primary)' : 'var(--text-primary)' }}>
+                    <p className="font-medium text-xs" style={{ color: isActive ? "var(--text-primary)" : "var(--text-primary)" }}>
                       {t("mode." + id)}
                     </p>
-                    <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{t("mode." + id + "Desc")}</p>
+                    <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>{t("mode." + id + "Desc")}</p>
                   </div>
                   {isActive && (
-                    <div className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--brand-500)' }} />
+                    <div className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--brand-500)" }} />
                   )}
                 </button>
               );

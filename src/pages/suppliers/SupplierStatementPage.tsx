@@ -10,13 +10,6 @@ import StatementPrintTemplate from "@/components/print/StatementPrintTemplate";
 import { printComponent } from "@/utils/printUtils";
 import { useUIStore } from "@/stores/uiStore";
 
-interface StatementData {
-  supplier: { id: number; name: string; code: string };
-  transactions: { date: string; ref_type: string; ref_id: number; debit_milli: number; credit_milli: number; balance_milli: number; memo: string }[];
-  opening_balance_milli: number;
-  closing_balance_milli: number;
-}
-
 export default function SupplierStatementPage() {
   const { id } = useParams();
   const navigate = useNavigate();

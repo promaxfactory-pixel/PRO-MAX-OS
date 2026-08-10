@@ -31,7 +31,7 @@ export default function CustomerFormPage() {
           credit_limit_milli: d.credit_limit_milli || 0, payment_terms: d.payment_terms || "",
           opening_balance_milli: d.opening_balance_milli || 0, notes: d.notes || "",
         });
-      }).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false));
+      }).catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" })).finally(() => setLoading(false));
     }
   }, [id, isEdit]);
 
@@ -61,7 +61,7 @@ export default function CustomerFormPage() {
     <div className="space-y-6">
       <div className="page-header">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/customers')} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
+          <button onClick={() => navigate("/customers")} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
           <div>
             <h1 className="page-title">{isEdit ? "تعديل بيانات العميل" : "عميل جديد"}</h1>
             <p className="page-subtitle">{isEdit ? `تعديل ${form.name}` : "إضافة عميل جديد"}</p>
@@ -127,7 +127,7 @@ export default function CustomerFormPage() {
         </Card>
         <div className="flex justify-start gap-3 mt-4">
           <Button type="submit" loading={saving} icon={<Save className="w-4 h-4" />}>{isEdit ? "حفظ التعديلات" : "إضافة العميل"}</Button>
-          <Button variant="outline" type="button" onClick={() => navigate('/customers')}>إلغاء</Button>
+          <Button variant="outline" type="button" onClick={() => navigate("/customers")}>إلغاء</Button>
         </div>
       </form>
     </div>

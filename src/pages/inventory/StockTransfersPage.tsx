@@ -4,7 +4,7 @@ import Button from "@/components/ui/Button";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import { formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
-import { Plus, Save, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Save, ChevronUp } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import type { InventoryItem } from "@/types";
@@ -72,7 +72,7 @@ export default function StockTransfersPage() {
   const set = (key: string, val: any) => setForm((f) => ({ ...f, [key]: val }));
 
   const handleSubmit = async (e?: React.FormEvent | Event) => {
-    if (e && 'preventDefault' in e) e.preventDefault();
+    if (e && "preventDefault" in e) e.preventDefault();
     if (!form.item_id) return addNotification({ id: crypto.randomUUID(), type: "warning", title: "تنبيه", message: "يرجى اختيار الصنف" });
     if (!form.from_warehouse_id || !form.to_warehouse_id) return addNotification({ id: crypto.randomUUID(), type: "warning", title: "تنبيه", message: "يرجى اختيار المستودعات" });
     setSaving(true);

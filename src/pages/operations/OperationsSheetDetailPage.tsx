@@ -1,14 +1,12 @@
 ﻿import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Card from "@/components/ui/Card";
-import Button from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/Badge";
 import Badge from "@/components/ui/Badge";
-import { formatOMR, formatDate } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
-import { ArrowRight, ClipboardList, User, Clock, ShieldCheck, FileText } from "lucide-react";
+import { ArrowRight, ClipboardList, User, Clock } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
-import { OperationsSheet } from "@/types";
 
 export default function OperationsSheetDetailPage() {
   const { id } = useParams();
@@ -21,7 +19,7 @@ export default function OperationsSheetDetailPage() {
   useEffect(() => {
     invoke("get_operations_sheet", { id: Number(id) })
       .then((d) => setSheet(d))
-      .catch((e: unknown) => addNotification({ title: 'ط®ط·ط£', message: String(e), type: 'error' }))
+      .catch((e: unknown) => addNotification({ title: "ط®ط·ط£", message: String(e), type: "error" }))
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -43,7 +41,7 @@ export default function OperationsSheetDetailPage() {
     <div className="space-y-6">
       <div className="page-header">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/operations')} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
+          <button onClick={() => navigate("/operations")} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
           <div>
             <h1 className="page-title flex items-center gap-3">
               <span className="font-mono text-brand-400">{sheet.sheet_no || "â€”"}</span>

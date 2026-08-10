@@ -17,7 +17,7 @@ export default function SupplierDetailPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   useEffect(() => {
-    invoke("get_supplier", { id: Number(id) }).then((d) => setSupplier(d as Supplier)).catch((e: unknown) => { const msg = String(e); setLoadError(msg); addNotification({ title: 'ط®ط·ط£', message: String(e), type: 'error' }); }).finally(() => setLoading(false));
+    invoke("get_supplier", { id: Number(id) }).then((d) => setSupplier(d as Supplier)).catch((e: unknown) => { const msg = String(e); setLoadError(msg); addNotification({ title: "ط®ط·ط£", message: String(e), type: "error" }); }).finally(() => setLoading(false));
   }, [id]);
 
   if (loading) {
@@ -31,7 +31,7 @@ export default function SupplierDetailPage() {
     <div className="space-y-6">
       <div className="page-header">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/suppliers')} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
+          <button onClick={() => navigate("/suppliers")} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
           <div>
             <h1 className="page-title">{supplier.name}</h1>
             <p className="page-subtitle font-mono">{supplier.code || "ط¨ط¯ظˆظ† ظƒظˆط¯"}</p>

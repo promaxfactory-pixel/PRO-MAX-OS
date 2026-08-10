@@ -6,14 +6,13 @@ import Input, { Select, Textarea } from "@/components/ui/Input";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowRight, Save, Plus, Trash2 } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
-import type { Machine, Product, ProductionLine } from "@/types";
+import type { Product } from "@/types";
 
 export default function ProductionOrderCreatePage() {
   const navigate = useNavigate();
   const { addNotification } = useUIStore();
-  const [machines, setMachines] = useState<Machine[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [machineId, setMachineId] = useState<number>(0);
+  const [machineId, _setMachineId] = useState<number>(0);
   const [operator, setOperator] = useState("");
   const [supervisor, setSupervisor] = useState("");
   const [shift, setShift] = useState("morning");
@@ -28,7 +27,7 @@ export default function ProductionOrderCreatePage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    invoke("list_products").then((d) => setProducts(d as Product[])).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }));
+    invoke("list_products").then((d) => setProducts(d as Product[])).catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" }));
   }, []);
 
   const addLine = () => setLines([...lines, { product_id: products[0]?.id || 0, cartons_good: 0, cartons_waste: 0, worker: "" }]);
@@ -50,7 +49,7 @@ export default function ProductionOrderCreatePage() {
     <div className="space-y-6">
       <div className="page-header">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/production')} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
+          <button onClick={() => navigate("/production")} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
           <div><h1 className="page-title">أمر إنتاج جديد</h1></div>
         </div>
         <Button onClick={handleSave} loading={saving} icon={<Save className="w-4 h-4" />}>حفظ</Button>

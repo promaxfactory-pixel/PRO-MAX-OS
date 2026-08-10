@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import Card from "@/components/ui/Card";
 import DataTable, { Column } from "@/components/ui/DataTable";
-import { formatOMR, formatNumber } from "@/lib/utils";
+import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { Calendar, Users } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
@@ -17,7 +17,7 @@ interface SalesByCustomer {
 export default function SalesByCustomerPage() {
   const addNotification = useUIStore((s) => s.addNotification);
   const [data, setData] = useState<SalesByCustomer[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
 

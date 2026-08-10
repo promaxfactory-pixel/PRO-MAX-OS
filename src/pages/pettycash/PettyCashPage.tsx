@@ -198,8 +198,8 @@ export default function PettyCashPage() {
     { key: "status", header: "الحالة", render: (r) => (
       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
         r.status === "active" ? "bg-emerald-500/20 text-emerald-400" :
-        r.status === "closed" ? "bg-red-500/20 text-red-400" :
-        "bg-surface-600 text-surface-300"
+          r.status === "closed" ? "bg-red-500/20 text-red-400" :
+            "bg-surface-600 text-surface-300"
       }`}>{r.status === "active" ? "نشط" : r.status === "closed" ? "مغلق" : r.status || "—"}</span>
     )},
     { key: "actions", header: "", render: (r) => (
@@ -273,7 +273,7 @@ export default function PettyCashPage() {
 
       <DataTable columns={columns} data={accounts} loading={loading} emptyMessage="لا توجد حسابات صرف نثري" />
 
-      <Modal open={statementOpen} onClose={() => { setStatementOpen(false); setEditingId(null); }} title={statementAccount ? `كشف حساب: ${statementAccount.name}` : ''} size="xl">
+      <Modal open={statementOpen} onClose={() => { setStatementOpen(false); setEditingId(null); }} title={statementAccount ? `كشف حساب: ${statementAccount.name}` : ""} size="xl">
         <div className="flex items-center gap-3 mb-4">
           <div className="flex items-center gap-2">
             <span className="text-sm text-[var(--text-secondary)]">من</span>

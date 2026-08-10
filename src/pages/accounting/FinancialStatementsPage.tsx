@@ -3,13 +3,8 @@ import Card from "@/components/ui/Card";
 import Tabs from "@/components/ui/Tabs";
 import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
-import { TrendingUp, TrendingDown, BarChart3 } from "lucide-react";
+import { TrendingUp, BarChart3 } from "lucide-react";
 import { useUIStore } from "../../stores/uiStore";
-
-interface FinancialStatement {
-  items: { account: string; amount_milli: number }[];
-  total_milli: number;
-}
 
 export default function FinancialStatementsPage() {
   const { addNotification } = useUIStore();
@@ -23,7 +18,7 @@ export default function FinancialStatementsPage() {
   useEffect(() => {
     Promise.all([invoke("get_income_statement"), invoke("get_balance_sheet")])
       .then(([i, b]) => { setIncome(i); setBalance(b); })
-      .catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
+      .catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" }))
       .finally(() => setLoading(false));
   }, []);
 
@@ -39,7 +34,7 @@ export default function FinancialStatementsPage() {
           <div className="space-y-3">
             <div className="flex justify-between py-2 border-b border-surface-700/30"><span className="text-surface-400">إجمالي الإيرادات</span><span className="text-emerald-400 font-bold">{formatOMR(income.total_revenue || 0)}</span></div>
             <div className="flex justify-between py-2 border-b border-surface-700/30"><span className="text-surface-400">إجمالي المصروفات</span><span className="text-red-400 font-bold">{formatOMR(income.total_expenses || 0)}</span></div>
-            <div className="flex justify-between py-3"><span className="font-bold text-white">صافي الربح / الخسارة</span><span className={`text-xl font-bold ${(income.net_income || 0) >= 0 ? 'gradient-text' : 'text-red-400'}`}>{formatOMR(income.net_income || 0)}</span></div>
+            <div className="flex justify-between py-3"><span className="font-bold text-white">صافي الربح / الخسارة</span><span className={`text-xl font-bold ${(income.net_income || 0) >= 0 ? "gradient-text" : "text-red-400"}`}>{formatOMR(income.net_income || 0)}</span></div>
           </div>
         </Card>
       )}

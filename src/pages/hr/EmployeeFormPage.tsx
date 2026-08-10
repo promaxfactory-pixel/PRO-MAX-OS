@@ -54,7 +54,7 @@ export default function EmployeeFormPage() {
           sponsor_name: d.sponsor_name || "", sponsor_id: d.sponsor_id || "",
           notes: d.notes || "",
         });
-      }).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false));
+      }).catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" })).finally(() => setLoading(false));
     }
   }, [id, isEdit]);
 
@@ -84,7 +84,7 @@ export default function EmployeeFormPage() {
     <div className="space-y-6">
       <div className="page-header">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/hr/employees')} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
+          <button onClick={() => navigate("/hr/employees")} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
           <div>
             <h1 className="page-title">{isEdit ? "تعديل بيانات الموظف" : "إضافة موظف جديد"}</h1>
             <p className="page-subtitle">{isEdit ? `تعديل ${form.name}` : "إضافة موظف جديد"}</p>
@@ -267,7 +267,7 @@ export default function EmployeeFormPage() {
 
         <div className="flex justify-start gap-3 mt-4">
           <Button type="submit" loading={saving} icon={<Save className="w-4 h-4" />}>{isEdit ? "حفظ التعديلات" : "إضافة الموظف"}</Button>
-          <Button variant="outline" type="button" onClick={() => navigate('/hr/employees')}>إلغاء</Button>
+          <Button variant="outline" type="button" onClick={() => navigate("/hr/employees")}>إلغاء</Button>
         </div>
       </form>
     </div>

@@ -21,7 +21,7 @@ interface MarginRow {
 export default function InventoryMarginPage() {
   const addNotification = useUIStore((s) => s.addNotification);
   const [data, setData] = useState<MarginRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
 
   const loadData = useCallback(async () => {
     setLoading(true);

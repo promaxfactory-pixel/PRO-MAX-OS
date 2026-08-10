@@ -4,9 +4,9 @@ import DataTable, { Column } from "@/components/ui/DataTable";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
-import { formatOMR, formatDate } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
-import { Plus, FileCheck, AlertTriangle, Clock, ShieldAlert } from "lucide-react";
+import { Plus, FileCheck, ShieldAlert } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
 interface Renewal {
@@ -83,13 +83,6 @@ export default function RenewalsPage() {
     const exp = new Date(expiryDate);
     exp.setHours(0, 0, 0, 0);
     return Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  };
-
-  const getRowBg = (r: Renewal): string => {
-    const days = getDaysUntilExpiry(r.expiry_date);
-    if (days < 0) return "bg-red-500/10 border-r-2 border-red-500";
-    if (days <= (r.alert_days || 30)) return "bg-yellow-500/10 border-r-2 border-yellow-500";
-    return "";
   };
 
   const getStatus = (r: Renewal): string => {

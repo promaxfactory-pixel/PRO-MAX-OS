@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { create } from "zustand";
 
 interface LicenseInfo {
   customer_name: string;
@@ -24,12 +24,12 @@ export const useLicenseStore = create<LicenseState>((set) => ({
   isLoading: false,
   isChecking: true,
   license: null,
-  message: '',
+  message: "",
   checkLicense: async () => {
     set({ isChecking: true });
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      const result = await invoke<{ valid: boolean; message: string; license: LicenseInfo | null }>('check_license');
+      const { invoke } = await import("@tauri-apps/api/core");
+      const result = await invoke<{ valid: boolean; message: string; license: LicenseInfo | null }>("check_license");
       set({
         isLicensed: result.valid,
         isChecking: false,
@@ -37,14 +37,14 @@ export const useLicenseStore = create<LicenseState>((set) => ({
         message: result.message,
       });
     } catch {
-      set({ isLicensed: false, isChecking: false, message: 'تعذر التحقق من الترخيص' });
+      set({ isLicensed: false, isChecking: false, message: "تعذر التحقق من الترخيص" });
     }
   },
   activateLicense: async (key: string) => {
     set({ isLoading: true });
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      const result = await invoke<{ valid: boolean; message: string; license: LicenseInfo | null }>('activate_license', { licenseKey: key });
+      const { invoke } = await import("@tauri-apps/api/core");
+      const result = await invoke<{ valid: boolean; message: string; license: LicenseInfo | null }>("activate_license", { licenseKey: key });
       if (result.valid) {
         set({ isLicensed: true, isLoading: false, license: result.license, message: result.message });
         return true;

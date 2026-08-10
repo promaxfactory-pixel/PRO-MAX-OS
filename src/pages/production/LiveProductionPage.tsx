@@ -80,7 +80,7 @@ export default function LiveProductionPage() {
       const w = await invoke<{id: number; name: string; code: string | null; job: string | null}[]>("list_employees_for_production");
       setWorkers(w);
     } catch {
-      addNotification({ id: crypto.randomUUID(), type: 'error', title: 'خطأ', message: 'فشل تحميل بيانات الإنتاج' });
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "فشل تحميل بيانات الإنتاج" });
     }
   }, []);
 
@@ -361,7 +361,7 @@ export default function LiveProductionPage() {
                 <label className="form-label">ط§ظ„ط¹ط§ظ…ظ„ *</label>
                 <select
                   className="input-field"
-                  value={workerId || ''}
+                  value={workerId || ""}
                   onChange={(e) => setWorkerId(Number(e.target.value) || null)}
                   aria-label="ط§ط®طھط± ط§ظ„ط¹ط§ظ…ظ„"
                 >

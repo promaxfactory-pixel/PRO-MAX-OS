@@ -4,7 +4,7 @@ import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import { formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
-import { Search, Shield, Users, Calendar, ChevronDown, ChevronUp } from "lucide-react";
+import { Search, ChevronDown, ChevronUp } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
 interface AuditLog {

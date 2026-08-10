@@ -4,7 +4,7 @@ import Badge from "@/components/ui/Badge";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
-import { Database, AlertTriangle } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { useUIStore } from "../../stores/uiStore";
 import { InventoryItem } from "@/types";
 
@@ -19,7 +19,7 @@ export default function InventoryListPage() {
     setLoading(true);
     setError(null);
     try { const d = await invoke("list_inventory_items"); setItems(d as InventoryItem[]); }
-    catch (err) { setError(err instanceof Error ? err.message : String(err)); addNotification({ title: 'خطأ', message: String(err), type: 'error' }); }
+    catch (err) { setError(err instanceof Error ? err.message : String(err)); addNotification({ title: "خطأ", message: String(err), type: "error" }); }
     finally { setLoading(false); }
   }, [addNotification]);
 
@@ -35,9 +35,9 @@ export default function InventoryListPage() {
   const columns: Column<any>[] = useMemo(() => [
     { key: "code", header: "الكود", sortable: true, render: (r) => <span className="font-mono text-brand-400">{r.code || "—"}</span> },
     { key: "name_ar", header: "الاسم", sortable: true, render: (r) => r.name_ar || r.name_en || "—" },
-    { key: "kind", header: "النوع", sortable: true, render: (r) => <Badge variant={r.kind === 'finished' ? 'success' : r.kind === 'raw' ? 'info' : 'default'}>{r.kind}</Badge> },
+    { key: "kind", header: "النوع", sortable: true, render: (r) => <Badge variant={r.kind === "finished" ? "success" : r.kind === "raw" ? "info" : "default"}>{r.kind}</Badge> },
     { key: "uom", header: "وحدة", align: "center" },
-    { key: "qty_on_hand", header: "المخزون", sortable: true, align: "center", render: (r) => <span className={`font-bold ${r.reorder_level > 0 && r.qty_on_hand <= r.reorder_level ? 'text-red-400' : 'text-emerald-400'}`}>{r.qty_on_hand}</span> },
+    { key: "qty_on_hand", header: "المخزون", sortable: true, align: "center", render: (r) => <span className={`font-bold ${r.reorder_level > 0 && r.qty_on_hand <= r.reorder_level ? "text-red-400" : "text-emerald-400"}`}>{r.qty_on_hand}</span> },
     { key: "reorder_level", header: "حد إعادة الطلب", align: "center" },
     { key: "avg_cost_milli", header: "متوسط التكلفة", align: "left", render: (r) => formatOMR(r.avg_cost_milli) },
   ], []);
@@ -56,7 +56,7 @@ export default function InventoryListPage() {
       <div className="flex items-center gap-2 mb-4">
         {["all", "finished", "raw", "packaging", "spare", "consumable"].map((k) => (
           <button key={k} onClick={() => setKindFilter(k)}
-            className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${kindFilter === k ? 'bg-brand-800 text-gold-400 border border-brand-500/30' : 'bg-surface-800 text-surface-400 border border-surface-700 hover:text-white'}`}>
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${kindFilter === k ? "bg-brand-800 text-gold-400 border border-brand-500/30" : "bg-surface-800 text-surface-400 border border-surface-700 hover:text-white"}`}>
             {k === "all" ? "الكل" : k === "finished" ? "منتجات تامة" : k === "raw" ? "خام" : k === "packaging" ? "تغليف" : k === "spare" ? "قطع غيار" : "مستهلك"}
           </button>
         ))}

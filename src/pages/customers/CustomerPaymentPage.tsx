@@ -2,7 +2,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
-import { formatOMR, formatDate } from "@/lib/utils";
+import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowRight, CreditCard } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
@@ -26,7 +26,7 @@ export default function CustomerPaymentPage() {
   useEffect(() => {
     invoke("get_customer", { id: Number(id) })
       .then((d) => setCustomer(d as Customer))
-      .catch((e: unknown) => addNotification({ title: 'ط®ط·ط£', message: String(e), type: 'error' }))
+      .catch((e: unknown) => addNotification({ title: "ط®ط·ط£", message: String(e), type: "error" }))
       .finally(() => setLoading(false));
   }, [id]);
 

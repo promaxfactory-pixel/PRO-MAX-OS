@@ -120,7 +120,6 @@ export default function ExcelImportPage() {
 
   const targetFields = TARGET_FIELDS[importType];
   const errorCount = errors.filter((e) => e.severity === "error").length;
-  const warningCount = errors.filter((e) => e.severity === "warning").length;
 
   return (
     <div className="space-y-6">

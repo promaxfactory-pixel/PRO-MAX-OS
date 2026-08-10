@@ -4,7 +4,7 @@ import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
-import { ArrowRight, UserCog, Edit } from "lucide-react";
+import { ArrowRight, Edit } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 import { Employee } from "@/types";
 
@@ -15,14 +15,14 @@ export default function EmployeeDetailPage() {
   const [emp, setEmp] = useState<Employee | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { invoke("get_employee", { id: Number(id) }).then((d) => setEmp(d as Employee)).catch((e: unknown) => addNotification({ title: 'ط®ط·ط£', message: String(e), type: 'error' })).finally(() => setLoading(false)); }, [id]);
+  useEffect(() => { invoke("get_employee", { id: Number(id) }).then((d) => setEmp(d as Employee)).catch((e: unknown) => addNotification({ title: "ط®ط·ط£", message: String(e), type: "error" })).finally(() => setLoading(false)); }, [id]);
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="w-12 h-12 border-2 border-brand-800 border-t-gold-400 rounded-full animate-spin" /></div>;
 
   if (!emp) return <div className="flex flex-col items-center justify-center h-64 gap-4"><p className="text-surface-400">تعذر تحميل بيانات الموظف</p><button className="btn-outline px-4 py-2 rounded-xl text-sm" onClick={() => window.location.reload()}>إعادة المحاولة</button></div>;
 
   const expiryWarning = (date: string) => {
-    if (!date) return '';
+    if (!date) return "";
     const d = new Date(date);
     const now = new Date();
     const days = Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
@@ -35,7 +35,7 @@ export default function EmployeeDetailPage() {
     <div className="space-y-6">
       <div className="page-header">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/hr/employees')} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
+          <button onClick={() => navigate("/hr/employees")} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
           <div><h1 className="page-title">{emp.name}</h1><p className="page-subtitle">{emp.job || "â€”"}</p></div>
         </div>
         <Button variant="outline" icon={<Edit className="w-4 h-4" />} onClick={() => navigate(`/hr/employees/${id}/edit`)}>طھط¹ط¯ظٹظ„</Button>

@@ -120,7 +120,7 @@
 | Table | Purpose | Key Columns |
 |-------|---------|-------------|
 | `e_invoices` | Generated e-invoices | `id` PK, `invoice_id` FK, `xml_hash`, `status`, `uuid`, `qr_code`, `submission_id`, `cancel_reason`, `cancelled_at`, `cancelled_by` |
-| `einvoice_settings` | Per-company ZATCA config | `id` PK, `company_id` FK, `tax_authority_endpoint`, `api_key`, `api_secret`, `environment`, `auto_submit`, `compliance_certificate`, `certificate_expiry` |
+| `einvoice_settings` | Per-company PINT OM (Oman Fawtara) e-invoice config | `id` PK, `company_id` FK, `tax_authority_endpoint`, `api_key`, `api_secret`, `environment`, `auto_submit`, `compliance_certificate`, `certificate_expiry` |
 | `einvoice_queue` | Processing queue | `id` PK, `invoice_id` FK, `action`, `priority`, `retry_count`, `max_retries`, `last_error`, `next_retry_at`, `status` |
 
 ### Government Compliance (Oman)

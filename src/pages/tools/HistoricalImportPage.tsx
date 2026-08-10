@@ -8,9 +8,8 @@ import {
   Users, Truck, Package, Warehouse, FileText, ShoppingCart,
   Receipt, Database, UserCheck, Upload, CheckCircle2, XCircle,
   AlertTriangle, RotateCcw, ArrowRight, ChevronLeft, FileSpreadsheet,
-  Download, Loader2, ChevronDown
+  Download, Loader2
 } from "lucide-react";
-import { useUIStore } from "@/stores/uiStore";
 
 interface FileWithPath {
   name: string;

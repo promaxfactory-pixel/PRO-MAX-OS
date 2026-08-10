@@ -8,9 +8,9 @@ export default function LicenseActivationPage() {
   const { activateLicense, isLoading, message, isLicensed, license } = useLicenseStore();
   const navigate = useNavigate();
 
-   const handleActivate = async () => {
-     await activateLicense(licenseKey.trim());
-   };
+  const handleActivate = async () => {
+    await activateLicense(licenseKey.trim());
+  };
 
   return (
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4" dir="rtl">
@@ -99,8 +99,8 @@ export default function LicenseActivationPage() {
                       <span className="text-gray-400">نوع الترخيص</span>
                       <span className="text-white font-medium">
                         {license.license_type === "perpetual" ? "دائم" :
-                         license.license_type === "subscription" ? "اشتراك" :
-                         license.license_type === "trial" ? "تجريبي" : license.license_type}
+                          license.license_type === "subscription" ? "اشتراك" :
+                            license.license_type === "trial" ? "تجريبي" : license.license_type}
                       </span>
                     </div>
                     {license.expires_at && (

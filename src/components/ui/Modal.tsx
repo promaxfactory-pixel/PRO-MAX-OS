@@ -7,23 +7,23 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: "sm" | "md" | "lg" | "xl";
   footer?: React.ReactNode;
 }
 
-export default function Modal({ open, onClose, title, children, size = 'md', footer }: ModalProps) {
+export default function Modal({ open, onClose, title, children, size = "md", footer }: ModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
-  const titleId = `modal-title-${title.replace(/\s+/g, '-').toLowerCase()}`;
+  const titleId = `modal-title-${title.replace(/\s+/g, "-").toLowerCase()}`;
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.key === 'Escape') {
+    if (e.key === "Escape") {
       onClose();
       return;
     }
-    if (e.key !== 'Tab') return;
+    if (e.key !== "Tab") return;
     const focusable = overlayRef.current?.querySelectorAll<HTMLElement>(
-      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      "button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex=\"-1\"])"
     );
     if (!focusable || focusable.length === 0) return;
     const first = focusable[0];
@@ -44,18 +44,18 @@ export default function Modal({ open, onClose, title, children, size = 'md', foo
   useEffect(() => {
     if (open) {
       previousFocusRef.current = document.activeElement as HTMLElement;
-      document.addEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = 'hidden';
+      document.addEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = "hidden";
       setTimeout(() => {
         const first = overlayRef.current?.querySelector<HTMLElement>(
-          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          "button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex=\"-1\"])"
         );
         first?.focus();
       }, 0);
     }
     return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = '';
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = "";
       previousFocusRef.current?.focus();
     };
   }, [open, handleKeyDown]);
@@ -63,10 +63,10 @@ export default function Modal({ open, onClose, title, children, size = 'md', foo
   if (!open) return null;
 
   const sizes = {
-    sm: 'max-w-md',
-    md: 'max-w-2xl',
-    lg: 'max-w-4xl',
-    xl: 'max-w-6xl',
+    sm: "max-w-md",
+    md: "max-w-2xl",
+    lg: "max-w-4xl",
+    xl: "max-w-6xl",
   };
 
   return (
@@ -78,19 +78,19 @@ export default function Modal({ open, onClose, title, children, size = 'md', foo
       className="modal-overlay"
       onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
     >
-      <div className={cn('modal-content', sizes[size])} onClick={(e) => e.stopPropagation()}>
+      <div className={cn("modal-content", sizes[size])} onClick={(e) => e.stopPropagation()}>
         <div
           className="flex items-center justify-between p-6 border-b"
-          style={{ borderColor: 'var(--border)' }}
+          style={{ borderColor: "var(--border)" }}
         >
-          <h2 id={titleId} className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>{title}</h2>
+          <h2 id={titleId} className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>{title}</h2>
           <button
             onClick={onClose}
             aria-label="إغلاق"
             className="p-2 rounded-lg transition-colors"
-            style={{ color: 'var(--text-muted)' }}
-            onMouseEnter={e => e.currentTarget.style.background = 'color-mix(in srgb, var(--border) 40%, transparent)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            style={{ color: "var(--text-muted)" }}
+            onMouseEnter={e => e.currentTarget.style.background = "color-mix(in srgb, var(--border) 40%, transparent)"}
+            onMouseLeave={e => e.currentTarget.style.background = "transparent"}
           >
             <X className="w-4 h-4" aria-hidden="true" />
           </button>
@@ -99,7 +99,7 @@ export default function Modal({ open, onClose, title, children, size = 'md', foo
         {footer && (
           <div
             className="flex items-center justify-end gap-3 p-6 border-t"
-            style={{ borderColor: 'var(--border)' }}
+            style={{ borderColor: "var(--border)" }}
           >
             {footer}
           </div>

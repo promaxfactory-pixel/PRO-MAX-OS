@@ -39,8 +39,8 @@ export default function PurchaseCreatePage() {
   ]);
 
   useEffect(() => {
-    invoke("list_suppliers").then((d) => setSuppliers(d as Supplier[])).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }));
-    invoke("list_inventory_items").then((d) => setItems(d as InventoryItem[])).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }));
+    invoke("list_suppliers").then((d) => setSuppliers(d as Supplier[])).catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" }));
+    invoke("list_inventory_items").then((d) => setItems(d as InventoryItem[])).catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" }));
   }, []);
 
   const updateLine = (index: number, field: keyof Line, value: number) => {

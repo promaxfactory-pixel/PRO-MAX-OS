@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import {
   MessageSquare, Mail, Printer, Save, CheckCircle2,
-  Send, Wifi, WifiOff
+  Send, WifiOff
 } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
@@ -36,7 +36,7 @@ export default function IntegrationsPage() {
   useEffect(() => {
     invoke<Partial<Settings>>("integrations_get_settings")
       .then((d) => setForm((prev) => ({ ...prev, ...d })))
-      .catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }));
+      .catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" }));
   }, []);
 
   const handleChange = (field: keyof Settings, value: any) => {

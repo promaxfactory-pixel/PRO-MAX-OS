@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/Badge";
-import { formatOMR, formatDate } from "@/lib/utils";
+import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowRight, Phone, Mail, MapPin, Edit, FileText, Banknote } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
@@ -18,7 +18,7 @@ export default function CustomerDetailPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   useEffect(() => {
-    invoke("get_customer", { id: Number(id) }).then((d) => setCustomer(d as Customer)).catch((e: unknown) => { const msg = String(e); setLoadError(msg); addNotification({ title: 'ط®ط·ط£', message: String(e), type: 'error' }); }).finally(() => setLoading(false));
+    invoke("get_customer", { id: Number(id) }).then((d) => setCustomer(d as Customer)).catch((e: unknown) => { const msg = String(e); setLoadError(msg); addNotification({ title: "ط®ط·ط£", message: String(e), type: "error" }); }).finally(() => setLoading(false));
   }, [id]);
 
   if (loading) {
@@ -32,7 +32,7 @@ export default function CustomerDetailPage() {
     <div className="space-y-6">
       <div className="page-header">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/customers')} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
+          <button onClick={() => navigate("/customers")} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
           <div>
             <h1 className="page-title">{customer.name}</h1>
             <p className="page-subtitle font-mono">{customer.code || "ط¨ط¯ظˆظ† ظƒظˆط¯"}</p>

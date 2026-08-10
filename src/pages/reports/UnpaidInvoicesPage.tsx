@@ -21,7 +21,7 @@ export default function UnpaidInvoicesPage() {
   const navigate = useNavigate();
   const addNotification = useUIStore((s) => s.addNotification);
   const [data, setData] = useState<UnpaidInvoice[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [asOf, setAsOf] = useState(new Date().toISOString().split("T")[0]);
 
   const loadData = useCallback(async () => {

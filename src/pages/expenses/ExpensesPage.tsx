@@ -4,7 +4,7 @@ import Button from "@/components/ui/Button";
 import Card, { StatCard } from "@/components/ui/Card";
 import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
-import { Plus, Save, Receipt, ArrowRight, Wallet, UserCheck, RefreshCw, CheckCircle, BadgeCheck } from "lucide-react";
+import { Plus, Save, Receipt, ArrowRight, Wallet, UserCheck, RefreshCw, BadgeCheck } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
 interface Expense {
@@ -126,21 +126,21 @@ export default function ExpensesPage() {
   };
 
   const totalExpenses = expenses.reduce((s, e) => s + (e.amount_milli || 0), 0);
-  const companyExpenses = expenses.filter(e => !e.paid_from_source || e.paid_from_source === 'company').reduce((s, e) => s + (e.amount_milli || 0), 0);
-  const custodyExpenses = expenses.filter(e => e.paid_from_source === 'custody').reduce((s, e) => s + (e.amount_milli || 0), 0);
-  const personalExpenses = expenses.filter(e => e.paid_from_source === 'personal').reduce((s, e) => s + (e.amount_milli || 0), 0);
-  const pendingReimburse = expenses.filter(e => e.reimbursement_status === 'pending').length;
+  const companyExpenses = expenses.filter(e => !e.paid_from_source || e.paid_from_source === "company").reduce((s, e) => s + (e.amount_milli || 0), 0);
+  const custodyExpenses = expenses.filter(e => e.paid_from_source === "custody").reduce((s, e) => s + (e.amount_milli || 0), 0);
+  const personalExpenses = expenses.filter(e => e.paid_from_source === "personal").reduce((s, e) => s + (e.amount_milli || 0), 0);
+  const pendingReimburse = expenses.filter(e => e.reimbursement_status === "pending").length;
 
   const methodLabel = (m: string) => METHODS.find((x) => x.value === m)?.label || m;
   const sourceLabel = (s: string | null) => {
-    if (s === 'custody') return 'عهدة';
-    if (s === 'personal') return 'شخصي';
-    return 'الشركة';
+    if (s === "custody") return "عهدة";
+    if (s === "personal") return "شخصي";
+    return "الشركة";
   };
   const sourceColor = (s: string | null) => {
-    if (s === 'custody') return 'bg-blue-500/20 text-blue-400';
-    if (s === 'personal') return 'bg-amber-500/20 text-amber-400';
-    return 'bg-emerald-500/20 text-emerald-400';
+    if (s === "custody") return "bg-blue-500/20 text-blue-400";
+    if (s === "personal") return "bg-amber-500/20 text-amber-400";
+    return "bg-emerald-500/20 text-emerald-400";
   };
 
   const columns: Column<Expense>[] = useMemo(() => [
@@ -153,23 +153,23 @@ export default function ExpensesPage() {
     { key: "method", header: "الطريقة", render: (r) => <span className="text-surface-300">{methodLabel(r.method)}</span> },
     { key: "approval_status", header: "الحالة", render: (r) => (
       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-        r.approval_status === 'approved' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-yellow-500/20 text-yellow-400'
-      }`}>{r.approval_status === 'approved' ? '✓ معتمد' : '⏳ قيد المراجعة'}</span>
+        r.approval_status === "approved" ? "bg-emerald-500/20 text-emerald-400" : "bg-yellow-500/20 text-yellow-400"
+      }`}>{r.approval_status === "approved" ? "✓ معتمد" : "⏳ قيد المراجعة"}</span>
     )},
     { key: "reimbursement_status", header: "الرد", render: (r) => {
-      if (r.paid_from_source !== 'personal') return <span className="text-surface-600">—</span>;
-      if (r.reimbursement_status === 'reimbursed') return <span className="text-emerald-400 text-xs font-medium">✓ تم الرد</span>;
-      if (r.reimbursement_status === 'pending') return <span className="text-amber-400 text-xs font-medium">⏳ ينتظر الرد</span>;
+      if (r.paid_from_source !== "personal") return <span className="text-surface-600">—</span>;
+      if (r.reimbursement_status === "reimbursed") return <span className="text-emerald-400 text-xs font-medium">✓ تم الرد</span>;
+      if (r.reimbursement_status === "pending") return <span className="text-amber-400 text-xs font-medium">⏳ ينتظر الرد</span>;
       return <span className="text-surface-600">—</span>;
     }},
     { key: "id", header: "", render: (r) => (
       <div className="flex items-center gap-1">
-        {r.approval_status !== 'approved' && (
+        {r.approval_status !== "approved" && (
           <button onClick={() => handleApprove(r.id)} className="p-1 rounded-lg hover:bg-emerald-500/10 text-emerald-400 transition-colors" title="اعتماد">
             <BadgeCheck className="w-4 h-4" />
           </button>
         )}
-        {r.paid_from_source === 'personal' && r.reimbursement_status === 'pending' && (
+        {r.paid_from_source === "personal" && r.reimbursement_status === "pending" && (
           <button onClick={() => handleReimburse(r.id)} className="p-1 rounded-lg hover:bg-blue-500/10 text-blue-400 transition-colors" title="رد المبلغ">
             <RefreshCw className="w-4 h-4" />
           </button>
@@ -246,32 +246,32 @@ export default function ExpensesPage() {
                   <button
                     key={src.value}
                     type="button"
-                    onClick={() => { setPaidFromSource(src.value); if (src.value !== 'custody') setPettyId(null); if (src.value === 'company') setPaidByEmployeeId(null); }}
+                    onClick={() => { setPaidFromSource(src.value); if (src.value !== "custody") setPettyId(null); if (src.value === "company") setPaidByEmployeeId(null); }}
                     className={`p-4 rounded-xl border-2 text-center transition-all ${
                       paidFromSource === src.value
-                        ? 'border-gold-400/50 bg-gold-400/5 text-white shadow-[0_0_15px_rgba(212,175,55,0.1)]'
-                        : 'border-surface-700/50 bg-surface-800/30 text-surface-400 hover:border-surface-600'
+                        ? "border-gold-400/50 bg-gold-400/5 text-white shadow-[0_0_15px_rgba(212,175,55,0.1)]"
+                        : "border-surface-700/50 bg-surface-800/30 text-surface-400 hover:border-surface-600"
                     }`}
                   >
                     <span className="text-2xl block mb-2">{src.icon}</span>
-                    <span className="text-sm font-medium block">{src.label.split('(')[0].trim()}</span>
+                    <span className="text-sm font-medium block">{src.label.split("(")[0].trim()}</span>
                   </button>
                 ))}
               </div>
 
               {/* Custody selector */}
-              {paidFromSource === 'custody' && (
+              {paidFromSource === "custody" && (
                 <div className="mt-4 grid grid-cols-2 gap-4">
                   <div className="input-group">
                     <label className="input-label">العهدة *</label>
-                    <select className="input-field" value={pettyId || ''} onChange={(e) => setPettyId(Number(e.target.value) || null)} aria-label="اختر العهدة">
+                    <select className="input-field" value={pettyId || ""} onChange={(e) => setPettyId(Number(e.target.value) || null)} aria-label="اختر العهدة">
                       <option value="">اختر العهدة...</option>
                       {custodyAccounts.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.code})</option>)}
                     </select>
                   </div>
                   <div className="input-group">
                     <label className="input-label">الدافع *</label>
-                    <select className="input-field" value={paidByEmployeeId || ''} onChange={(e) => setPaidByEmployeeId(Number(e.target.value) || null)} aria-label="اختر الدافع">
+                    <select className="input-field" value={paidByEmployeeId || ""} onChange={(e) => setPaidByEmployeeId(Number(e.target.value) || null)} aria-label="اختر الدافع">
                       <option value="">اختر الشخص...</option>
                       {employees.map((e) => <option key={e.id} value={e.id}>{e.name} ({e.code})</option>)}
                     </select>
@@ -280,11 +280,11 @@ export default function ExpensesPage() {
               )}
 
               {/* Personal payment - employee selector */}
-              {paidFromSource === 'personal' && (
+              {paidFromSource === "personal" && (
                 <div className="mt-4">
                   <div className="input-group">
                     <label className="input-label">الموظف الذي دفع من جيبه *</label>
-                    <select className="input-field" value={paidByEmployeeId || ''} onChange={(e) => setPaidByEmployeeId(Number(e.target.value) || null)} aria-label="اختر الموظف">
+                    <select className="input-field" value={paidByEmployeeId || ""} onChange={(e) => setPaidByEmployeeId(Number(e.target.value) || null)} aria-label="اختر الموظف">
                       <option value="">اختر الموظف...</option>
                       {employees.map((e) => <option key={e.id} value={e.id}>{e.name} ({e.code})</option>)}
                     </select>

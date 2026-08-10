@@ -2,10 +2,10 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import Button from "@/components/ui/Button";
-import Card, { StatCard } from "@/components/ui/Card";
+import { StatCard } from "@/components/ui/Card";
 import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
-import { Plus, ShoppingCart } from "lucide-react";
+import { ShoppingCart } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
 interface PurchaseOrder {
@@ -44,10 +44,10 @@ export default function PurchaseListPage() {
     { key: "paid_milli", header: "المدفوع", align: "left", render: (r) => formatOMR(r.paid_milli) },
     { key: "status", header: "الحالة", render: (r) => (
       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-        r.status === 'Posted' ? 'bg-emerald-500/20 text-emerald-400' :
-        r.status === 'Draft' ? 'bg-yellow-500/20 text-yellow-400' :
-        'bg-surface-600 text-surface-300'
-      }`}>{r.status === 'Posted' ? 'مرسل' : r.status === 'Draft' ? 'مسودة' : r.status}</span>
+        r.status === "Posted" ? "bg-emerald-500/20 text-emerald-400" :
+          r.status === "Draft" ? "bg-yellow-500/20 text-yellow-400" :
+            "bg-surface-600 text-surface-300"
+      }`}>{r.status === "Posted" ? "مرسل" : r.status === "Draft" ? "مسودة" : r.status}</span>
     )},
   ], []);
 
@@ -58,7 +58,7 @@ export default function PurchaseListPage() {
           <h1 className="page-title">المشتريات</h1>
           <p className="page-subtitle">{purchases.length} مشتريات</p>
         </div>
-        <Button icon={<ShoppingCart className="w-4 h-4" />} onClick={() => navigate('/purchases/new')}>مشتريات جديدة</Button>
+        <Button icon={<ShoppingCart className="w-4 h-4" />} onClick={() => navigate("/purchases/new")}>مشتريات جديدة</Button>
       </div>
       <div className="grid grid-cols-3 gap-4">
         <StatCard title="إجمالي المشتريات" value={formatOMR(totalAmount)} icon={<ShoppingCart className="w-6 h-6" />} />

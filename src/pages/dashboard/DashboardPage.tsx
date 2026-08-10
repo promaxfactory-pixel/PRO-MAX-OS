@@ -35,9 +35,9 @@ interface LiveData {
   recent_entries: Array<{ product_name?: string; product_id?: number; cartons_produced?: number; }>;
 }
 
-const PIE_COLORS = ['#4c1d95', '#d4af37', '#8b5cf6', '#6366f1', '#ec4899', '#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#64748b'];
+const PIE_COLORS = ["#4c1d95", "#d4af37", "#8b5cf6", "#6366f1", "#ec4899", "#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#64748b"];
 
-const ChartTooltipStyle = { backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px', color: '#f8fafc', fontSize: '13px' };
+const ChartTooltipStyle = { backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: "12px", color: "#f8fafc", fontSize: "13px" };
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -82,7 +82,7 @@ export default function DashboardPage() {
   })) || [];
 
   const topCustomers = stats?.top_customers?.map((d) => ({
-    name: d.name?.length > 12 ? d.name.slice(0, 12) + '...' : d.name,
+    name: d.name?.length > 12 ? d.name.slice(0, 12) + "..." : d.name,
     المبيعات: Math.round(d.total / 1000)
   })) || [];
 
@@ -114,7 +114,7 @@ export default function DashboardPage() {
           <button onClick={loadDashboard} className="btn-ghost flex items-center gap-2 text-sm">
             <RefreshCw className="w-4 h-4" /> تحديث
           </button>
-          <button onClick={() => navigate('/dashboard/daily-brief')} className="btn-primary">
+          <button onClick={() => navigate("/dashboard/daily-brief")} className="btn-primary">
             الموجز اليومي
           </button>
         </div>
@@ -132,7 +132,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-4 gap-5">
         <StatCard title="العملاء" value={stats?.total_customers || 0} icon={<Users className="w-6 h-6" />} />
         <StatCard title="المنتجات" value={stats?.total_products || 0} icon={<Package className="w-6 h-6" />} />
-        <StatCard title="الإنتاج اليوم" value={`${((liveData?.today_total_cartons as number) || stats?.production_today || 0).toFixed(0)} كرتون`} icon={<Factory className="w-6 h-6" style={{ color: liveData?.today_total_cartons ? '#fbbf24' : undefined }} />} />
+        <StatCard title="الإنتاج اليوم" value={`${((liveData?.today_total_cartons as number) || stats?.production_today || 0).toFixed(0)} كرتون`} icon={<Factory className="w-6 h-6" style={{ color: liveData?.today_total_cartons ? "#fbbf24" : undefined }} />} />
         <StatCard title="أرصدة البنوك" value={formatOMR(stats?.bank_balance || 0)} icon={<Banknote className="w-6 h-6" />} />
       </div>
 
@@ -156,8 +156,8 @@ export default function DashboardPage() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                 <XAxis dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} />
                 <YAxis stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={ChartTooltipStyle} formatter={(value: number) => [formatOMR(value * 1000), 'المبيعات']} />
-                <Area type="monotone" dataKey="amount" stroke="#d4af37" strokeWidth={2.5} fill="url(#salesGrad)" dot={false} activeDot={{ r: 5, fill: '#d4af37' }} />
+                <Tooltip contentStyle={ChartTooltipStyle} formatter={(value: number) => [formatOMR(value * 1000), "المبيعات"]} />
+                <Area type="monotone" dataKey="amount" stroke="#d4af37" strokeWidth={2.5} fill="url(#salesGrad)" dot={false} activeDot={{ r: 5, fill: "#d4af37" }} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -176,7 +176,7 @@ export default function DashboardPage() {
                 <XAxis dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} />
                 <YAxis stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
                 <Tooltip contentStyle={ChartTooltipStyle} />
-                <Legend wrapperStyle={{ fontSize: '12px', color: '#94a3b8' }} />
+                <Legend wrapperStyle={{ fontSize: "12px", color: "#94a3b8" }} />
                 <Bar dataKey="good" fill="#4c1d95" radius={[6, 6, 0, 0]} name="صالح" />
                 <Bar dataKey="waste" fill="#ef4444" radius={[6, 6, 0, 0]} name="هالك" />
               </BarChart>
@@ -200,7 +200,7 @@ export default function DashboardPage() {
                 <XAxis dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} />
                 <YAxis stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
                 <Tooltip contentStyle={ChartTooltipStyle} />
-                <Legend wrapperStyle={{ fontSize: '12px', color: '#94a3b8' }} />
+                <Legend wrapperStyle={{ fontSize: "12px", color: "#94a3b8" }} />
                 <Bar dataKey="كرتون" fill="#4c1d95" radius={[6, 6, 0, 0]} />
                 <Bar dataKey="أكواب" fill="#d4af37" radius={[6, 6, 0, 0]} />
               </BarChart>
@@ -221,7 +221,7 @@ export default function DashboardPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
                   <XAxis type="number" stroke="#64748b" fontSize={11} tickLine={false} />
                   <YAxis type="category" dataKey="name" stroke="#64748b" fontSize={10} tickLine={false} width={90} />
-                  <Tooltip contentStyle={ChartTooltipStyle} formatter={(value: number) => [formatOMR(value * 1000), 'المبيعات']} />
+                  <Tooltip contentStyle={ChartTooltipStyle} formatter={(value: number) => [formatOMR(value * 1000), "المبيعات"]} />
                   <Bar dataKey="المبيعات" fill="#d4af37" radius={[0, 6, 6, 0]} barSize={18} />
                 </BarChart>
               </ResponsiveContainer>
@@ -255,8 +255,8 @@ export default function DashboardPage() {
                       <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip contentStyle={ChartTooltipStyle} formatter={(value: number) => [formatOMR(value * 1000), 'المبلغ']} />
-                  <Legend wrapperStyle={{ fontSize: '11px', color: '#94a3b8' }} />
+                  <Tooltip contentStyle={ChartTooltipStyle} formatter={(value: number) => [formatOMR(value * 1000), "المبلغ"]} />
+                  <Legend wrapperStyle={{ fontSize: "11px", color: "#94a3b8" }} />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
@@ -275,7 +275,7 @@ export default function DashboardPage() {
               <Factory className="w-5 h-5 text-gold-400" />
               الإنتاج المباشر — اليوم
             </h3>
-            <button onClick={() => navigate('/live-production')} className="text-xs text-brand-400 hover:text-gold-400 transition-colors font-medium">
+            <button onClick={() => navigate("/live-production")} className="text-xs text-brand-400 hover:text-gold-400 transition-colors font-medium">
               فتح الإنتاج المباشر ←
             </button>
           </div>
@@ -301,7 +301,7 @@ export default function DashboardPage() {
             <div className="mt-4 p-3 bg-surface-800/30 rounded-xl border border-surface-700/20">
               <p className="text-xs text-surface-400">
                 آخر تسجيل: <span className="text-white font-medium">{liveData.recent_entries[0]?.product_name || `منتج #${liveData.recent_entries[0]?.product_id}`}</span>
-                {' — '}
+                {" — "}
                 <span className="text-gold-400 font-mono">{liveData.recent_entries[0]?.cartons_produced?.toFixed(0)} كرتون</span>
               </p>
             </div>
@@ -312,15 +312,15 @@ export default function DashboardPage() {
       {/* Quick Actions */}
       <div className="grid grid-cols-5 gap-5">
         {[
-          { label: 'فاتورة جديدة', icon: FileText, path: '/invoices/new', color: 'brand' },
-          { label: 'إنتاج مباشر', icon: Factory, path: '/live-production', color: 'amber' },
-          { label: 'أمر إنتاج', icon: Package, path: '/production/new', color: 'brand' },
-          { label: 'المخزون', icon: Warehouse, path: '/reports/low-stock', color: 'brand' },
-          { label: 'الموجز اليومي', icon: BarChart3, path: '/dashboard/daily-brief', color: 'brand' },
+          { label: "فاتورة جديدة", icon: FileText, path: "/invoices/new", color: "brand" },
+          { label: "إنتاج مباشر", icon: Factory, path: "/live-production", color: "amber" },
+          { label: "أمر إنتاج", icon: Package, path: "/production/new", color: "brand" },
+          { label: "المخزون", icon: Warehouse, path: "/reports/low-stock", color: "brand" },
+          { label: "الموجز اليومي", icon: BarChart3, path: "/dashboard/daily-brief", color: "brand" },
         ].map(({ label, icon: Icon, path, color }) => (
           <button key={path} onClick={() => navigate(path)} className="card-hover flex flex-col items-center gap-3 py-7 group">
-            <div className={`w-14 h-14 rounded-2xl ${color === 'amber' ? 'bg-amber-500/20 border border-amber-500/30' : 'bg-brand-800/30 border border-brand-500/20'} flex items-center justify-center group-hover:shadow-glow transition-all`}>
-              <Icon className={`w-7 h-7 ${color === 'amber' ? 'text-amber-400' : 'text-brand-400'} group-hover:text-gold-400 transition-colors`} />
+            <div className={`w-14 h-14 rounded-2xl ${color === "amber" ? "bg-amber-500/20 border border-amber-500/30" : "bg-brand-800/30 border border-brand-500/20"} flex items-center justify-center group-hover:shadow-glow transition-all`}>
+              <Icon className={`w-7 h-7 ${color === "amber" ? "text-amber-400" : "text-brand-400"} group-hover:text-gold-400 transition-colors`} />
             </div>
             <span className="text-sm font-medium text-surface-300 group-hover:text-white transition-colors">{label}</span>
           </button>

@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
-import { formatOMR, formatDate } from "@/lib/utils";
+import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowRight, Printer, Download } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -33,7 +33,7 @@ export default function ReportsVatReturnPage() {
     setLoading(true);
     invoke("vat_return", { month: period })
       .then((d: unknown) => setData(d as VatReturn))
-      .catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
+      .catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" }))
       .finally(() => setLoading(false));
   };
 
@@ -131,7 +131,7 @@ export default function ReportsVatReturnPage() {
               </div>
               <div className="text-center p-4 bg-surface-800/50 rounded-xl border border-brand-500/30">
                 <p className="text-sm text-surface-400 mb-1">المبلغ المستحق للسداد</p>
-                <p className={`text-3xl font-bold ${(data.net_vat || 0) >= 0 ? 'gradient-text' : 'text-emerald-400'}`}>
+                <p className={`text-3xl font-bold ${(data.net_vat || 0) >= 0 ? "gradient-text" : "text-emerald-400"}`}>
                   {formatOMR(data.net_vat || 0)}
                 </p>
                 <p className="text-xs text-surface-500 mt-1">

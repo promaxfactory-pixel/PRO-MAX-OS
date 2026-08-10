@@ -45,7 +45,7 @@ export default function ProductFormPage() {
           carton_height_cm: d.carton_height_cm || 0, weight_kg: d.weight_kg || 0,
           min_stock: d.min_stock || 0,
         });
-      }).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false));
+      }).catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" })).finally(() => setLoading(false));
     }
   }, [id, isEdit]);
 
@@ -75,7 +75,7 @@ export default function ProductFormPage() {
     <div className="space-y-6">
       <div className="page-header">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/products')} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
+          <button onClick={() => navigate("/products")} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
           <div>
             <h1 className="page-title">{isEdit ? "تعديل المنتج" : "منتج جديد"}</h1>
             <p className="page-subtitle">{isEdit ? `تعديل ${form.name_ar}` : "إضافة منتج جديد"}</p>
@@ -239,7 +239,7 @@ export default function ProductFormPage() {
 
         <div className="flex justify-start gap-3 mt-4">
           <Button type="submit" loading={saving} icon={<Save className="w-4 h-4" />}>{isEdit ? "حفظ التعديلات" : "إضافة المنتج"}</Button>
-          <Button variant="outline" type="button" onClick={() => navigate('/products')}>إلغاء</Button>
+          <Button variant="outline" type="button" onClick={() => navigate("/products")}>إلغاء</Button>
         </div>
       </form>
     </div>

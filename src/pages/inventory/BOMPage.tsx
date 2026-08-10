@@ -1,10 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import { invoke } from "@tauri-apps/api/core";
-import { Plus, Save, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Save, ChevronUp } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import type { Product, InventoryItem } from "@/types";
@@ -21,7 +20,6 @@ interface Bom {
 }
 
 export default function BOMPage() {
-  const navigate = useNavigate();
   const { addNotification } = useUIStore();
   const [boms, setBoms] = useState<Bom[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,7 +61,7 @@ export default function BOMPage() {
   const set = (key: string, val: any) => setForm((f) => ({ ...f, [key]: val }));
 
   const handleSubmit = async (e?: React.FormEvent | Event) => {
-    if (e && 'preventDefault' in e) e.preventDefault();
+    if (e && "preventDefault" in e) e.preventDefault();
     if (!form.product_id || !form.item_id) return addNotification({ id: crypto.randomUUID(), type: "warning", title: "تنبيه", message: "يرجى اختيار المنتج والمادة الخام" });
     setSaving(true);
     try {

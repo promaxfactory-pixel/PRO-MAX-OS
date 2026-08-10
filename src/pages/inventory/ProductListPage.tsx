@@ -5,7 +5,7 @@ import Button from "@/components/ui/Button";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
-import { Plus, Package } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useUIStore } from "../../stores/uiStore";
 import { Product } from "@/types";
 
@@ -20,7 +20,7 @@ export default function ProductListPage() {
     setLoading(true);
     setError(null);
     try { const d = await invoke("list_products"); setProducts(d as Product[]); }
-    catch (err) { setError(err instanceof Error ? err.message : String(err)); addNotification({ title: 'خطأ', message: String(err), type: 'error' }); }
+    catch (err) { setError(err instanceof Error ? err.message : String(err)); addNotification({ title: "خطأ", message: String(err), type: "error" }); }
     finally { setLoading(false); }
   }, [addNotification]);
 
@@ -45,7 +45,7 @@ export default function ProductListPage() {
     <div className="space-y-6">
       <div className="page-header">
         <div><h1 className="page-title">المنتجات</h1><p className="page-subtitle">{products.length} منتج نشط</p></div>
-        <Button icon={<Plus className="w-4 h-4" />} onClick={() => navigate('/products/new')}>منتج جديد</Button>
+        <Button icon={<Plus className="w-4 h-4" />} onClick={() => navigate("/products/new")}>منتج جديد</Button>
       </div>
       <DataTable columns={columns} data={products} loading={loading} onRowClick={(r) => navigate(`/products/${r.id}`)} emptyMessage="لا توجد منتجات" />
     </div>

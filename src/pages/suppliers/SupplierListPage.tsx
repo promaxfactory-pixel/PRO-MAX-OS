@@ -42,7 +42,7 @@ export default function SupplierListPage() {
           <h1 className="page-title">الموردين</h1>
           <p className="page-subtitle">{suppliers.length} مورد مسجل</p>
         </div>
-        <Button icon={<Plus className="w-4 h-4" />} onClick={() => navigate('/suppliers/new')}>إضافة مورد</Button>
+        <Button icon={<Plus className="w-4 h-4" />} onClick={() => navigate("/suppliers/new")}>إضافة مورد</Button>
       </div>
 
       <div className="relative">

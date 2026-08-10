@@ -6,7 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useUIStore } from "@/stores/uiStore";
 import {
   Brain, AlertTriangle, AlertCircle, Info, TrendingUp,
-  Users, Factory, DollarSign, Warehouse, RefreshCw, Loader2
+  Users, Factory, DollarSign, Warehouse, RefreshCw
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer

@@ -104,12 +104,15 @@ Built with **Tauri 2** (Rust backend + React 18/TypeScript frontend), PRO MAX OS
 - Leave accrual rules configurable per employment contract
 - Calendar view with team leave coverage
 
-### E-Invoice (ZATCA / FATOORA Integration)
-- Saudi ZATCA Phase 2 / FATOORA e-invoice compliance ready
-- XML generation per ZATCA specifications
-- QR code generation for each e-invoice
-- Integration with FATOORA portal for validation and stamping
-- Tax invoice numbering with sequential sequence management
+### E-Invoice (Oman Fawtara / PINT OM)
+- PINT OM e-invoice XML generation (CrossIndustryInvoice, TypeCode 380) per OTA's Oman specification
+- SHA-256 content hash + base64 QR data for each e-invoice
+- Real REST submission to the configured tax authority endpoint (Oman ASP / OTA testbed)
+- Credentials stored encrypted at rest (AES-256-GCM); decrypted only at submission time
+- Automatic submission queue with exponential-backoff retries and per-item attempt tracking
+- Sandbox mode (simulated references) for testing before production go-live
+- Status: generator + submission integration complete; **requires Oman ASP portal credentials to go live**
+- Note: target mandate is Oman's **Fawtara** (Phase 1 Aug 2026; SME waves through Aug 2027). This is **not** a Saudi ZATCA implementation.
 
 ### AI-Powered Insights
 - Production trend analysis and anomaly detection
@@ -349,6 +352,8 @@ On first launch, the system auto-generates a unique developer PIN tied to the ma
 | **Monetary Unit** | Milli (1/1000 OMR) — stored as `INTEGER` |
 | **Location** | User's AppData directory (per-platform) |
 
+> **Multi-company scope:** `company_id` currently exists on the settings tables (`fiscal_years`, `tax_rates`, `einvoice_settings`) and `companies`. It is **not yet** applied to core operational tables (invoices, inventory, payroll, GL). A full multi-company tenant pass is a planned enhancement.
+
 ### Monetary Precision
 
 All monetary values are stored in **milli** units (1/1000 of an OMR) as `INTEGER` to avoid floating-point precision issues. For example:
@@ -449,7 +454,9 @@ All checks pass for every commit:
 | `vite build` | ✅ 2,714 modules in ~7s |
 | `cargo check` | ✅ 0 errors |
 | `cargo clippy` | ✅ 0 warnings |
-| `cargo test` | ✅ 44/44 |
+| `cargo test` | ✅ 53/53 (Rust) |
+| `vitest run` | ✅ 5/5 (frontend) |
+| `npx eslint` | ✅ 0 errors |
 
 ## Build Artifacts
 

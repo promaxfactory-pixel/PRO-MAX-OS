@@ -4,8 +4,8 @@ import Button from "@/components/ui/Button";
 import { formatDate, cn } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import {
-  Database, Download, Upload, Trash2, CheckCircle2,
-  AlertTriangle, RefreshCw
+  Database, Download, Upload, CheckCircle2,
+  AlertTriangle
 } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
@@ -24,7 +24,7 @@ export default function BackupPage() {
     setLoading(true);
     invoke<Backup[]>("backup_list")
       .then(setBackups)
-      .catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
+      .catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" }))
       .finally(() => setLoading(false));
   }, []);
 

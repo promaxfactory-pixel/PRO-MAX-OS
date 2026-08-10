@@ -48,9 +48,9 @@ export default function ConfirmDialog({
       onCancel();
       return;
     }
-    if (e.key !== 'Tab') return;
+    if (e.key !== "Tab") return;
     const focusable = overlayRef.current?.querySelectorAll<HTMLElement>(
-      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      "button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex=\"-1\"])"
     );
     if (!focusable || focusable.length === 0) return;
     const first = focusable[0];
@@ -72,11 +72,11 @@ export default function ConfirmDialog({
     if (!open) return;
     previousFocusRef.current = document.activeElement as HTMLElement;
     window.addEventListener("keydown", handleKeyDown);
-    document.body.style.overflow = 'hidden';
+    document.body.style.overflow = "hidden";
     setTimeout(() => confirmBtnRef.current?.focus(), 0);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = '';
+      document.body.style.overflow = "";
       previousFocusRef.current?.focus();
     };
   }, [open, handleKeyDown]);

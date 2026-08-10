@@ -1,8 +1,7 @@
-import { useState, useEffect, useMemo } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { useTranslation } from "react-i18next";
-import { useAuthStore } from "@/stores/authStore";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 import Toast from "@/components/ui/Toast";
@@ -10,48 +9,46 @@ import GlobalSearch from "@/components/ui/GlobalSearch";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    const saved = localStorage.getItem('promax-sidebar-collapsed');
-    return saved === 'true';
+    const saved = localStorage.getItem("promax-sidebar-collapsed");
+    return saved === "true";
   });
   const [searchOpen, setSearchOpen] = useState(false);
   const location = useLocation();
-  const navigate = useNavigate();
-  const { user } = useAuthStore();
   const { i18n } = useTranslation();
   const isRtl = i18n.language === "ar" || i18n.language === "ur";
 
-  const sidebarWidth = sidebarCollapsed ? 'var(--sidebar-collapsed-width)' : 'var(--sidebar-width)';
+  const sidebarWidth = sidebarCollapsed ? "var(--sidebar-collapsed-width)" : "var(--sidebar-width)";
   const marginProp = isRtl ? { marginRight: sidebarWidth } : { marginLeft: sidebarWidth };
-  const marginTransition = 'margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1), margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+  const marginTransition = "margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1), margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)";
 
   useEffect(() => {
-    localStorage.setItem('promax-sidebar-collapsed', String(sidebarCollapsed));
+    localStorage.setItem("promax-sidebar-collapsed", String(sidebarCollapsed));
   }, [sidebarCollapsed]);
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem('promax-theme');
+    const savedTheme = localStorage.getItem("promax-theme");
     if (savedTheme) {
-      document.documentElement.setAttribute('data-theme', savedTheme);
+      document.documentElement.setAttribute("data-theme", savedTheme);
     }
   }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key === 'b') {
+      if (e.ctrlKey && e.key === "b") {
         e.preventDefault();
         setSidebarCollapsed(prev => !prev);
       }
-      if (e.ctrlKey && e.key === 'k') {
+      if (e.ctrlKey && e.key === "k") {
         e.preventDefault();
         setSearchOpen(prev => !prev);
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: 'var(--surface-bg)' }}>
+    <div className="flex h-screen overflow-hidden" style={{ background: "var(--surface-bg)" }}>
       <Toast isRtl={isRtl} />
       <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
       <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} currentPath={location.pathname} />

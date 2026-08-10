@@ -5,7 +5,7 @@ import Button from "@/components/ui/Button";
 import OvertimeBadge from "@/components/ui/OvertimeBadge";
 import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
-import { Plus, Clock, DollarSign, CheckCircle, XCircle } from "lucide-react";
+import { Plus, Clock } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useUIStore } from "@/stores/uiStore";
 import type { Employee } from "@/types";
@@ -33,7 +33,7 @@ export default function OvertimePage() {
   const [pendingAction, setPendingAction] = useState<() => void>(() => {});
   const [confirmTitle, setConfirmTitle] = useState("");
   const [confirmMessage, setConfirmMessage] = useState("");
-  const [confirmVariant, setConfirmVariant] = useState<'danger' | 'warning' | 'info'>('danger');
+  const [confirmVariant, setConfirmVariant] = useState<"danger" | "warning" | "info">("danger");
   const [form, setForm] = useState({
     employee_id: "",
     date: new Date().toISOString().split("T")[0],

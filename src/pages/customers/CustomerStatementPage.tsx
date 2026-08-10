@@ -10,13 +10,6 @@ import StatementPrintTemplate from "@/components/print/StatementPrintTemplate";
 import { printComponent } from "@/utils/printUtils";
 import { useUIStore } from "@/stores/uiStore";
 
-interface StatementData {
-  customer: { id: number; name: string; code: string };
-  transactions: { date: string; ref_type: string; ref_id: number; debit_milli: number; credit_milli: number; balance_milli: number; memo: string }[];
-  opening_balance_milli: number;
-  closing_balance_milli: number;
-}
-
 export default function CustomerStatementPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -24,7 +17,6 @@ export default function CustomerStatementPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

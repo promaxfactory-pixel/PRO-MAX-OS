@@ -20,7 +20,7 @@ export default function UsersPage() {
   const fetchUsers = useCallback(() => {
     invoke("list_users")
       .then((d) => setUsers(d as User[]))
-      .catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
+      .catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" }))
       .finally(() => setLoading(false));
   }, [addNotification]);
 
@@ -49,9 +49,9 @@ export default function UsersPage() {
   };
 
   const handleDelete = useCallback(async (id: number) => {
-    if (!confirm('هل أنت متأكد من حذف هذا المستخدم؟')) return;
+    if (!confirm("هل أنت متأكد من حذف هذا المستخدم؟")) return;
     try {
-      await invoke('delete_user', { id });
+      await invoke("delete_user", { id });
       fetchUsers();
     } catch (err: unknown) {
       addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(err) });

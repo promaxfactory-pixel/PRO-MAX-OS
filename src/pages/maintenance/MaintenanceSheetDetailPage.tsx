@@ -1,14 +1,12 @@
 ﻿import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Card from "@/components/ui/Card";
-import Button from "@/components/ui/Button";
 import Badge, { StatusBadge } from "@/components/ui/Badge";
 import { type BadgeVariant } from "@/components/ui/DataTable";
 import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
-import { ArrowRight, Wrench, AlertTriangle, Clock, DollarSign, Calendar } from "lucide-react";
+import { ArrowRight, Wrench, AlertTriangle, Clock, Calendar } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
-import { MaintenanceSheet } from "@/types";
 
 export default function MaintenanceSheetDetailPage() {
   const { id } = useParams();
@@ -21,7 +19,7 @@ export default function MaintenanceSheetDetailPage() {
   useEffect(() => {
     invoke("get_maintenance_sheet", { id: Number(id) })
       .then((d) => setSheet(d))
-      .catch((e: unknown) => addNotification({ title: 'ط®ط·ط£', message: String(e), type: 'error' }))
+      .catch((e: unknown) => addNotification({ title: "ط®ط·ط£", message: String(e), type: "error" }))
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -42,7 +40,7 @@ export default function MaintenanceSheetDetailPage() {
     <div className="space-y-6">
       <div className="page-header">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/maintenance')} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
+          <button onClick={() => navigate("/maintenance")} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
           <div>
             <h1 className="page-title flex items-center gap-3">
               <span className="font-mono text-brand-400">{sheet.ticket_no || "â€”"}</span>

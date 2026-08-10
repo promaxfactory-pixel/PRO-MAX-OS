@@ -44,7 +44,7 @@ export default function OcrScannerPage() {
     setHistoryLoading(true);
     invoke("ocr_get_history")
       .then((d) => setHistory((d as HistoryEntry[]) || []))
-      .catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
+      .catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" }))
       .finally(() => setHistoryLoading(false));
   }, []);
 

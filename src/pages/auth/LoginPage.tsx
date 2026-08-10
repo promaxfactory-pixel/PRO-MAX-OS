@@ -6,7 +6,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { Factory, Eye, EyeOff, ArrowLeft, Shield, Zap } from "lucide-react";
 import LanguageSwitcher from "@/components/layout/LanguageSwitcher";
 
-function Particle({ index }: { index: number }) {
+function Particle({ index: _index }: { index: number }) {
   const style = useMemo(() => ({
     left: `${Math.random() * 100}%`,
     top: `${Math.random() * 100}%`,
@@ -44,35 +44,35 @@ export default function LoginPage() {
 
   const particles = useMemo(() => Array.from({ length: 30 }, (_, i) => i), []);
 
-   const handleSubmit = async (e: React.FormEvent) => {
-     e.preventDefault();
-     setLoading(true);
-     setError("");
-     try {
-       const result = await login(username, password);
-       if (result?.user?.must_change_password) {
-         navigate("/settings/change-password");
-       } else {
-         navigate("/");
-       }
-     } catch (err: unknown) {
-       setError(err instanceof Error ? err.message : String(err) || t("auth.loginError"));
-     } finally {
-       setLoading(false);
-     }
-   };
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    try {
+      const result = await login(username, password);
+      if (result?.user?.must_change_password) {
+        navigate("/settings/change-password");
+      } else {
+        navigate("/");
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err) || t("auth.loginError"));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden" data-theme="dark" style={{ background: 'var(--surface-950)' }}>
-      <div className={`absolute top-6 ${isRtl ? 'left-6' : 'right-6'} z-30`}>
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden" data-theme="dark" style={{ background: "var(--surface-950)" }}>
+      <div className={`absolute top-6 ${isRtl ? "left-6" : "right-6"} z-30`}>
         <LanguageSwitcher />
       </div>
 
       <div className="absolute inset-0">
         <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-brand-950 via-surface-950 to-brand-950" />
         <div className="absolute top-1/3 right-1/4 w-[500px] h-[500px] bg-brand-800/15 rounded-full blur-[150px] animate-pulse-slow" />
-        <div className="absolute bottom-1/3 left-1/4 w-[400px] h-[400px] bg-gold-400/5 rounded-full blur-[120px] animate-pulse-slow" style={{ animationDelay: '2s' }} />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-brand-700/8 rounded-full blur-[200px] animate-pulse-slow" style={{ animationDelay: '4s' }} />
+        <div className="absolute bottom-1/3 left-1/4 w-[400px] h-[400px] bg-gold-400/5 rounded-full blur-[120px] animate-pulse-slow" style={{ animationDelay: "2s" }} />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-brand-700/8 rounded-full blur-[200px] animate-pulse-slow" style={{ animationDelay: "4s" }} />
       </div>
 
       <div className="absolute inset-0 overflow-hidden">
@@ -82,8 +82,8 @@ export default function LoginPage() {
       </div>
 
       <div className="absolute inset-0 opacity-[0.02]" style={{
-        backgroundImage: `linear-gradient(rgba(212,175,55,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(212,175,55,0.3) 1px, transparent 1px)`,
-        backgroundSize: '80px 80px'
+        backgroundImage: "linear-gradient(rgba(212,175,55,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(212,175,55,0.3) 1px, transparent 1px)",
+        backgroundSize: "80px 80px"
       }} />
 
       <motion.div
@@ -172,10 +172,10 @@ export default function LoginPage() {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder={t("auth.usernamePlaceholder")}
-                  className={`w-full transition-all duration-300 ${focusedField === 'username' ? 'border-gold-400/50 shadow-[0_0_0_3px_rgba(212,175,55,0.1)]' : ''}`}
+                  className={`w-full transition-all duration-300 ${focusedField === "username" ? "border-gold-400/50 shadow-[0_0_0_3px_rgba(212,175,55,0.1)]" : ""}`}
                   required
                   autoFocus
-                  onFocus={() => setFocusedField('username')}
+                  onFocus={() => setFocusedField("username")}
                   onBlur={() => setFocusedField(null)}
                   aria-label={t("auth.username")}
                 />
@@ -189,9 +189,9 @@ export default function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder={t("auth.passwordPlaceholder")}
-                    className={`w-full pr-12 transition-all duration-300 ${focusedField === 'password' ? 'border-gold-400/50 shadow-[0_0_0_3px_rgba(212,175,55,0.1)]' : ''}`}
+                    className={`w-full pr-12 transition-all duration-300 ${focusedField === "password" ? "border-gold-400/50 shadow-[0_0_0_3px_rgba(212,175,55,0.1)]" : ""}`}
                     required
-                    onFocus={() => setFocusedField('password')}
+                    onFocus={() => setFocusedField("password")}
                     onBlur={() => setFocusedField(null)}
                     aria-label={t("auth.password")}
                   />
@@ -211,15 +211,15 @@ export default function LoginPage() {
               type="submit"
               disabled={loading || !username || !password}
               className="w-full mt-8 py-4 rounded-2xl font-bold text-pure-white text-base relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
-               style={{
-                 background: loading
-                   ? 'linear-gradient(to left, var(--brand-800), var(--brand-900))'
-                   : 'linear-gradient(to left, var(--brand-gold), var(--gold-600))',
-                 boxShadow: loading
-                   ? '0 4px 20px rgba(76,29,149,0.3)'
-                   : '0 4px 20px rgba(212,175,55,0.3)',
-               }}
-              whileHover={!loading ? { scale: 1.01, boxShadow: '0 6px 30px rgba(212,175,55,0.4)' } : undefined}
+              style={{
+                background: loading
+                  ? "linear-gradient(to left, var(--brand-800), var(--brand-900))"
+                  : "linear-gradient(to left, var(--brand-gold), var(--gold-600))",
+                boxShadow: loading
+                  ? "0 4px 20px rgba(76,29,149,0.3)"
+                  : "0 4px 20px rgba(212,175,55,0.3)",
+              }}
+              whileHover={!loading ? { scale: 1.01, boxShadow: "0 6px 30px rgba(212,175,55,0.4)" } : undefined}
               whileTap={!loading ? { scale: 0.98 } : undefined}
             >
               {loading ? (

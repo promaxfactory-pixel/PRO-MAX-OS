@@ -5,7 +5,7 @@ import Button from "@/components/ui/Button";
 import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { useUIStore } from "@/stores/uiStore";
-import { ArrowLeftRight, Plus, Package, Scale, CheckCircle2 } from "lucide-react";
+import { ArrowLeftRight, Plus, Scale, CheckCircle2 } from "lucide-react";
 
 interface BarterExchange {
   id: number;

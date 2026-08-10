@@ -3,11 +3,10 @@ import { useNavigate } from "react-router-dom";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import { StatusBadge } from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
-import Card from "@/components/ui/Card";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
-import { Plus, FileText, Download, Filter } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 import { SalesInvoice } from "@/types";
 
@@ -54,14 +53,14 @@ export default function InvoiceListPage() {
           <p className="page-subtitle">{invoices.length} فاتورة</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button onClick={() => navigate('/invoices/new')} icon={<Plus className="w-4 h-4" />}>فاتورة جديدة</Button>
+          <Button onClick={() => navigate("/invoices/new")} icon={<Plus className="w-4 h-4" />}>فاتورة جديدة</Button>
         </div>
       </div>
 
       <div className="flex items-center gap-2 mb-4">
         {["all", "draft", "posted", "void"].map((s) => (
           <button key={s} onClick={() => setStatusFilter(s)}
-            className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all ${statusFilter === s ? 'bg-brand-800 text-gold-400 border border-brand-500/30' : 'bg-surface-800 text-surface-400 border border-surface-700 hover:text-white'}`}>
+            className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all ${statusFilter === s ? "bg-brand-800 text-gold-400 border border-brand-500/30" : "bg-surface-800 text-surface-400 border border-surface-700 hover:text-white"}`}>
             {s === "all" ? "الكل" : s === "draft" ? "مسودة" : s === "posted" ? "مرحل" : "ملغى"}
           </button>
         ))}

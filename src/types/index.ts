@@ -28,7 +28,7 @@ export interface Account {
   code: string;
   name_ar: string;
   name_en: string;
-  type: 'asset' | 'liability' | 'equity' | 'revenue' | 'expense';
+  type: "asset" | "liability" | "equity" | "revenue" | "expense";
   parent: string | null;
   is_system: number;
 }
@@ -93,7 +93,7 @@ export interface InventoryItem {
   code: string;
   name_ar: string;
   name_en: string;
-  kind: 'finished' | 'raw' | 'packaging' | 'spare' | 'consumable';
+  kind: "finished" | "raw" | "packaging" | "spare" | "consumable";
   uom: string;
   product_id: number | null;
   qty_on_hand: number;
@@ -479,7 +479,7 @@ export interface DailyBrief {
   overdue_total: number;
   waste_yesterday: number;
   last_backup_days: number;
-  backup_status: 'green' | 'amber' | 'red';
+  backup_status: "green" | "amber" | "red";
   overdue_customers: { name: string; amount: number; days: number }[];
   low_stock: { name: string; on_hand: number; reorder: number }[];
   oldest_custodies: { name: string; balance: number; negative: boolean }[];

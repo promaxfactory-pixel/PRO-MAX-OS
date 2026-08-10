@@ -1,6 +1,7 @@
 ﻿use crate::db::DbState;
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use tauri::State;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -105,11 +106,9 @@ pub struct EInvoiceDashboard {
 }
 
 fn compute_hash(data: &[u8]) -> String {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-    let mut hasher = DefaultHasher::new();
-    data.hash(&mut hasher);
-    format!("{:016x}", hasher.finish())
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    format!("{:x}", hasher.finalize())
 }
 
 fn xml_escape(s: &str) -> String {
@@ -648,12 +647,16 @@ pub fn einvoice_submit(
         ("sandbox".into(), None, None, None)
     });
 
+    // Stored credentials are encrypted at rest; decrypt before transmission.
+    let dec_key = api_key.as_deref().map(crate::crypto::decrypt_if_needed).transpose().map_err(AppError::crypto)?;
+    let dec_secret = api_secret.as_deref().map(crate::crypto::decrypt_if_needed).transpose().map_err(AppError::crypto)?;
+
     let submission_result = submit_to_tax_authority(
         &invoice_id.to_string(),
         &env,
         endpoint.as_deref(),
-        api_key.as_deref(),
-        api_secret.as_deref(),
+        dec_key.as_deref(),
+        dec_secret.as_deref(),
         &xml_content,
     );
 
@@ -689,18 +692,108 @@ fn submit_to_tax_authority(
     invoice_id: &str,
     environment: &str,
     endpoint: Option<&str>,
-    _api_key: Option<&str>,
-    _api_secret: Option<&str>,
-    _xml_content: &str,
+    api_key: Option<&str>,
+    api_secret: Option<&str>,
+    xml_content: &str,
 ) -> Result<String, AppError> {
-    if environment == "sandbox" || endpoint.is_none() {
+    if environment == "sandbox" {
         return Ok(format!("SANDBOX-{}-{}", invoice_id, chrono::Utc::now().timestamp()));
     }
-    let url = endpoint.unwrap_or("");
-    if url.is_empty() {
-        return Ok(format!("SANDBOX-SIMULATED-{}", invoice_id));
+
+    let url = endpoint
+        .map(str::trim)
+        .filter(|u| !u.is_empty())
+        .ok_or_else(|| {
+            AppError::config("Production tax authority endpoint is not configured. Set it in E-Invoice settings.")
+        })?;
+
+    let api_key = api_key.map(str::trim).filter(|k| !k.is_empty());
+    let api_secret = api_secret.map(str::trim).filter(|s| !s.is_empty());
+
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .connect_timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| AppError::business(format!("Failed to build HTTP client: {e}")))?;
+
+    let mut req = client
+        .post(url)
+        .header("Content-Type", "application/xml")
+        .header("Accept", "application/json, application/xml")
+        .header("X-Invoice-ID", invoice_id)
+        .body(xml_content.to_string());
+
+    if let Some(key) = api_key {
+        req = req.header("Authorization", format!("Bearer {key}"));
     }
-    Err("Production endpoint not yet configured. Please set up e-invoicing settings.".into())
+    if let Some(secret) = api_secret {
+        req = req.header("X-API-Secret", secret);
+    }
+
+    let resp = req
+        .send()
+        .map_err(|e| AppError::business(format!("Submission HTTP request failed: {e}")))?;
+
+    let status = resp.status();
+    let body = resp.text().unwrap_or_default();
+
+    if status.is_success() {
+        // Extract the OTA/ASP reference (UUID) from the response when present.
+        let reference = extract_submission_reference(&body)
+            .unwrap_or_else(|| format!("OTA-{}-{}", invoice_id, chrono::Utc::now().timestamp()));
+        Ok(reference)
+    } else {
+        let snippet: String = body.chars().take(500).collect();
+        Err(AppError::business(format!(
+            "Tax authority rejected submission (HTTP {}): {}",
+            status.as_u16(),
+            if snippet.is_empty() { "empty response body".into() } else { snippet }
+        )))
+    }
+}
+
+/// Extract an OTA/ASP submission reference (UUID) from a JSON or XML response body.
+fn extract_submission_reference(body: &str) -> Option<String> {
+    let trimmed = body.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    // JSON responses commonly use fields like uuid / reference / id.
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(trimmed) {
+        for key in ["uuid", "reference", "submissionUuid", "trackingId", "id"] {
+            if let Some(s) = value
+                .get(key)
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+            {
+                return Some(s.to_string());
+            }
+            if let Some(s) = value
+                .get("data")
+                .and_then(|d| d.get(key))
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+            {
+                return Some(s.to_string());
+            }
+        }
+    }
+    // Fallback: first UUID-looking token anywhere in the body.
+    for token in trimmed.split_whitespace() {
+        let clean: String = token
+            .chars()
+            .filter(|c| c.is_ascii_hexdigit() || *c == '-')
+            .collect();
+        if is_uuid_like(&clean) {
+            return Some(clean);
+        }
+    }
+    None
+}
+
+fn is_uuid_like(s: &str) -> bool {
+    let parts: Vec<&str> = s.split('-').collect();
+    parts.len() == 5 && parts.iter().all(|p| !p.is_empty() && p.len() <= 12)
 }
 
 #[tauri::command]
@@ -737,6 +830,35 @@ pub fn einvoice_add_to_queue(
 pub fn einvoice_process_queue(
     state: State<'_, DbState>,
 ) -> Result<String, AppError> {
+    let (env, endpoint, api_key, api_secret): (String, Option<String>, Option<String>, Option<String>) = {
+        let conn = state.0.lock()?;
+        conn.query_row(
+            "SELECT environment, tax_authority_endpoint, api_key, api_secret
+             FROM einvoice_settings WHERE active = 1 LIMIT 1",
+            [],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                ))
+            },
+        )
+        .unwrap_or_else(|_| ("sandbox".into(), None, None, None))
+    };
+
+    let dec_key = api_key
+        .as_deref()
+        .map(crate::crypto::decrypt_if_needed)
+        .transpose()
+        .map_err(AppError::crypto)?;
+    let dec_secret = api_secret
+        .as_deref()
+        .map(crate::crypto::decrypt_if_needed)
+        .transpose()
+        .map_err(AppError::crypto)?;
+
     let items: Vec<i64> = {
         let conn = state.0.lock()?;
         let mut stmt = conn
@@ -770,7 +892,14 @@ pub fn einvoice_process_queue(
             .ok();
 
         if let Some((_eid, xml)) = einv {
-            let result = submit_to_tax_authority(&inv_id.to_string(), "sandbox", None, None, None, &xml);
+            let result = submit_to_tax_authority(
+                &inv_id.to_string(),
+                &env,
+                endpoint.as_deref(),
+                dec_key.as_deref(),
+                dec_secret.as_deref(),
+                &xml,
+            );
             match result {
                 Ok(ref_no) => {
                     let now = chrono::Utc::now().to_rfc3339();
@@ -779,15 +908,21 @@ pub fn einvoice_process_queue(
                         rusqlite::params![now, ref_no, inv_id],
                     ).ok();
                     conn.execute(
-                        "UPDATE einvoice_queue SET status = 'completed' WHERE invoice_id = ?1",
+                        "UPDATE einvoice_queue SET status = 'completed', last_error = NULL WHERE invoice_id = ?1",
                         [inv_id],
                     ).ok();
                     processed += 1;
                 }
                 Err(e) => {
+                    let err_str = e.to_string();
                     conn.execute(
-                        "UPDATE einvoice_queue SET status = 'failed', last_error = ?1, retry_count = retry_count + 1 WHERE invoice_id = ?2",
-                        rusqlite::params![e.to_string(), inv_id],
+                        "UPDATE einvoice_queue
+                         SET status = CASE WHEN retry_count + 1 >= max_retries THEN 'failed' ELSE 'pending' END,
+                             last_error = ?1,
+                             retry_count = retry_count + 1,
+                             next_retry_at = datetime('now', '+' || ((retry_count + 1) * 60) || ' seconds')
+                         WHERE invoice_id = ?2",
+                        rusqlite::params![err_str, inv_id],
                     ).ok();
                     failed += 1;
                 }
@@ -1093,4 +1228,78 @@ pub fn einvoice_bulk_generate(
         count += 1;
     }
     Ok(count)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sha256_hash_is_deterministic_and_64_hex() {
+        let a = compute_hash(b"hello");
+        let b = compute_hash(b"hello");
+        assert_eq!(a, b);
+        assert_eq!(a.len(), 64);
+        assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn sha256_differs_for_adjacent_xml() {
+        let a = compute_hash(b"<Invoice/>");
+        let b = compute_hash(b"<Invoice/ >");
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn extract_submission_reference_from_json_top_level() {
+        let body = r#"{"uuid":"7c9e6679-7425-40de-944b-e07fc1f90ae7","status":"submitted"}"#;
+        assert_eq!(
+            extract_submission_reference(body).as_deref(),
+            Some("7c9e6679-7425-40de-944b-e07fc1f90ae7")
+        );
+    }
+
+    #[test]
+    fn extract_submission_reference_from_json_nested_data() {
+        let body = r#"{"data":{"trackingId":"11111111-2222-3333-4444-555555555555"}}"#;
+        assert_eq!(
+            extract_submission_reference(body).as_deref(),
+            Some("11111111-2222-3333-4444-555555555555")
+        );
+    }
+
+    #[test]
+    fn extract_submission_reference_falls_back_to_uuid_scan() {
+        let body = "Submission accepted. Reference: 6ba7b810-9dad-11d1-80b4-00c04fd430c8";
+        assert_eq!(
+            extract_submission_reference(body).as_deref(),
+            Some("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+        );
+    }
+
+    #[test]
+    fn extract_submission_reference_none_for_garbage() {
+        assert_eq!(extract_submission_reference(""), None);
+        assert_eq!(extract_submission_reference("{\"error\":\"nope\"}"), None);
+    }
+
+    #[test]
+    fn is_uuid_like_accepts_real_uuid_only() {
+        assert!(is_uuid_like("7c9e6679-7425-40de-944b-e07fc1f90ae7"));
+        assert!(!is_uuid_like("7c9e6679-7425-40de-944b"));
+        assert!(!is_uuid_like("not-a-uuid"));
+        assert!(!is_uuid_like(""));
+    }
+
+    #[test]
+    fn sandbox_submission_returns_sandbox_reference() {
+        let ref_no = submit_to_tax_authority("42", "sandbox", None, None, None, "<Invoice/>").unwrap();
+        assert!(ref_no.starts_with("SANDBOX-42-"));
+    }
+
+    #[test]
+    fn production_submission_requires_endpoint() {
+        let err = submit_to_tax_authority("42", "production", None, None, None, "<Invoice/>").unwrap_err();
+        assert!(err.to_string().contains("endpoint"));
+    }
 }

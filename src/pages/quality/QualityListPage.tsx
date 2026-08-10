@@ -5,7 +5,7 @@ import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import { formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
-import { Plus, ShieldCheck, AlertCircle } from "lucide-react";
+import { Plus, AlertCircle } from "lucide-react";
 
 interface QualityInspection {
   id: number;
@@ -38,11 +38,6 @@ export default function QualityListPage() {
     conditional: { label: "مشروط", variant: "warning" },
   };
 
-  const severityMap: Record<string, { label: string; variant: BadgeVariant }> = {
-    critical: { label: "حرج", variant: "danger" },
-    major: { label: "رئيسي", variant: "warning" },
-    minor: { label: "بسيط", variant: "info" },
-  };
 
   const statusMap: Record<string, { label: string; variant: BadgeVariant }> = {
     open: { label: "مفتوح", variant: "info" },

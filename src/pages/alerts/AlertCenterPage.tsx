@@ -78,7 +78,7 @@ export default function AlertCenterPage() {
       setAlerts(data);
     } catch {
       setAlerts(null);
-      addNotification({ id: crypto.randomUUID(), type: 'error', title: 'خطأ', message: 'فشل تحميل التنبيهات' });
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "فشل تحميل التنبيهات" });
     } finally {
       setLoading(false);
     }
@@ -90,15 +90,15 @@ export default function AlertCenterPage() {
 
   const counts = alerts
     ? {
-        total:
+      total:
           alerts.expiry.length +
           alerts.overdue_orders.length +
           alerts.low_stock.length +
           alerts.overdue_invoices.length +
           alerts.quality_pending.length,
-        critical: alerts.expiry.length + alerts.overdue_invoices.length,
-        info: alerts.overdue_orders.length + alerts.low_stock.length + alerts.quality_pending.length,
-      }
+      critical: alerts.expiry.length + alerts.overdue_invoices.length,
+      info: alerts.overdue_orders.length + alerts.low_stock.length + alerts.quality_pending.length,
+    }
     : { total: 0, critical: 0, info: 0 };
 
   const isEmpty = alerts && counts.total === 0;

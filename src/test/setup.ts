@@ -1,8 +1,8 @@
-import '@testing-library/jest-dom';
-import { vi } from 'vitest';
+import "@testing-library/jest-dom";
+import { vi } from "vitest";
 
 // Mock Tauri APIs
-vi.mock('@tauri-apps/api/core', () => ({
+vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
 
@@ -13,10 +13,10 @@ const localStorageMock = {
   removeItem: vi.fn(),
   clear: vi.fn(),
 };
-Object.defineProperty(window, 'localStorage', { value: localStorageMock });
+Object.defineProperty(window, "localStorage", { value: localStorageMock });
 
 // Mock matchMedia
-Object.defineProperty(window, 'matchMedia', {
+Object.defineProperty(window, "matchMedia", {
   writable: true,
   value: vi.fn().mockImplementation((query) => ({
     matches: false,
@@ -48,7 +48,7 @@ globalThis.IntersectionObserver = vi.fn().mockImplementation(() => ({
 const originalError = console.error;
 beforeAll(() => {
   console.error = (...args) => {
-    if (args[0]?.includes?.('Warning: ReactDOM.render is no longer supported')) return;
+    if (args[0]?.includes?.("Warning: ReactDOM.render is no longer supported")) return;
     originalError.call(console, ...args);
   };
 });

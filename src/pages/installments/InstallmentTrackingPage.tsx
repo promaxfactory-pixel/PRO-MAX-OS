@@ -5,7 +5,7 @@ import Button from "@/components/ui/Button";
 import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { useUIStore } from "@/stores/uiStore";
-import { CreditCard, Plus, CheckCircle2, AlertTriangle, Clock } from "lucide-react";
+import { Plus, CheckCircle2, AlertTriangle, Clock } from "lucide-react";
 
 interface InstallmentPayment {
   id: number;
@@ -41,7 +41,7 @@ const EMPTY_PAYMENT_FORM = {
 export default function InstallmentTrackingPage() {
   const { addNotification } = useUIStore();
   const [payments, setPayments] = useState<InstallmentPayment[]>([]);
-  const [installments, setInstallments] = useState<Installment[]>([]);
+  const [, setInstallments] = useState<Installment[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_PAYMENT_FORM);
@@ -117,8 +117,8 @@ export default function InstallmentTrackingPage() {
       return (
         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
           r.status === "Paid" ? "bg-emerald-500/20 text-emerald-400" :
-          isOverdue ? "bg-red-500/20 text-red-400" :
-          "bg-amber-500/20 text-amber-400"
+            isOverdue ? "bg-red-500/20 text-red-400" :
+              "bg-amber-500/20 text-amber-400"
         }`}>{r.status === "Paid" ? "مدفوع" : isOverdue ? "متأخر" : "معلق"}</span>
       );
     }},

@@ -7,11 +7,10 @@ import DataTable, { Column } from "@/components/ui/DataTable";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
-import { ArrowRight, Send, Ban, Copy, Printer, FileText, Truck, RotateCcw } from "lucide-react";
+import { ArrowRight, Send, Ban, Copy, Printer, FileText, Truck } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 import type { SalesInvoice, InvoiceLine } from "@/types";
 import InvoicePrintTemplate from "@/components/print/InvoicePrintTemplate";
-import ReceiptPrintTemplate from "@/components/print/ReceiptPrintTemplate";
 import DeliveryNotePrintTemplate from "@/components/print/DeliveryNotePrintTemplate";
 import { printComponent } from "@/utils/printUtils";
 
@@ -128,7 +127,7 @@ export default function InvoiceDetailPage() {
     <div className="space-y-6">
       <div className="page-header">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/invoices')} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
+          <button onClick={() => navigate("/invoices")} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
           <div>
             <h1 className="page-title flex items-center gap-3">
               <span className="font-mono text-brand-400">{invoice.inv_no}</span>

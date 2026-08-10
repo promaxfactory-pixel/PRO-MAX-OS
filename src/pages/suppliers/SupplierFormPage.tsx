@@ -31,7 +31,7 @@ export default function SupplierFormPage() {
           payment_terms: d.payment_terms || "", opening_balance_milli: d.opening_balance_milli || 0,
           notes: d.notes || "",
         });
-      }).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false));
+      }).catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" })).finally(() => setLoading(false));
     }
   }, [id, isEdit]);
 
@@ -61,7 +61,7 @@ export default function SupplierFormPage() {
     <div className="space-y-6">
       <div className="page-header">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/suppliers')} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
+          <button onClick={() => navigate("/suppliers")} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
           <div>
             <h1 className="page-title">{isEdit ? "تعديل بيانات المورد" : "إضافة مورد جديد"}</h1>
             <p className="page-subtitle">{isEdit ? `تعديل ${form.name}` : "إضافة مورد جديد"}</p>
@@ -125,7 +125,7 @@ export default function SupplierFormPage() {
         </Card>
         <div className="flex justify-start gap-3 mt-4">
           <Button type="submit" loading={saving} icon={<Save className="w-4 h-4" />}>{isEdit ? "حفظ التعديلات" : "إضافة المورد"}</Button>
-          <Button variant="outline" type="button" onClick={() => navigate('/suppliers')}>إلغاء</Button>
+          <Button variant="outline" type="button" onClick={() => navigate("/suppliers")}>إلغاء</Button>
         </div>
       </form>
     </div>

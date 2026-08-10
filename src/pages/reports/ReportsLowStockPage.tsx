@@ -36,7 +36,7 @@ export default function ReportsLowStockPage() {
           totalCostGap: arr.reduce((s: number, i: LowStockItem) => s + (i.cost_gap_milli || 0), 0),
         });
       })
-      .catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
+      .catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" }))
       .finally(() => setLoading(false));
   }, []);
 

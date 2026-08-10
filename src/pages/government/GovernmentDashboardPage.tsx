@@ -60,7 +60,7 @@ export default function GovernmentDashboardPage() {
     ]).then(([d, ds]) => {
       setDashboard(d);
       setDocStatus(ds);
-    }).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false));
+    }).catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" })).finally(() => setLoading(false));
   }, []);
 
   if (loading) {
@@ -131,8 +131,8 @@ export default function GovernmentDashboardPage() {
                     <p className="text-sm text-white">{sub.entity_name}</p>
                     <p className="text-xs text-surface-500">{sub.created_at}</p>
                   </div>
-                  <span className={`badge-${sub.status === 'submitted' ? 'success' : sub.status === 'pending' ? 'warning' : 'danger'}`}>
-                    {sub.status === 'submitted' ? 'تم الإرسال' : sub.status === 'pending' ? 'قيد الانتظار' : 'فشل'}
+                  <span className={`badge-${sub.status === "submitted" ? "success" : sub.status === "pending" ? "warning" : "danger"}`}>
+                    {sub.status === "submitted" ? "تم الإرسال" : sub.status === "pending" ? "قيد الانتظار" : "فشل"}
                   </span>
                 </div>
               ))

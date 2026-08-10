@@ -50,7 +50,7 @@ function highlightMatch(text: string, query: string) {
   return (
     <>
       {text.slice(0, idx)}
-      <span className="font-semibold" style={{ color: 'var(--brand-500)' }}>{text.slice(idx, idx + query.length)}</span>
+      <span className="font-semibold" style={{ color: "var(--brand-500)" }}>{text.slice(idx, idx + query.length)}</span>
       {text.slice(idx + query.length)}
     </>
   );
@@ -205,16 +205,16 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]"
-      style={{ background: 'color-mix(in srgb, #000 50%, transparent)', backdropFilter: 'blur(4px)' }}
+      style={{ background: "color-mix(in srgb, #000 50%, transparent)", backdropFilter: "blur(4px)" }}
       onClick={() => onClose()}
     >
       <div
         className="w-full max-w-xl mx-4 rounded-2xl overflow-hidden shadow-2xl"
-        style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}
+        style={{ background: "var(--surface-card)", border: "1px solid var(--border)" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-3 px-4 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
-          <Search className="h-5 w-5 shrink-0" style={{ color: 'var(--text-muted)' }} />
+        <div className="flex items-center gap-3 px-4 py-3 border-b" style={{ borderColor: "var(--border)" }}>
+          <Search className="h-5 w-5 shrink-0" style={{ color: "var(--text-muted)" }} />
           <input
             ref={inputRef}
             type="text"
@@ -222,18 +222,18 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
             onChange={(e) => setQuery(e.target.value)}
             placeholder="ط¨ط­ط«..."
             className="flex-1 bg-transparent text-sm outline-none"
-            style={{ color: 'var(--text-primary)' }}
+            style={{ color: "var(--text-primary)" }}
           />
-          <kbd className="hidden sm:inline text-[10px] rounded px-1.5 py-0.5" style={{ color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+          <kbd className="hidden sm:inline text-[10px] rounded px-1.5 py-0.5" style={{ color: "var(--text-muted)", border: "1px solid var(--border)" }}>
             ESC
           </kbd>
           {query && (
             <button
               onClick={() => setQuery("")}
               className="transition-colors"
-              style={{ color: 'var(--text-muted)' }}
-              onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
-              onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+              style={{ color: "var(--text-muted)" }}
+              onMouseEnter={e => e.currentTarget.style.color = "var(--text-primary)"}
+              onMouseLeave={e => e.currentTarget.style.color = "var(--text-muted)"}
             >
               <X className="h-4 w-4" />
             </button>
@@ -242,20 +242,20 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
 
         <div className="max-h-[400px] overflow-y-auto p-2" role="listbox">
           {!query && (
-            <div className="flex flex-col items-center justify-center py-12" style={{ color: 'var(--text-muted)' }}>
+            <div className="flex flex-col items-center justify-center py-12" style={{ color: "var(--text-muted)" }}>
               <Search className="h-10 w-10 mb-3 opacity-30" />
               <p className="text-sm">ط§ظƒطھط¨ ظ„ظ„ط¨ط­ط«...</p>
             </div>
           )}
 
           {query && !loading && results.length === 0 && (
-            <div className="py-12 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+            <div className="py-12 text-center text-sm" style={{ color: "var(--text-muted)" }}>
               ظ„ط§ طھظˆط¬ط¯ ظ†طھط§ط¦ط¬ ظ„ظ€ &quot;{query}&quot;
             </div>
           )}
 
           {loading && (
-            <div className="py-12 text-center text-sm" style={{ color: 'var(--text-muted)' }}>ط¬ط§ط±ظٹ ط§ظ„ط¨ط­ط«...</div>
+            <div className="py-12 text-center text-sm" style={{ color: "var(--text-muted)" }}>ط¬ط§ط±ظٹ ط§ظ„ط¨ط­ط«...</div>
           )}
 
           {Object.entries(groupedResults).map(([type, items]) => {
@@ -266,8 +266,8 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
             return (
               <div key={type} className="mb-2">
                 <div className="flex items-center gap-2 px-3 py-1.5">
-                  <Icon className="h-3.5 w-3.5" style={{ color: 'var(--text-muted)' }} />
-                  <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                  <Icon className="h-3.5 w-3.5" style={{ color: "var(--text-muted)" }} />
+                  <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
                     {meta.label}
                   </span>
                 </div>
@@ -276,15 +276,15 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
                     key={`${item.type}-${item.id}`}
                     onClick={() => handleSelect(item.route)}
                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-right transition-colors"
-                    onMouseEnter={e => e.currentTarget.style.background = 'color-mix(in srgb, var(--border) 40%, transparent)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    onMouseEnter={e => e.currentTarget.style.background = "color-mix(in srgb, var(--border) 40%, transparent)"}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                   >
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm truncate" style={{ color: 'var(--text-primary)' }}>
+                      <p className="text-sm truncate" style={{ color: "var(--text-primary)" }}>
                         {highlightMatch(item.title, query)}
                       </p>
                       {item.subtitle && (
-                        <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{item.subtitle}</p>
+                        <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>{item.subtitle}</p>
                       )}
                     </div>
                   </button>

@@ -2,13 +2,10 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { formatOMR, formatDate, cn } from "@/lib/utils";
-import { invoke, convertFileSrc } from "@tauri-apps/api/core";
-import { useNavigate } from "react-router-dom";
+import { invoke } from "@tauri-apps/api/core";
 import {
-  ScanLine, Upload, FileText, Image, FileSpreadsheet, Save,
-  CheckCircle2, XCircle, AlertTriangle, Eye, EyeOff, ChevronLeft,
-  ChevronRight, Edit, Clock, History, Zap, RotateCcw, Loader2,
-  Download, BadgeCheck, BadgeHelp, BadgeX, BadgeInfo, Plus
+  ScanLine, Upload, FileText, Image, FileSpreadsheet,
+  CheckCircle2, XCircle, History, Zap, RotateCcw, Loader2, BadgeCheck, BadgeHelp, BadgeX, BadgeInfo
 } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
@@ -107,7 +104,6 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function EnhancedOcrPage() {
-  const navigate = useNavigate();
   const addNotification = useUIStore((s) => s.addNotification);
 
   const [activeTab, setActiveTab] = useState<"scan" | "history">("scan");
@@ -131,7 +127,7 @@ export default function EnhancedOcrPage() {
     setHistoryLoading(true);
     invoke("ocr_get_history")
       .then((d: any) => setHistory(d || []))
-      .catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
+      .catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" }))
       .finally(() => setHistoryLoading(false));
   }, []);
 
@@ -245,16 +241,11 @@ export default function EnhancedOcrPage() {
     setSuccessMsg(null);
   };
 
-  const handleViewHistoryDetail = (entry: HistoryEntry) => {
-    setSelectedHistoryId(entry.id);
-    setActiveTab("history");
-  };
-
   const overallConfidence = result
     ? result.fields.reduce((acc, f) => {
-        const scores: Record<ConfidenceLevel, number> = { high: 1, medium: 0.6, low: 0.3 };
-        return acc + scores[f.confidence];
-      }, 0) / Math.max(result.fields.length, 1)
+      const scores: Record<ConfidenceLevel, number> = { high: 1, medium: 0.6, low: 0.3 };
+      return acc + scores[f.confidence];
+    }, 0) / Math.max(result.fields.length, 1)
     : 0;
 
   return (
@@ -371,8 +362,8 @@ export default function EnhancedOcrPage() {
                   <div className={cn(
                     "inline-flex items-center justify-center w-20 h-20 rounded-full text-2xl font-bold",
                     overallConfidence >= 0.8 ? "bg-emerald-500/10 text-emerald-400" :
-                    overallConfidence >= 0.5 ? "bg-amber-500/10 text-amber-400" :
-                    "bg-red-500/10 text-red-400"
+                      overallConfidence >= 0.5 ? "bg-amber-500/10 text-amber-400" :
+                        "bg-red-500/10 text-red-400"
                   )}>
                     {Math.round(overallConfidence * 100)}%
                   </div>
@@ -472,7 +463,6 @@ export default function EnhancedOcrPage() {
                   </div>
                   <div className="space-y-3">
                     {result.fields.map((field) => {
-                      const cfg = CONFIDENCE_CONFIG[field.confidence];
                       const isEditable = field.confidence !== "high";
                       return (
                         <div key={field.key} className="flex items-center gap-3 py-2 border-b border-surface-700/20 last:border-0">

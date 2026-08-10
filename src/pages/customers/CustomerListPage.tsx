@@ -5,7 +5,7 @@ import Button from "@/components/ui/Button";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
-import { Plus, Users } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 import { Customer } from "@/types";
 
@@ -35,7 +35,7 @@ export default function CustomerListPage() {
     { key: "name", header: "الاسم", sortable: true, render: (r) => <span className="font-medium">{r.name}</span> },
     { key: "phone", header: "الهاتف", render: (r) => r.phone || "—" },
     { key: "email", header: "البريد", render: (r) => r.email || "—" },
-    { key: "balance_milli", header: "الرصيد", sortable: true, align: "left", render: (r) => <span className={`font-bold ${r.balance_milli > 0 ? 'text-gold-400' : r.balance_milli < 0 ? 'text-red-400' : ''}`}>{formatOMR(r.balance_milli)}</span> },
+    { key: "balance_milli", header: "الرصيد", sortable: true, align: "left", render: (r) => <span className={`font-bold ${r.balance_milli > 0 ? "text-gold-400" : r.balance_milli < 0 ? "text-red-400" : ""}`}>{formatOMR(r.balance_milli)}</span> },
     { key: "credit_limit_milli", header: "الحد الائتماني", align: "left", render: (r) => formatOMR(r.credit_limit_milli) },
   ], []);
 
@@ -46,7 +46,7 @@ export default function CustomerListPage() {
           <h1 className="page-title">العملاء</h1>
           <p className="page-subtitle">{customers.length} عميل نشط</p>
         </div>
-        <Button icon={<Plus className="w-4 h-4" />} onClick={() => navigate('/customers/new')}>عميل جديد</Button>
+        <Button icon={<Plus className="w-4 h-4" />} onClick={() => navigate("/customers/new")}>عميل جديد</Button>
       </div>
       <DataTable columns={columns} data={customers} loading={loading}
         onRowClick={(r) => navigate(`/customers/${r.id}`)} emptyMessage="لا يوجد عملاء" />

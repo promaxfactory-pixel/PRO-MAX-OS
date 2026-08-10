@@ -1,10 +1,10 @@
 import { cn } from "@/lib/utils";
 
-export default function LoadingSpinner({ size = 'md', className }: { size?: 'sm' | 'md' | 'lg'; className?: string }) {
-  const sizes = { sm: 'w-4 h-4', md: 'w-8 h-8', lg: 'w-12 h-12' };
+export default function LoadingSpinner({ size = "md", className }: { size?: "sm" | "md" | "lg"; className?: string }) {
+  const sizes = { sm: "w-4 h-4", md: "w-8 h-8", lg: "w-12 h-12" };
   return (
-    <div className={cn('flex items-center justify-center', className)}>
-      <div className={cn(sizes[size], 'border-2 border-brand-800 border-t-gold-400 rounded-full animate-spin')} />
+    <div className={cn("flex items-center justify-center", className)}>
+      <div className={cn(sizes[size], "border-2 border-brand-800 border-t-gold-400 rounded-full animate-spin")} />
     </div>
   );
 }

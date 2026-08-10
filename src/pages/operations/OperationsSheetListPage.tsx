@@ -5,7 +5,7 @@ import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import { formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
-import { Plus, ClipboardList } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 import { OperationsSheet } from "@/types";
 
@@ -18,7 +18,7 @@ export default function OperationsSheetListPage() {
   useEffect(() => {
     invoke("list_operations_sheets")
       .then((d) => setSheets(d as OperationsSheet[]))
-      .catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
+      .catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" }))
       .finally(() => setLoading(false));
   }, []);
 

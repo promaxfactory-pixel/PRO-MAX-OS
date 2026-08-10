@@ -1,24 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import {
-  AlertTriangle, Package, Users, FileText, Clock,
-  TrendingDown, Shield, RefreshCw
+  AlertTriangle, Package, Users, FileText, Shield, RefreshCw
 } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
-interface DailyBrief {
-  date: string; total_sales_milli: number; total_orders: number;
-  production_summary: { product: string; qty: number }[];
-  alerts: { type: string; message: string; severity: string }[];
-  low_stock_items: { name: string; qty: number; reorder: number }[];
-}
-
 export default function DailyBriefPage() {
-  const navigate = useNavigate();
   const addNotification = useUIStore((s) => s.addNotification);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [brief, setBrief] = useState<any>(null);
@@ -68,11 +58,11 @@ export default function DailyBriefPage() {
           <p className="text-sm text-surface-400">هالك كرتون (أمس)</p>
         </Card>
         <Card className="text-center">
-          <Shield className={`w-8 h-8 mx-auto mb-2 ${brief?.backup_status === 'green' ? 'text-emerald-400' : brief?.backup_status === 'amber' ? 'text-amber-400' : 'text-red-400'}`} />
-          <p className="text-3xl font-bold text-white">{brief?.last_backup_days ?? '—'}</p>
+          <Shield className={`w-8 h-8 mx-auto mb-2 ${brief?.backup_status === "green" ? "text-emerald-400" : brief?.backup_status === "amber" ? "text-amber-400" : "text-red-400"}`} />
+          <p className="text-3xl font-bold text-white">{brief?.last_backup_days ?? "—"}</p>
           <p className="text-sm text-surface-400">أيام من آخر نسخة احتياطية</p>
-          <Badge variant={brief?.backup_status === 'green' ? 'success' : brief?.backup_status === 'amber' ? 'warning' : 'danger'}>
-            {brief?.backup_status === 'green' ? 'محدث' : brief?.backup_status === 'amber' ? 'يحتاج تحديث' : 'متأخر'}
+          <Badge variant={brief?.backup_status === "green" ? "success" : brief?.backup_status === "amber" ? "warning" : "danger"}>
+            {brief?.backup_status === "green" ? "محدث" : brief?.backup_status === "amber" ? "يحتاج تحديث" : "متأخر"}
           </Badge>
         </Card>
       </div>

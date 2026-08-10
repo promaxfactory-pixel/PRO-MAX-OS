@@ -5,7 +5,7 @@ import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
-import { Plus, FileText, AlertTriangle, CheckCircle } from "lucide-react";
+import { Plus, FileText } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
 type ChequeKind = "all" | "issued" | "received";
@@ -89,11 +89,6 @@ export default function ChequesPage() {
     deposited: { label: "مودعة", variant: "info" },
     cleared: { label: "محصلة", variant: "success" },
     bounced: { label: "مرتجعة", variant: "danger" },
-  };
-
-  const kindLabels: Record<string, string> = {
-    issued: "صادرة",
-    received: "واردة",
   };
 
   const columns: Column<Cheque>[] = useMemo(() => [

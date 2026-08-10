@@ -48,7 +48,7 @@ export default function ReportsAgingPage() {
           over_90: arr.reduce((s, c) => s + (c.over_90 || 0), 0),
         });
       })
-      .catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }))
+      .catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" }))
       .finally(() => setLoading(false));
   }, []);
 

@@ -5,7 +5,7 @@ import { StatusBadge } from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import { formatDate } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
-import { Plus, Factory } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useUIStore } from "../../stores/uiStore";
 import type { ProductionOrder } from "@/types";
 
@@ -15,7 +15,7 @@ export default function ProductionOrderListPage() {
   const [orders, setOrders] = useState<ProductionOrder[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { invoke("list_production_orders").then((d) => setOrders(d as ProductionOrder[])).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false)); }, []);
+  useEffect(() => { invoke("list_production_orders").then((d) => setOrders(d as ProductionOrder[])).catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" })).finally(() => setLoading(false)); }, []);
 
   const columns: Column<ProductionOrder>[] = useMemo(() => [
     { key: "prod_no", header: "رقم الأمر", sortable: true, render: (r) => <span className="font-mono text-brand-400">{r.prod_no || "—"}</span> },
@@ -32,7 +32,7 @@ export default function ProductionOrderListPage() {
     <div className="space-y-6">
       <div className="page-header">
         <div><h1 className="page-title">أوامر الإنتاج</h1><p className="page-subtitle">{orders.length} أمر</p></div>
-        <Button onClick={() => navigate('/production/new')} icon={<Plus className="w-4 h-4" />}>أمر جديد</Button>
+        <Button onClick={() => navigate("/production/new")} icon={<Plus className="w-4 h-4" />}>أمر جديد</Button>
       </div>
       <DataTable columns={columns} data={orders} loading={loading} onRowClick={(r) => navigate(`/production/${r.id}`)} emptyMessage="لا توجد أوامر إنتاج" />
     </div>

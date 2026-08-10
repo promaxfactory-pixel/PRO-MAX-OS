@@ -5,7 +5,7 @@ import Card from "@/components/ui/Card";
 import Input, { Select, Textarea } from "@/components/ui/Input";
 import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
-import { Plus, Trash2, Save, Printer, ArrowRight } from "lucide-react";
+import { Plus, Trash2, Save, ArrowRight } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 import { Customer, Product } from "@/types";
 
@@ -29,8 +29,8 @@ export default function InvoiceCreatePage() {
   const [useCustoms, setUseCustoms] = useState(false);
 
   useEffect(() => {
-    invoke("list_customers").then((d: unknown) => setCustomers(d as Customer[])).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }));
-    invoke("list_products").then((d: unknown) => setProducts(d as Product[])).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }));
+    invoke("list_customers").then((d: unknown) => setCustomers(d as Customer[])).catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" }));
+    invoke("list_products").then((d: unknown) => setProducts(d as Product[])).catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" }));
   }, []);
 
   const addLine = () => setLines([...lines, { product_id: products[0]?.id || 0, cartons: 1, unit_price: 0, customs_price: 0 }]);
@@ -71,7 +71,7 @@ export default function InvoiceCreatePage() {
     <div className="space-y-6">
       <div className="page-header">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/invoices')} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
+          <button onClick={() => navigate("/invoices")} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
           <div>
             <h1 className="page-title">فاتورة جديدة</h1>
             <p className="page-subtitle">إنشاء فاتورة مبيعات جديدة</p>
@@ -90,7 +90,7 @@ export default function InvoiceCreatePage() {
                 options={customers.map(c => ({ value: c.id, label: c.name }))} placeholder="اختر العميل" />
               <Select label="نوع الدفع" value={paymentType} onChange={(e) => setPaymentType(e.target.value)}
                 options={[{ value: "cash", label: "نقدي" }, { value: "credit", label: "آجل" }, { value: "cheque", label: "شيك" }]} />
-              <Input label="التاريخ" type="date" defaultValue={new Date().toISOString().split('T')[0]} />
+              <Input label="التاريخ" type="date" defaultValue={new Date().toISOString().split("T")[0]} />
             </div>
           </Card>
 

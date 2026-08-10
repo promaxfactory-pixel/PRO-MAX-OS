@@ -1,14 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
-import { useNavigate } from "react-router-dom";
 import {
   Send, Bot, User, Settings, MessageSquare, Plus, Trash2,
-  Eye, EyeOff, Loader2, Zap, TrendingUp, Warehouse,
-  DollarSign, BarChart3, Lightbulb, X, ChevronDown, Sparkles,
-  TestTube, Save, History, PanelRightOpen, CheckCircle2, AlertCircle
+  Eye, EyeOff, Loader2, X, Sparkles,
+  TestTube, Save, PanelRightOpen, CheckCircle2, AlertCircle
 } from "lucide-react";
 
 type ContextType = "general" | "financial" | "production" | "inventory" | "hr";
@@ -79,7 +76,7 @@ function TypingDots() {
 }
 
 function escapeHtml(str: string): string {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 function renderMessageContent(content: string) {
@@ -110,15 +107,13 @@ function renderMessageContent(content: string) {
     if (line.trim() === "") return <br key={i} />;
     const escaped = escapeHtml(line);
     const formatted = escaped
-      .replace(/\*\*(.*?)\*\*/g, '<strong class="text-white">$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>');
+      .replace(/\*\*(.*?)\*\*/g, "<strong class=\"text-white\">$1</strong>")
+      .replace(/\*(.*?)\*/g, "<em>$1</em>");
     return <p key={i} className="text-sm text-surface-300" dangerouslySetInnerHTML={{ __html: formatted }} />;
   });
 }
 
 export default function AiAssistantPage() {
-  const navigate = useNavigate();
-
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [contextType, setContextType] = useState<ContextType>("general");
@@ -205,7 +200,6 @@ export default function AiAssistantPage() {
     };
 
     if (!activeSessionId) {
-      const ctxLabel = CONTEXTS.find((c) => c.value === contextType)?.label || "عام";
       const sessionId = generateId();
       setSessions([{
         id: sessionId,

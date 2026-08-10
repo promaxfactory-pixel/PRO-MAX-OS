@@ -3,7 +3,6 @@ import DataTable, { Column } from "@/components/ui/DataTable";
 import Card from "@/components/ui/Card";
 import { formatOMR } from "@/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
-import { Calculator } from "lucide-react";
 import { useUIStore } from "../../stores/uiStore";
 
 interface TrialBalanceRow {
@@ -18,7 +17,7 @@ export default function TrialBalancePage() {
   const [data, setData] = useState<TrialBalanceRow[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { invoke("get_trial_balance").then((d: unknown) => setData(d as TrialBalanceRow[])).catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' })).finally(() => setLoading(false)); }, []);
+  useEffect(() => { invoke("get_trial_balance").then((d: unknown) => setData(d as TrialBalanceRow[])).catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" })).finally(() => setLoading(false)); }, []);
 
   const totalDebit = data.reduce((s, r) => s + (r.debit_milli || 0), 0);
   const totalCredit = data.reduce((s, r) => s + (r.credit_milli || 0), 0);

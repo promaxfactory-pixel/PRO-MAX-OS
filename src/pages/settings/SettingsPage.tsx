@@ -22,7 +22,7 @@ export default function SettingsPage() {
   const [genMaxUsers, setGenMaxUsers] = useState("5");
   const [genResult, setGenResult] = useState("");
   const [genLoading, setGenLoading] = useState(false);
-  const { isLicensed, license, message } = useLicenseStore();
+  const { isLicensed, license } = useLicenseStore();
 
   const [form, setForm] = useState({
     company_name_ar: "",
@@ -45,7 +45,7 @@ export default function SettingsPage() {
   useEffect(() => {
     invoke("get_company_settings")
       .then((d: any) => setForm((prev) => ({ ...prev, ...d })))
-      .catch((e: unknown) => addNotification({ title: 'خطأ', message: String(e), type: 'error' }));
+      .catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" }));
   }, []);
 
   const handleChange = (field: string, value: any) => {
@@ -199,8 +199,8 @@ export default function SettingsPage() {
                     <span className="text-gray-400">النوع</span>
                     <span className="text-white font-medium">
                       {license.license_type === "perpetual" ? "دائم" :
-                       license.license_type === "subscription" ? "اشتراك" :
-                       license.license_type === "trial" ? "تجريبي" : license.license_type}
+                        license.license_type === "subscription" ? "اشتراك" :
+                          license.license_type === "trial" ? "تجريبي" : license.license_type}
                     </span>
                   </div>
                   {license.expires_at && (

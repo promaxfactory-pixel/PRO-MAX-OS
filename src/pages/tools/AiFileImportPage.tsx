@@ -484,10 +484,10 @@ export default function AiFileImportPage() {
                       <span className="inline-flex items-center gap-1 text-xs text-surface-300">
                         {h.doc_type === "purchase" ? <ShoppingCart className="w-3 h-3" />
                           : h.doc_type === "customer" ? <Users className="w-3 h-3" />
-                          : h.doc_type === "product" ? <Package className="w-3 h-3" />
-                          : h.doc_type === "supplier" ? <Truck className="w-3 h-3" />
-                          : h.doc_type === "expense" ? <Receipt className="w-3 h-3" />
-                          : <FileText className="w-3 h-3" />}
+                            : h.doc_type === "product" ? <Package className="w-3 h-3" />
+                              : h.doc_type === "supplier" ? <Truck className="w-3 h-3" />
+                                : h.doc_type === "expense" ? <Receipt className="w-3 h-3" />
+                                  : <FileText className="w-3 h-3" />}
                         {t(`tools.aiFileImport.docTypes.${h.doc_type}`)}
                       </span>
                     </td>
