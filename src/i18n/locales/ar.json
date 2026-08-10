@@ -139,8 +139,6 @@
     "secureSystem": "نظام آمن",
     "copyright": "شركة ميادين بهلا الوطنية. جميع الحقوق محفوظة.",
     "admin": "المدير",
-    "firstTimeHint": "أول مرة؟ استخدم",
-    "checkConsoleForPassword": "شاهد نافذة الأوامر لكلمة المرور",
     "loginError": "خطأ في تسجيل الدخول",
     "changing": "جارٍ التغيير..."
   },

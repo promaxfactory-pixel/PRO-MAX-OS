@@ -144,10 +144,6 @@ export default function LoginPage() {
               <p className="text-sm text-surface-400">{t("auth.enterCredentials")}</p>
             </div>
 
-            <div className="mb-4 p-3 bg-gold-400/10 border border-gold-400/20 rounded-2xl text-gold-400 text-xs text-center">
-              {t("auth.firstTimeHint")}: <span className="font-bold">admin</span> / <span className="font-bold">{t("auth.checkConsoleForPassword")}</span>
-            </div>
-
             <AnimatePresence>
               {error && (
                 <motion.div

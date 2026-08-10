@@ -38,7 +38,7 @@ export default function LanguageSwitcher() {
         <span>{current.label}</span>
       </button>
       {open && (
-        <div className="absolute bottom-full right-0 mb-1 w-32 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden">
+        <div className="absolute top-full right-0 mt-1 z-50 w-36 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden">
           {languages.map((lang) => (
             <button
               key={lang.code}
@@ -49,8 +49,8 @@ export default function LanguageSwitcher() {
                   : "text-gray-400 hover:text-white hover:bg-zinc-800"
               }`}
             >
-              <span className="flex-1 text-right">{lang.label}</span>
-              {i18n.language === lang.code && <Check className="w-3 h-3 text-gold-400" />}
+              <span className="flex-1 text-right truncate">{lang.label}</span>
+              {i18n.language === lang.code && <Check className="w-3 h-3 text-gold-400 flex-shrink-0" />}
             </button>
           ))}
         </div>
