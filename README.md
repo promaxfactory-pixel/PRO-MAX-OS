@@ -454,8 +454,8 @@ All checks pass for every commit:
 | `vite build` | ✅ 2,714 modules in ~7s |
 | `cargo check` | ✅ 0 errors |
 | `cargo clippy` | ✅ 0 warnings |
-| `cargo test` | ✅ 53/53 (Rust) |
-| `vitest run` | ✅ 5/5 (frontend) |
+| `cargo test` | ✅ 68/68 (Rust) |
+| `vitest run` | ✅ 20/20 (frontend) |
 | `npx eslint` | ✅ 0 errors |
 
 ## Build Artifacts

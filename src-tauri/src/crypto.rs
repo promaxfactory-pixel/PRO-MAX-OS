@@ -447,6 +447,23 @@ mod tests {
     }
 
     #[test]
+    fn test_decrypt_value_rejects_invalid_base64() {
+        init_test_secrets();
+        let result = decrypt_value("gcm:!!!not_base64!!!");
+        assert!(result.is_err(), "Invalid base64 payload must error");
+    }
+
+    #[test]
+    fn test_decrypt_value_rejects_corrupted_ciphertext() {
+        init_test_secrets();
+        let mut garbage = "gcm:".to_string();
+        let nonce_and_ct = [7u8; 24];
+        garbage.push_str(&B64.encode(nonce_and_ct));
+        let result = decrypt_value(&garbage);
+        assert!(result.is_err(), "Tampered ciphertext must error");
+    }
+
+    #[test]
     fn test_token_blacklist() {
         let jti = uuid::Uuid::new_v4().to_string();
         assert!(!is_token_blacklisted(&jti));

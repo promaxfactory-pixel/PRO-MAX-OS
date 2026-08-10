@@ -1302,4 +1302,89 @@ mod tests {
         let err = submit_to_tax_authority("42", "production", None, None, None, "<Invoice/>").unwrap_err();
         assert!(err.to_string().contains("endpoint"));
     }
+
+    #[test]
+    fn sha256_matches_known_vector() {
+        // "hello" is a well-known SHA-256 test vector.
+        assert_eq!(
+            compute_hash(b"hello"),
+            "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+        );
+    }
+
+    #[test]
+    fn xml_escape_handles_all_five_entities() {
+        assert_eq!(
+            xml_escape("A & B <tag> \"quote\" 'apos'"),
+            "A &amp; B &lt;tag&gt; &quot;quote&quot; &apos;apos&apos;"
+        );
+    }
+
+    #[test]
+    fn xml_escape_leaves_safe_input_unchanged() {
+        assert_eq!(xml_escape("plain invoice 123"), "plain invoice 123");
+        assert_eq!(xml_escape(""), "");
+    }
+
+    #[test]
+    fn pint_om_xml_contains_core_identifiers() {
+        let xml = generate_pint_om_xml(
+            1, "INV-0001", 100_000, 5_000, 105_000, "2026-08-10",
+            "ACME LLC", "OM123456", "PRO MAX FACTORY", "OM654321",
+            "Muscat", "CR12345", "Sales", &[
+                ("Widget".to_string(), 10.0, 10.000, 100.000),
+            ],
+        );
+        assert!(xml.contains("<ram:ID>INV-0001</ram:ID>"));
+        assert!(xml.contains("<ram:TypeCode>380</ram:TypeCode>"));
+        assert!(xml.contains("urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100"));
+        assert!(xml.contains("<ram:Name>ACME LLC</ram:Name>"));
+        assert!(xml.contains("<ram:Name>PRO MAX FACTORY</ram:Name>"));
+        assert!(xml.contains("schemeID=\"9921\""));
+        assert!(xml.contains("schemeID=\"9930\""));
+    }
+
+    #[test]
+    fn pint_om_xml_uses_omr_amounts_and_vat_rate() {
+        let xml = generate_pint_om_xml(
+            1, "INV-0002", 250_000, 12_500, 262_500, "2026-08-10",
+            "Buyer", "", "Seller", "", "", "", "", &[],
+        );
+        assert!(xml.contains("<ram:InvoiceCurrencyCode>OMR</ram:InvoiceCurrencyCode>"));
+        assert!(xml.contains("<ram:LineTotalAmount currencyID=\"OMR\">250.000</ram:LineTotalAmount>"));
+        assert!(xml.contains("<ram:TaxBasisTotalAmount currencyID=\"OMR\">250.000</ram:TaxBasisTotalAmount>"));
+        assert!(xml.contains("<ram:TaxTotalAmount currencyID=\"OMR\">12.500</ram:TaxTotalAmount>"));
+        assert!(xml.contains("<ram:GrandTotalAmount currencyID=\"OMR\">262.500</ram:GrandTotalAmount>"));
+        assert!(xml.contains("<ram:DuePayableAmount currencyID=\"OMR\">262.500</ram:DuePayableAmount>"));
+        assert!(xml.contains("<ram:RateApplicablePercent>5.00</ram:RateApplicablePercent>"));
+    }
+
+    #[test]
+    fn pint_om_xml_escapes_special_chars_in_names() {
+        let xml = generate_pint_om_xml(
+            1, "INV-0003", 100_000, 5_000, 105_000, "2026-08-10",
+            "ACME & Sons <Ltd>", "", "A&B Co", "", "", "", "", &[],
+        );
+        assert!(xml.contains("<ram:Name>ACME &amp; Sons &lt;Ltd&gt;</ram:Name>"));
+        assert!(xml.contains("<ram:Name>A&amp;B Co</ram:Name>"));
+        assert!(!xml.contains("& Sons <Ltd>"));
+    }
+
+    #[test]
+    fn pint_om_xml_includes_line_items_with_indexes() {
+        let xml = generate_pint_om_xml(
+            1, "INV-0004", 30_000, 1_500, 31_500, "2026-08-10",
+            "Buyer", "", "Seller", "", "", "", "", &[
+                ("First".to_string(), 2.0, 10.000, 20.000),
+                ("Second".to_string(), 1.0, 10.000, 10.000),
+            ],
+        );
+        assert!(xml.contains("<ram:LineID>1</ram:LineID>"));
+        assert!(xml.contains("<ram:LineID>2</ram:LineID>"));
+        assert!(xml.contains("<ram:Name>First</ram:Name>"));
+        assert!(xml.contains("<ram:Name>Second</ram:Name>"));
+        assert!(xml.contains("<ram:BilledQuantity unitCode=\"C62\">2</ram:BilledQuantity>"));
+        assert!(xml.contains("<ram:NetPriceAmount currencyID=\"OMR\">10.000</ram:NetPriceAmount>"));
+        assert!(xml.ends_with("</rsm:CrossIndustryInvoice>\n"));
+    }
 }

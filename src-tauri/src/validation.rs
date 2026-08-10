@@ -158,4 +158,44 @@ mod tests {
         assert!(Validator::doc_number("INV-001").is_ok());
         assert!(Validator::doc_number("").is_err());
     }
+
+    #[test]
+    fn test_min_length() {
+        assert!(Validator::min_length("code", "AB", 3).is_err());
+        assert!(Validator::min_length("code", "ABC", 3).is_ok());
+        assert!(Validator::min_length("code", "ABCD", 3).is_ok());
+    }
+
+    #[test]
+    fn test_max_length() {
+        assert!(Validator::max_length("name", "ABCDE", 4).is_err());
+        assert!(Validator::max_length("name", "ABCD", 4).is_ok());
+    }
+
+    #[test]
+    fn test_non_zero() {
+        assert!(Validator::non_zero("qty", 0).is_err());
+        assert!(Validator::non_zero("qty", 1).is_ok());
+        assert!(Validator::non_zero("qty", -5).is_ok());
+    }
+
+    #[test]
+    fn test_phone() {
+        assert!(Validator::phone("").is_ok());
+        assert!(Validator::phone("+968 9123 4567").is_ok());
+        assert!(Validator::phone("12345").is_err());
+    }
+
+    #[test]
+    fn test_valid_status() {
+        assert!(Validator::valid_status("posted", &["draft", "posted", "void"]).is_ok());
+        assert!(Validator::valid_status("unknown", &["draft", "posted", "void"]).is_err());
+    }
+
+    #[test]
+    fn test_milli_amount() {
+        assert!(Validator::milli_amount("total", 0).is_ok());
+        assert!(Validator::milli_amount("total", 105_000).is_ok());
+        assert!(Validator::milli_amount("total", -1).is_err());
+    }
 }
