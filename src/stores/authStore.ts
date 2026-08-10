@@ -17,6 +17,12 @@ function isTokenExpired(): boolean {
   try {
     const token = localStorage.getItem("auth_token");
     if (!token) return true;
+    if (token.startsWith("promax_")) {
+      const parts = token.split("_");
+      const ts = Number(parts[2]);
+      if (Number.isNaN(ts)) return true;
+      return Date.now() >= (ts + 7 * 86400) * 1000;
+    }
     const payload = JSON.parse(atob(token.split(".")[1]));
     return payload.exp ? Date.now() >= payload.exp * 1000 : false;
   } catch {

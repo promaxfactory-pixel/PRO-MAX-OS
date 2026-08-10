@@ -93,4 +93,26 @@ describe("useAuthStore", () => {
     expect(window.localStorage.getItem("auth_token")).toBeNull();
     expect(window.localStorage.getItem("auth_user")).toBeNull();
   });
+
+  it("keeps a fresh promax_ token valid and validates it with the backend", async () => {
+    const ts = Math.floor(Date.now() / 1000);
+    window.localStorage.setItem("auth_token", `promax_1_${ts}_admin_admin_deadbeef`);
+    vi.mocked(invoke).mockResolvedValue(mockUser);
+
+    const valid = await useAuthStore.getState().validateToken();
+
+    expect(valid).toBe(true);
+    expect(invoke).toHaveBeenCalledWith("validate_token", { token: `promax_1_${ts}_admin_admin_deadbeef` });
+  });
+
+  it("rejects an expired promax_ token without calling the backend", async () => {
+    const ts = Math.floor(Date.now() / 1000) - 8 * 86400;
+    window.localStorage.setItem("auth_token", `promax_1_${ts}_admin_admin_deadbeef`);
+
+    const valid = await useAuthStore.getState().validateToken();
+
+    expect(valid).toBe(false);
+    expect(invoke).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem("auth_token")).toBeNull();
+  });
 });
