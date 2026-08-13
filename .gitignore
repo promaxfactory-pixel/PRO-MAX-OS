@@ -58,6 +58,10 @@ releases/
 # Generated schemas
 src-tauri/gen/
 
+# Distribution package (intentionally published)
+!release/
+!release/**
+
 # Clippy / build check output files
 clippy_*.txt
 *_check.txt
