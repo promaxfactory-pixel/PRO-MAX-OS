@@ -16,7 +16,7 @@ export default function ReportsPage() {
   const reports: ReportCard[] = [
     {
       title: "الإقفال اليومي للمصنع",
-      description: "ملخص شامل لأنشطة اليوم: إنتاج، مبيعات، مشتريات، تحصيلات",
+      description: "ملخص شامل لأنشطة اليوم: إنتا̡ مبيعاʡ مشترياʡ تحصيلات",
       icon: <Calendar className="w-6 h-6" />,
       path: "/reports/daily-closing",
       color: "text-emerald-400",

@@ -1,5 +1,5 @@
 use crate::commands::rbac;
-use crate::db::DbState;
+use crate::db::{next_sequence, DbState};
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -17,6 +17,7 @@ pub struct Customer {
     pub vat_number: Option<String>,
     pub credit_limit_milli: i64,
     pub payment_terms: Option<String>,
+    pub payment_terms_days: i64,
     pub opening_balance_milli: i64,
     pub balance_milli: i64,
     pub notes: Option<String>,
@@ -35,6 +36,7 @@ pub struct CreateCustomerInput {
     pub vat_number: Option<String>,
     pub credit_limit_milli: Option<i64>,
     pub payment_terms: Option<String>,
+    pub payment_terms_days: Option<i64>,
     pub notes: Option<String>,
 }
 
@@ -50,6 +52,7 @@ pub struct UpdateCustomerInput {
     pub vat_number: Option<String>,
     pub credit_limit_milli: Option<i64>,
     pub payment_terms: Option<String>,
+    pub payment_terms_days: Option<i64>,
     pub notes: Option<String>,
     pub active: Option<i64>,
 }
@@ -67,10 +70,11 @@ fn row_to_customer(row: &rusqlite::Row) -> rusqlite::Result<Customer> {
         vat_number: row.get(8)?,
         credit_limit_milli: row.get(9)?,
         payment_terms: row.get(10)?,
-        opening_balance_milli: row.get(11)?,
-        balance_milli: row.get(12)?,
-        notes: row.get(13)?,
-        active: row.get(14)?,
+        payment_terms_days: row.get(11)?,
+        opening_balance_milli: row.get(12)?,
+        balance_milli: row.get(13)?,
+        notes: row.get(14)?,
+        active: row.get(15)?,
     })
 }
 
@@ -78,7 +82,7 @@ fn row_to_customer(row: &rusqlite::Row) -> rusqlite::Result<Customer> {
 pub fn list_customers(state: State<'_, DbState>) -> Result<Vec<Customer>, AppError> {
     let conn = state.0.lock()?;
     let mut stmt = conn.prepare(
-        "SELECT id, code, name, ctype, contact, phone, email, address, vat_number, credit_limit_milli, payment_terms, opening_balance_milli, balance_milli, notes, active FROM customers WHERE active=1 ORDER BY name"
+        "SELECT id, code, name, ctype, contact, phone, email, address, vat_number, credit_limit_milli, payment_terms, payment_terms_days, opening_balance_milli, balance_milli, notes, active FROM customers WHERE active=1 ORDER BY name"
     )?;
     let rows = stmt.query_map([], row_to_customer)?;
     rows.collect::<Result<Vec<_>, _>>().map_err(AppError::from)
@@ -88,29 +92,31 @@ pub fn list_customers(state: State<'_, DbState>) -> Result<Vec<Customer>, AppErr
 pub fn get_customer(state: State<'_, DbState>, id: i64) -> Result<Customer, AppError> {
     let conn = state.0.lock()?;
     conn.query_row(
-        "SELECT id, code, name, ctype, contact, phone, email, address, vat_number, credit_limit_milli, payment_terms, opening_balance_milli, balance_milli, notes, active FROM customers WHERE id=?",
+        "SELECT id, code, name, ctype, contact, phone, email, address, vat_number, credit_limit_milli, payment_terms, payment_terms_days, opening_balance_milli, balance_milli, notes, active FROM customers WHERE id=?",
         [id],
         row_to_customer,
-    ).map_err(|_| AppError::not_found("Customer not found"))
+    ).map_err(|_| AppError::not_found("العميل غير موجود"))
 }
 
 fn get_customer_by_conn(conn: &rusqlite::Connection, id: i64) -> Result<Customer, AppError> {
     conn.query_row(
-        "SELECT id, code, name, ctype, contact, phone, email, address, vat_number, credit_limit_milli, payment_terms, opening_balance_milli, balance_milli, notes, active FROM customers WHERE id=?",
+        "SELECT id, code, name, ctype, contact, phone, email, address, vat_number, credit_limit_milli, payment_terms, payment_terms_days, opening_balance_milli, balance_milli, notes, active FROM customers WHERE id=?",
         [id],
         row_to_customer,
-    ).map_err(|_| AppError::not_found("Customer not found"))
+    ).map_err(|_| AppError::not_found("العميل غير موجود"))
 }
 
 #[tauri::command]
-pub fn create_customer(state: State<'_, DbState>, input: CreateCustomerInput) -> Result<i64, AppError> {
+pub fn create_customer(state: State<'_, DbState>, user_id: i64, input: CreateCustomerInput) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager"])?;
     conn.execute(
-        "INSERT INTO customers(code, name, ctype, contact, phone, email, address, vat_number, credit_limit_milli, payment_terms, notes) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO customers(code, name, ctype, contact, phone, email, address, vat_number, credit_limit_milli, payment_terms, payment_terms_days, notes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
         rusqlite::params![
             input.code, input.name, input.ctype.unwrap_or_else(|| "credit".into()),
             input.contact, input.phone, input.email, input.address, input.vat_number,
-            input.credit_limit_milli.unwrap_or(0), input.payment_terms, input.notes
+            input.credit_limit_milli.unwrap_or(0), input.payment_terms,
+            input.payment_terms_days.unwrap_or(30), input.notes
         ],
     )?;
     let cid = conn.last_insert_rowid();
@@ -119,8 +125,9 @@ pub fn create_customer(state: State<'_, DbState>, input: CreateCustomerInput) ->
 }
 
 #[tauri::command]
-pub fn update_customer(state: State<'_, DbState>, id: i64, input: UpdateCustomerInput) -> Result<String, AppError> {
+pub fn update_customer(state: State<'_, DbState>, user_id: i64, id: i64, input: UpdateCustomerInput) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager"])?;
     let mut sets = Vec::new();
     let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
@@ -134,6 +141,7 @@ pub fn update_customer(state: State<'_, DbState>, id: i64, input: UpdateCustomer
     if let Some(v) = &input.vat_number { sets.push("vat_number=?"); params.push(Box::new(v.clone())); }
     if let Some(v) = input.credit_limit_milli { sets.push("credit_limit_milli=?"); params.push(Box::new(v)); }
     if let Some(v) = &input.payment_terms { sets.push("payment_terms=?"); params.push(Box::new(v.clone())); }
+    if let Some(v) = input.payment_terms_days { sets.push("payment_terms_days=?"); params.push(Box::new(v)); }
     if let Some(v) = &input.notes { sets.push("notes=?"); params.push(Box::new(v.clone())); }
     if let Some(v) = input.active { sets.push("active=?"); params.push(Box::new(v)); }
 
@@ -147,11 +155,134 @@ pub fn update_customer(state: State<'_, DbState>, id: i64, input: UpdateCustomer
 }
 
 #[tauri::command]
-pub fn delete_customer(state: State<'_, DbState>, id: i64) -> Result<String, AppError> {
+pub fn delete_customer(state: State<'_, DbState>, user_id: i64, id: i64) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager"])?;
     conn.execute("UPDATE customers SET active=0 WHERE id=?", [id])?;
     let _ = rbac::log_audit(&conn, None, None, "delete_customer", "customers", Some(id), None, None, None);
     Ok("تم الحذف بنجاح".to_string())
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateCustomerPaymentInput {
+    pub date: String,
+    pub amount_milli: i64,
+    pub method: Option<String>,
+    pub cashbank_id: Option<i64>,
+    pub reference: Option<String>,
+    pub notes: Option<String>,
+}
+
+#[tauri::command]
+pub fn create_customer_payment(
+    state: State<'_, DbState>,
+    user_id: i64,
+    customer_id: i64,
+    input: CreateCustomerPaymentInput,
+) -> Result<i64, AppError> {
+    let mut conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
+    let tx = conn.transaction()?;
+
+    let year = chrono::Utc::now().format("%Y").to_string();
+    let seq = next_sequence(&tx, "RCP", &year)?;
+    let rec_no = format!("RCP-{}-{:04}", year, seq);
+
+    let created_by: String = tx
+        .query_row("SELECT username FROM users WHERE id=?", [user_id], |r| r.get(0))
+        .unwrap_or_else(|_| "user".into());
+
+    let method = input.method.clone().unwrap_or_else(|| "cash".into());
+    tx.execute(
+        "INSERT INTO customer_payments(rec_no, date, customer_id, amount_milli, method, cashbank_id, reference, notes, created_by, created_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9, datetime('now'))",
+        rusqlite::params![
+            rec_no,
+            input.date.clone(),
+            customer_id,
+            input.amount_milli,
+            method,
+            input.cashbank_id,
+            input.reference,
+            input.notes,
+            created_by,
+        ],
+    )?;
+    let payment_id = tx.last_insert_rowid();
+
+    tx.execute(
+        "UPDATE customers SET balance_milli = balance_milli - ?1 WHERE id=?2",
+        [input.amount_milli, customer_id],
+    )?;
+
+    // Spread the payment across the customer's open (posted, unpaid) credit invoices,
+    // oldest first (FIFO), mirroring the supplier-side allocation. This keeps
+    // per-invoice outstanding amounts (and thus aging/dunning) accurate.
+    allocate_customer_payment_fifo(&tx, customer_id, input.amount_milli, None)?;
+
+    let cash_account = crate::commands::accounting::resolve_cash_account(&tx, input.cashbank_id, &method)?;
+    let lines: Vec<(String, i64, i64, Option<String>)> = vec![
+        (cash_account, input.amount_milli, 0, Some("سند قبض".to_string())),
+        ("1200".to_string(), 0, input.amount_milli, None),
+    ];
+    let journal_id = crate::commands::accounting::post_to_journal(
+        &tx,
+        "customer_payment",
+        payment_id,
+        &input.date,
+        &format!("سند قبض {}", rec_no),
+        &lines,
+        &created_by,
+    )?;
+    tx.execute(
+        "UPDATE customer_payments SET journal_id=?1 WHERE id=?2",
+        rusqlite::params![journal_id, payment_id],
+    )?;
+
+    let _ = rbac::log_audit(&tx, Some(user_id), None, "create_customer_payment", "customer_payments", Some(payment_id), None, None, None);
+    tx.commit()?;
+    Ok(payment_id)
+}
+
+/// Spreads `amount` across the customer's open (posted, unpaid) credit invoices,
+/// oldest first (FIFO). `exclude_id` is skipped (used when redistributing the
+/// payments of an invoice being voided). Returns the leftover that no open
+/// invoice absorbed (an on-account credit). Mirrors `allocate_payment_fifo`.
+pub(crate) fn allocate_customer_payment_fifo(
+    conn: &rusqlite::Connection,
+    customer_id: i64,
+    mut amount: i64,
+    exclude_id: Option<i64>,
+) -> Result<i64, AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT id, total_milli, paid_milli FROM sales_invoices
+         WHERE customer_id=?1 AND LOWER(status) = 'posted' AND LOWER(COALESCE(payment_type,'credit')) = 'credit'
+               AND total_milli > paid_milli
+         ORDER BY date ASC, id ASC",
+    )?;
+    let rows = stmt.query_map([customer_id], |row| {
+        Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, row.get::<_, i64>(2)?))
+    })?;
+    let open_invoices: Vec<(i64, i64, i64)> = rows.collect::<Result<_, _>>()?;
+    drop(stmt);
+
+    for (inv_id, total, paid) in open_invoices {
+        if amount <= 0 {
+            break;
+        }
+        if Some(inv_id) == exclude_id {
+            continue;
+        }
+        let outstanding = total - paid;
+        let apply = amount.min(outstanding);
+        if apply > 0 {
+            conn.execute(
+                "UPDATE sales_invoices SET paid_milli = paid_milli + ?1 WHERE id = ?2",
+                rusqlite::params![apply, inv_id],
+            )?;
+            amount -= apply;
+        }
+    }
+    Ok(amount)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -191,7 +322,9 @@ pub fn get_customer_statement(
 
     {
         let mut stmt = conn.prepare(
-            "SELECT si.date, si.inv_no, si.total_milli, si.discount_milli, si.notes FROM sales_invoices si WHERE si.customer_id=? AND si.date BETWEEN ? AND ? AND si.status != 'Void' ORDER BY si.date ASC"
+            "SELECT si.date, si.inv_no, si.total_milli, si.discount_milli, si.notes FROM sales_invoices si
+             WHERE si.customer_id=? AND si.date BETWEEN ? AND ? AND LOWER(si.status) = 'posted' AND LOWER(COALESCE(si.payment_type,'credit')) = 'credit'
+             ORDER BY si.date ASC"
         )?;
         let rows = stmt.query_map(rusqlite::params![customer_id, from, to], |row| {
             Ok((
@@ -219,7 +352,7 @@ pub fn get_customer_statement(
 
     {
         let mut stmt = conn.prepare(
-            "SELECT cp.date, cp.receipt_no, cp.amount_milli, cp.method, cp.notes FROM customer_payments cp WHERE cp.customer_id=? AND cp.date BETWEEN ? AND ? AND cp.status != 'Void' ORDER BY cp.date ASC"
+            "SELECT cp.date, cp.rec_no, cp.amount_milli, cp.method, cp.notes FROM customer_payments cp WHERE cp.customer_id=? AND cp.date BETWEEN ? AND ? ORDER BY cp.date ASC"
         )?;
         let rows = stmt.query_map(rusqlite::params![customer_id, from, to], |row| {
             Ok((

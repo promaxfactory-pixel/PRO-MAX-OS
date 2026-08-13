@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import { useUIStore } from "@/stores/uiStore";
 import {
   FileUp, Sparkles, FileText, ShoppingCart, Users, Package,

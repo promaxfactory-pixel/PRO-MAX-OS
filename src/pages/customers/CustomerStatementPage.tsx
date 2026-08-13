@@ -4,7 +4,7 @@ import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import { formatOMR, formatDate } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import { ArrowRight, Printer, Calendar } from "lucide-react";
 import StatementPrintTemplate from "@/components/print/StatementPrintTemplate";
 import { printComponent } from "@/utils/printUtils";
@@ -32,7 +32,7 @@ export default function CustomerStatementPage() {
         toDate: toDate || null,
       });
       setData(result);
-    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "ط®ط·ط£", message: "ط­ط¯ط« ط®ط·ط£ ط£ط«ظ†ط§ط، طھط­ظ…ظٹظ„ ط§ظ„ط¨ظٹط§ظ†ط§طھ" }); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
   }, [addNotification, id, fromDate, toDate]);
 
@@ -47,7 +47,7 @@ export default function CustomerStatementPage() {
         printComponent("print-area");
         setShowPrint(false);
       }, 200);
-    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "ط®ط·ط£", message: "ط­ط¯ط« ط®ط·ط£ ط£ط«ظ†ط§ط، طھط­ظ…ظٹظ„ ط§ظ„ط¨ظٹط§ظ†ط§طھ" }); }
+    } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
   };
 
   if (loading || !data) {
@@ -55,19 +55,19 @@ export default function CustomerStatementPage() {
   }
 
   const txnLabels: Record<string, string> = {
-    invoice: "ظپط§طھظˆط±ط©",
-    payment: "ط¯ظپط¹ط©",
-    credit_note: "ط¥ط´ط¹ط§ط± ط¯ط§ط¦ظ†",
+    invoice: "فاتورة",
+    payment: "دفعة",
+    credit_note: "إشعار دائن",
   };
 
   const columns: Column<any>[] = useMemo(() => [
-    { key: "date", header: "ط§ظ„طھط§ط±ظٹط®", render: (r) => formatDate(r.date) },
-    { key: "ref_no", header: "ط§ظ„ظ…ط±ط¬ط¹", render: (r) => r.ref_no || "â€”" },
-    { key: "txn_type", header: "ط§ظ„ظ†ظˆط¹", render: (r) => txnLabels[r.txn_type] || r.txn_type },
-    { key: "debit_milli", header: "ظ…ط¯ظٹظ†", align: "left", render: (r) => r.debit_milli > 0 ? <span className="text-emerald-400 font-medium">{formatOMR(r.debit_milli)}</span> : "â€”" },
-    { key: "credit_milli", header: "ط¯ط§ط¦ظ†", align: "left", render: (r) => r.credit_milli > 0 ? <span className="text-red-400 font-medium">{formatOMR(r.credit_milli)}</span> : "â€”" },
-    { key: "balance_milli", header: "ط§ظ„ط±طµظٹط¯", align: "left", render: (r) => <span className="font-bold">{formatOMR(r.balance_milli)}</span> },
-    { key: "notes", header: "ظ…ظ„ط§ط­ط¸ط§طھ", render: (r) => r.notes || "â€”" },
+    { key: "date", header: "التاريخ", render: (r) => formatDate(r.date) },
+    { key: "ref_no", header: "المرجع", render: (r) => r.ref_no || "—" },
+    { key: "txn_type", header: "النوع", render: (r) => txnLabels[r.txn_type] || r.txn_type },
+    { key: "debit_milli", header: "مدين", align: "left", render: (r) => r.debit_milli > 0 ? <span className="text-emerald-400 font-medium">{formatOMR(r.debit_milli)}</span> : "—" },
+    { key: "credit_milli", header: "دائن", align: "left", render: (r) => r.credit_milli > 0 ? <span className="text-red-400 font-medium">{formatOMR(r.credit_milli)}</span> : "—" },
+    { key: "balance_milli", header: "الرصيد", align: "left", render: (r) => <span className="font-bold">{formatOMR(r.balance_milli)}</span> },
+    { key: "notes", header: "ملاحظات", render: (r) => r.notes || "—" },
   ], []);
 
   return (
@@ -76,27 +76,27 @@ export default function CustomerStatementPage() {
         <div className="flex items-center gap-3">
           <button onClick={() => navigate(`/customers/${id}`)} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
           <div>
-            <h1 className="page-title">ظƒط´ظپ ط­ط³ط§ط¨ ط§ظ„ط¹ظ…ظٹظ„</h1>
-            <p className="page-subtitle">{data.customer.name} â€” {data.customer.code || ""}</p>
+            <h1 className="page-title">كشف حساب العميل</h1>
+            <p className="page-subtitle">{data.customer.name} — {data.customer.code || ""}</p>
           </div>
         </div>
-        <Button variant="outline" icon={<Printer className="w-4 h-4" />} onClick={handlePrint}>ط·ط¨ط§ط¹ط©</Button>
+        <Button variant="outline" icon={<Printer className="w-4 h-4" />} onClick={handlePrint}>طباعة</Button>
       </div>
 
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
           <Calendar className="w-4 h-4 text-surface-400" />
-          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="input-field text-sm" aria-label="ظ…ظ† طھط§ط±ظٹط®" />
-          <span className="text-surface-500">ط¥ظ„ظ‰</span>
-          <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="input-field text-sm" aria-label="ط¥ظ„ظ‰ طھط§ط±ظٹط®" />
+          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="input-field text-sm" aria-label="من تاريخ" />
+          <span className="text-surface-500">إلى</span>
+          <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="input-field text-sm" aria-label="إلى تاريخ" />
         </div>
       </div>
 
       <div className="grid grid-cols-4 gap-4">
-        <Card><p className="text-sm text-surface-400">ط§ظ„ط±طµظٹط¯ ط§ظ„ط§ظپطھطھط§ط­ظٹ</p><p className="text-lg font-bold mt-1">{formatOMR(data.opening_balance_milli)}</p></Card>
-        <Card><p className="text-sm text-surface-400">ط¥ط¬ظ…ط§ظ„ظٹ ط§ظ„ظ…ط¯ظٹظ†</p><p className="text-lg font-bold mt-1 text-emerald-400">{formatOMR(data.total_debit_milli)}</p></Card>
-        <Card><p className="text-sm text-surface-400">ط¥ط¬ظ…ط§ظ„ظٹ ط§ظ„ط¯ط§ط¦ظ†</p><p className="text-lg font-bold mt-1 text-red-400">{formatOMR(data.total_credit_milli)}</p></Card>
-        <Card><p className="text-sm text-surface-400">ط§ظ„ط±طµظٹط¯ ط§ظ„ط®طھط§ظ…ظٹ</p><p className="text-lg font-bold mt-1 gradient-text">{formatOMR(data.closing_balance_milli)}</p></Card>
+        <Card><p className="text-sm text-surface-400">الرصيد الافتتاحي</p><p className="text-lg font-bold mt-1">{formatOMR(data.opening_balance_milli)}</p></Card>
+        <Card><p className="text-sm text-surface-400">إجمالي المدين</p><p className="text-lg font-bold mt-1 text-emerald-400">{formatOMR(data.total_debit_milli)}</p></Card>
+        <Card><p className="text-sm text-surface-400">إجمالي الدائن</p><p className="text-lg font-bold mt-1 text-red-400">{formatOMR(data.total_credit_milli)}</p></Card>
+        <Card><p className="text-sm text-surface-400">الرصيد الختامي</p><p className="text-lg font-bold mt-1 gradient-text">{formatOMR(data.closing_balance_milli)}</p></Card>
       </div>
 
       <Card>
@@ -106,7 +106,7 @@ export default function CustomerStatementPage() {
       {showPrint && printData && (
         <div style={{ position: "absolute", left: "-9999px" }}>
           <StatementPrintTemplate
-            title="ظƒط´ظپ ط­ط³ط§ط¨ ط¹ظ…ظٹظ„"
+            title="كشف حساب عميل"
             entityName={printData.customer.name}
             entityCode={printData.customer.code}
             entityType="customer"

@@ -2,6 +2,7 @@ use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
+use crate::commands::rbac;
 use crate::db::DbState;
 use crate::error::AppError;
 
@@ -115,9 +116,11 @@ pub fn get_operations_sheet(
 #[tauri::command]
 pub fn create_operations_sheet(
     state: State<'_, DbState>,
+    user_id: i64,
     input: CreateOperationsSheetInput,
 ) -> Result<OperationsSheet, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "operator"])?;
 
     let seq: i64 = conn
         .query_row(
@@ -148,6 +151,7 @@ pub fn create_operations_sheet(
     )?;
 
     let id = conn.last_insert_rowid();
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "create_operations_sheet", "operations_daily_sheets", Some(id), None, Some(&sheet_no), None);
 
     Ok(conn.query_row(
         "SELECT id, sheet_no, date, shift, supervisor_name, worker_name, start_time, end_time, normal_hours, overtime_hours, cartons_produced, total_cups, status, notes, created_by, created_at FROM operations_daily_sheets WHERE id=?1",

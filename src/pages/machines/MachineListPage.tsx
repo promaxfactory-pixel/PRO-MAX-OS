@@ -4,7 +4,7 @@ import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import { type BadgeVariant } from "@/components/ui/DataTable";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import { Plus, Cog, AlertCircle } from "lucide-react";
 import { Machine } from "@/types";
 

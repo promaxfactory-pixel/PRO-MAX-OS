@@ -5,7 +5,7 @@ import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import { formatDate } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import { Plus, FileCheck, ShieldAlert } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
@@ -173,7 +173,7 @@ export default function RenewalsPage() {
               </div>
               <div className="input-group">
                 <label className="input-label">الفئة</label>
-                <input type="text" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="input-field" placeholder="مثال: ترخيص، تأمين..." aria-label="الفئة" />
+                <input type="text" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="input-field" placeholder="مثال: ترخيա تأمين..." aria-label="الفئة" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">

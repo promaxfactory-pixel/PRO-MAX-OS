@@ -1,3 +1,4 @@
+use crate::commands::rbac;
 use crate::db::DbState;
 use crate::error::AppError;
 use rusqlite::params;
@@ -309,9 +310,11 @@ pub struct GovSubmissionRecord {
 #[tauri::command]
 pub fn gov_submit_report(
     state: State<'_, DbState>,
+    user_id: i64,
     input: GovSubmissionRecord,
 ) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager"])?;
 
     let entity_id: i64 = conn
         .query_row(
@@ -329,6 +332,8 @@ pub fn gov_submit_report(
         params![entity_id, input.payload_json, now],
     )
     ?;
+    let id = conn.last_insert_rowid();
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "gov_submit_report", "gov_submissions", Some(id), None, Some(&input.entity_code), None);
 
     Ok(format!("Report submitted to entity #{} successfully at {}", entity_id, now))
 }

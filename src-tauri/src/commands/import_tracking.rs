@@ -1,5 +1,5 @@
 use crate::commands::rbac;
-use crate::db::DbState;
+use crate::db::{next_sequence, DbState};
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -191,22 +191,14 @@ pub fn get_shipment(state: State<'_, DbState>, id: i64) -> Result<ImportShipment
 #[tauri::command]
 pub fn create_shipment(
     state: State<'_, DbState>,
+    user_id: i64,
     input: CreateShipmentInput,
 ) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager"])?;
     let year = chrono::Utc::now().format("%Y").to_string();
 
-    let seq: i64 = conn
-        .query_row(
-            "SELECT COALESCE(last_number,0)+1 FROM doc_sequences WHERE doc_type='IMP' AND year=?",
-            [&year],
-            |r| r.get(0),
-        )
-        .unwrap_or(1);
-    conn.execute(
-        "INSERT INTO doc_sequences(doc_type, year, last_number) VALUES('IMP',?,?) ON CONFLICT(doc_type, year) DO UPDATE SET last_number=excluded.last_number",
-        rusqlite::params![year, seq],
-    ).map_err(|e| format!("Failed to increment import shipment sequence: {}", e))?;
+    let seq = next_sequence(&conn, "IMP", &year)?;
     let shipment_no = format!("IMP-{}-{:04}", year, seq);
 
     conn.execute(
@@ -242,10 +234,12 @@ pub fn create_shipment(
 #[tauri::command]
 pub fn update_shipment(
     state: State<'_, DbState>,
+    user_id: i64,
     id: i64,
     input: UpdateShipmentInput,
 ) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager"])?;
     let mut sets = Vec::new();
     let mut p: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
@@ -319,7 +313,7 @@ pub fn update_shipment(
     }
 
     if sets.is_empty() {
-        return Err(AppError::validation("No changes provided"));
+        return Err(AppError::validation("لا توجد تعديلات"));
     }
 
     p.push(Box::new(id));
@@ -332,10 +326,12 @@ pub fn update_shipment(
 #[tauri::command]
 pub fn update_shipment_status(
     state: State<'_, DbState>,
+    user_id: i64,
     id: i64,
     input: UpdateShipmentStatusInput,
 ) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager"])?;
     let mut sets = vec!["status=?"];
     let mut p: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
     p.push(Box::new(input.status));

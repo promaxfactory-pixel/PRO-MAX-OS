@@ -2,17 +2,25 @@ import { useState, useEffect, useCallback } from "react";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { formatDate, cn } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import {
   Database, Download, Upload, CheckCircle2,
   AlertTriangle
 } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
+import { useAuthStore } from "@/stores/authStore";
 
-interface Backup { id: number; file_name: string; size: string; created_at: string; type: string; }
+interface Backup { id: number; file_name: string; size: number; created_at: string; kind: string; }
+
+function formatSize(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${bytes} B`;
+}
 
 export default function BackupPage() {
   const addNotification = useUIStore((s) => s.addNotification);
+  const user = useAuthStore((s) => s.user);
   const [backups, setBackups] = useState<Backup[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -34,7 +42,7 @@ export default function BackupPage() {
     setCreating(true);
     setMessage(null);
     try {
-      await invoke("backup_create");
+      await invoke("backup_create", { userId: user?.id || 0 });
       setMessage({ type: "success", text: "تم إنشاء النسخة الاحتياطية بنجاح" });
       loadBackups();
     } catch (err) {
@@ -50,7 +58,7 @@ export default function BackupPage() {
     setRestoring(id);
     setMessage(null);
     try {
-      await invoke("backup_restore", { backupId: id });
+      await invoke("backup_restore", { backupId: id, userId: user?.id || 0 });
       setMessage({ type: "success", text: "تم الاستعادة بنجاح" });
     } catch (err) {
       setMessage({ type: "error", text: "فشل الاستعادة" });
@@ -64,7 +72,7 @@ export default function BackupPage() {
 
   const handleExport = async (exportType: string) => {
     try {
-      await invoke("backup_export_csv", { exportType });
+      await invoke("backup_export_csv", { exportType, userId: user?.id || 0 });
       setMessage({ type: "success", text: "تم التصدير بنجاح" });
       setTimeout(() => setMessage(null), 4000);
     } catch (err) {
@@ -117,8 +125,8 @@ export default function BackupPage() {
                       <div>
                         <p className="text-sm font-medium text-surface-200">{b.file_name}</p>
                         <div className="flex items-center gap-3 text-xs text-surface-500 mt-0.5">
-                          <span>{b.size}</span>
-                          <span>{b.type}</span>
+                          <span>{formatSize(b.size)}</span>
+                          <span>{b.kind === "auto" ? "تلقائي" : "يدوي"}</span>
                           <span>{formatDate(b.created_at)}</span>
                         </div>
                       </div>

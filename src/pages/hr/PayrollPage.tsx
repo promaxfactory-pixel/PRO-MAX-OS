@@ -4,7 +4,7 @@ import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import { formatOMR, formatDate } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import { Plus, Play, Eye } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useUIStore } from "@/stores/uiStore";

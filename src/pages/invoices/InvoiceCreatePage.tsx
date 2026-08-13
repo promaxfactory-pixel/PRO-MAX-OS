@@ -4,7 +4,7 @@ import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Input, { Select, Textarea } from "@/components/ui/Input";
 import { formatOMR } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import { Plus, Trash2, Save, ArrowRight } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 import { Customer, Product } from "@/types";

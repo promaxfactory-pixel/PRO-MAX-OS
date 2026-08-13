@@ -43,8 +43,9 @@ pub struct ProductProductionSummary {
 }
 
 #[tauri::command]
-pub fn get_shift_sheet(state: State<'_, DbState>, date: String, shift: String) -> Result<i64, AppError> {
+pub fn get_shift_sheet(state: State<'_, DbState>, user_id: i64, date: String, shift: String) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "operator"])?;
 
     let existing: Option<i64> = conn
         .query_row(
@@ -70,13 +71,16 @@ pub fn get_shift_sheet(state: State<'_, DbState>, date: String, shift: String) -
     )
     ?;
 
-    Ok(conn.last_insert_rowid())
+    let id = conn.last_insert_rowid();
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "get_shift_sheet_create", "operations_daily_sheets", Some(id), None, Some(&sheet_no), None);
+    Ok(id)
 }
 
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn record_production(
     state: State<'_, DbState>,
+    user_id: i64,
     sheet_id: i64,
     product_id: i64,
     customer_brand: Option<String>,
@@ -87,6 +91,7 @@ pub fn record_production(
     worker_id: Option<i64>,
 ) -> Result<ShiftLine, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "operator"])?;
 
     let cpc = cups_per_carton.unwrap_or(1000);
     let waste = waste_cartons.unwrap_or(0.0);
@@ -114,7 +119,7 @@ pub fn record_production(
 
     update_sheet_totals(&conn, sheet_id)?;
 
-    let _ = rbac::log_audit(&conn, None, None, "record_production", "production_shift_lines", None, None, None, None);
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "record_production", "production_shift_lines", None, None, None, None);
 
     Ok(line)
 }
@@ -156,8 +161,9 @@ pub fn get_shift_lines(state: State<'_, DbState>, sheet_id: i64) -> Result<Vec<S
 }
 
 #[tauri::command]
-pub fn complete_shift(state: State<'_, DbState>, sheet_id: i64, completed_by: String) -> Result<String, AppError> {
+pub fn complete_shift(state: State<'_, DbState>, user_id: i64, sheet_id: i64, completed_by: String) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "operator"])?;
 
     let status: String = conn.query_row(
         "SELECT status FROM operations_daily_sheets WHERE id = ?1",
@@ -209,7 +215,7 @@ pub fn complete_shift(state: State<'_, DbState>, sheet_id: i64, completed_by: St
         ?;
     }
 
-    let _ = rbac::log_audit(&conn, None, None, "complete_shift", "operations_daily_sheets", Some(sheet_id), None, None, None);
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "complete_shift", "operations_daily_sheets", Some(sheet_id), None, None, None);
 
     Ok("تم إقفال الوردية وتحديث المخزون".to_string())
 }
@@ -217,11 +223,13 @@ pub fn complete_shift(state: State<'_, DbState>, sheet_id: i64, completed_by: St
 #[tauri::command]
 pub fn update_production_line(
     state: State<'_, DbState>,
+    user_id: i64,
     line_id: i64,
     cartons_produced: f64,
     waste_cartons: Option<f64>,
 ) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "operator"])?;
 
     let sheet_id: i64 = conn.query_row(
         "SELECT psl.sheet_id FROM production_shift_lines psl
@@ -239,12 +247,15 @@ pub fn update_production_line(
 
     update_sheet_totals(&conn, sheet_id)?;
 
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "update_production_line", "production_shift_lines", Some(line_id), None, None, None);
+
     Ok("تم التحديث".to_string())
 }
 
 #[tauri::command]
-pub fn delete_production_line(state: State<'_, DbState>, line_id: i64) -> Result<String, AppError> {
+pub fn delete_production_line(state: State<'_, DbState>, user_id: i64, line_id: i64) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "operator"])?;
 
     let sheet_id: i64 = conn.query_row(
         "SELECT psl.sheet_id FROM production_shift_lines psl
@@ -259,7 +270,7 @@ pub fn delete_production_line(state: State<'_, DbState>, line_id: i64) -> Result
 
     update_sheet_totals(&conn, sheet_id)?;
 
-    let _ = rbac::log_audit(&conn, None, None, "delete_production_line", "production_shift_lines", Some(line_id), None, None, None);
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "delete_production_line", "production_shift_lines", Some(line_id), None, None, None);
 
     Ok("تم الحذف".to_string())
 }
@@ -583,8 +594,10 @@ pub struct ShiftInventorySnapshot {
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub fn record_shift_inventory_snapshot(
     state: State<'_, DbState>,
+    user_id: i64,
     date: String,
     shift: String,
     item_id: i64,
@@ -593,6 +606,7 @@ pub fn record_shift_inventory_snapshot(
     recorded_by: Option<String>,
 ) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "operator"])?;
 
     conn.execute(
         "INSERT INTO shift_inventory_snapshots (date, shift, item_id, opening_qty, closing_qty, recorded_by, ts)
@@ -601,7 +615,7 @@ pub fn record_shift_inventory_snapshot(
     )
     ?;
 
-    let _ = rbac::log_audit(&conn, None, None, "record_shift_inventory_snapshot", "shift_inventory_snapshots", None, None, None, None);
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "record_shift_inventory_snapshot", "shift_inventory_snapshots", None, None, None, None);
 
     Ok("تم حفظ جرد الوردية".to_string())
 }

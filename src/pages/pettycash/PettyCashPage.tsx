@@ -5,7 +5,7 @@ import Card, { StatCard } from "@/components/ui/Card";
 import Modal from "@/components/ui/Modal";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { formatOMR, formatDateTime } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import { Plus, Save, Coins, FileText, X, Check, Edit2, Search } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 import { useAuthStore } from "@/stores/authStore";

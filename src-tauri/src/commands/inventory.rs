@@ -153,9 +153,11 @@ pub fn get_inventory_item(state: State<'_, DbState>, id: i64) -> Result<Inventor
 #[tauri::command]
 pub fn create_inventory_item(
     state: State<'_, DbState>,
+    user_id: i64,
     input: CreateItemInput,
 ) -> Result<InventoryItem, AppError> {
     let conn = state.0.lock()?;
+    crate::commands::rbac::require_role(&conn, user_id, &["admin", "manager", "operator"])?;
 
     conn.execute(
         "INSERT INTO inventory_items (code, name_ar, name_en, kind, uom, product_id, qty_on_hand, avg_cost_milli, reorder_level, notes)
@@ -175,16 +177,19 @@ pub fn create_inventory_item(
     )?;
 
     let id = conn.last_insert_rowid();
+    let _ = crate::commands::rbac::log_audit(&conn, Some(user_id), None, "create_inventory_item", "inventory_items", Some(id), None, input.name_ar.as_deref().or(input.name_en.as_deref()), None);
     fetch_item(&conn, id)
 }
 
 #[tauri::command]
 pub fn update_inventory_item(
     state: State<'_, DbState>,
+    user_id: i64,
     id: i64,
     input: UpdateItemInput,
 ) -> Result<InventoryItem, AppError> {
     let conn = state.0.lock()?;
+    crate::commands::rbac::require_role(&conn, user_id, &["admin", "manager", "operator"])?;
 
     let mut sets = Vec::new();
     let mut values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
@@ -239,15 +244,18 @@ pub fn update_inventory_item(
     let params_ref: Vec<&dyn rusqlite::types::ToSql> = values.iter().map(|v| v.as_ref()).collect();
     conn.execute(&sql, params_ref.as_slice())?;
 
+    let _ = crate::commands::rbac::log_audit(&conn, Some(user_id), None, "update_inventory_item", "inventory_items", Some(id), None, None, None);
     fetch_item(&conn, id)
 }
 
 #[tauri::command]
 pub fn adjust_stock(
     state: State<'_, DbState>,
+    user_id: i64,
     input: AdjustStockInput,
 ) -> Result<InventoryItem, AppError> {
     let conn = state.0.lock()?;
+    crate::commands::rbac::require_role(&conn, user_id, &["admin", "manager", "operator"])?;
 
     let (qty_in, qty_out) = if input.qty_change >= 0.0 {
         (input.qty_change, 0.0)
@@ -272,7 +280,9 @@ pub fn adjust_stock(
         ],
     )?;
 
-    fetch_item(&conn, input.item_id)
+    let item = fetch_item(&conn, input.item_id)?;
+    let _ = crate::commands::rbac::log_audit(&conn, Some(user_id), None, "adjust_stock", "inventory_movements", Some(input.item_id), None, Some(&format!("qty_change={}", input.qty_change)), None);
+    Ok(item)
 }
 
 #[tauri::command]

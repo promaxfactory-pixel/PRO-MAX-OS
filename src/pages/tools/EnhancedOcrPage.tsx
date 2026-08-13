@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { formatOMR, formatDate, cn } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import {
   ScanLine, Upload, FileText, Image, FileSpreadsheet,
   CheckCircle2, XCircle, History, Zap, RotateCcw, Loader2, BadgeCheck, BadgeHelp, BadgeX, BadgeInfo

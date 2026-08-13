@@ -4,6 +4,21 @@ use std::sync::Mutex;
 
 pub struct DbState(pub Mutex<Connection>);
 
+/// Atomically allocates the next per-year sequence number for a document type.
+///
+/// The single UPSERT both increments `last_number` and returns the new value,
+/// so concurrent callers can never observe the same number twice (unlike the
+/// former read-then-write pattern which could duplicate invoice/expense/... numbers).
+pub fn next_sequence(conn: &Connection, doc_type: &str, year: &str) -> Result<i64> {
+    conn.query_row(
+        "INSERT INTO doc_sequences(doc_type, year, last_number) VALUES(?1, ?2, 1)
+         ON CONFLICT(doc_type, year) DO UPDATE SET last_number = doc_sequences.last_number + 1
+         RETURNING last_number",
+        rusqlite::params![doc_type, year],
+        |r| r.get(0),
+    )
+}
+
 pub fn init_database(path: &Path) -> Result<Connection> {
     let conn = Connection::open(path)?;
     conn.execute_batch("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;")?;
@@ -30,13 +45,9 @@ fn ensure_admin_user(conn: &Connection) -> Result<()> {
         .unwrap_or(0) > 0;
 
     if !admin_exists {
-        use rand::Rng;
-        let temp_password: String = rand::thread_rng()
-            .sample_iter(&rand::distributions::Alphanumeric)
-            .take(16)
-            .map(char::from)
-            .collect();
-        let temp_password = format!("{}Aa1!", temp_password);
+        // Deterministic default so freshly installed copies can be logged into
+        // out of the box. The user is forced to change it on first login.
+        let temp_password = "Admin@2026".to_string();
         let hash = crate::crypto::hash_password(&temp_password)
             .unwrap_or_else(|_| "argon2id$v=19$m=19456,t=2,p=1$FALLBACK".into());
 
@@ -61,7 +72,7 @@ fn ensure_admin_user(conn: &Connection) -> Result<()> {
 mod migrations {
     use rusqlite::{Connection, Result};
     
-    pub(crate) const SCHEMA_VERSION: i32 = 29;
+    pub(crate) const SCHEMA_VERSION: i32 = 31;
     
     pub fn run(conn: &Connection) -> Result<()> {
         let current: i32 = conn
@@ -776,6 +787,50 @@ mod migrations {
                     e
                 })?;
             }
+            30 => {
+                conn.execute_batch(
+                    "-- ============================================================
+                    -- MIGRATION 30: Seed chart of accounts for automatic journal posting
+                    -- ============================================================
+                    INSERT OR IGNORE INTO accounts(code, name_ar, type, is_system) VALUES ('1000', 'الأصول', 'asset', 1);
+                    INSERT OR IGNORE INTO accounts(code, name_ar, type, parent, is_system) VALUES ('1100', 'النقدية', 'asset', '1000', 1);
+                    INSERT OR IGNORE INTO accounts(code, name_ar, type, parent, is_system) VALUES ('1101', 'البنك', 'asset', '1000', 1);
+                    INSERT OR IGNORE INTO accounts(code, name_ar, type, parent, is_system) VALUES ('1200', 'الذمم المدينة - العملاء', 'asset', '1000', 1);
+                    INSERT OR IGNORE INTO accounts(code, name_ar, type, parent, is_system) VALUES ('1320', 'سلف الموظفين', 'asset', '1000', 1);
+                    INSERT OR IGNORE INTO accounts(code, name_ar, type, parent, is_system) VALUES ('1400', 'المخزون', 'asset', '1000', 1);
+                    INSERT OR IGNORE INTO accounts(code, name_ar, type, is_system) VALUES ('2000', 'الخصوم', 'liability', 1);
+                    INSERT OR IGNORE INTO accounts(code, name_ar, type, parent, is_system) VALUES ('2100', 'ضريبة القيمة المضافة المستحقة', 'liability', '2000', 1);
+                    INSERT OR IGNORE INTO accounts(code, name_ar, type, parent, is_system) VALUES ('2200', 'الذمم الدائنة - الموردون', 'liability', '2000', 1);
+                    INSERT OR IGNORE INTO accounts(code, name_ar, type, is_system) VALUES ('3000', 'حقوق الملكية', 'equity', 1);
+                    INSERT OR IGNORE INTO accounts(code, name_ar, type, parent, is_system) VALUES ('3100', 'رأس المال', 'equity', '3000', 1);
+                    INSERT OR IGNORE INTO accounts(code, name_ar, type, parent, is_system) VALUES ('3200', 'الأرباح المحتجزة', 'equity', '3000', 1);
+                    INSERT OR IGNORE INTO accounts(code, name_ar, type, is_system) VALUES ('4000', 'الإيرادات', 'revenue', 1);
+                    INSERT OR IGNORE INTO accounts(code, name_ar, type, parent, is_system) VALUES ('4100', 'إيرادات المبيعات', 'revenue', '4000', 1);
+                    INSERT OR IGNORE INTO accounts(code, name_ar, type, parent, is_system) VALUES ('4200', 'إيرادات أخرى', 'revenue', '4000', 1);
+                    INSERT OR IGNORE INTO accounts(code, name_ar, type, is_system) VALUES ('5000', 'المصروفات', 'expense', 1);
+                    INSERT OR IGNORE INTO accounts(code, name_ar, type, parent, is_system) VALUES ('5100', 'تكلفة البضاعة المباعة', 'expense', '5000', 1);
+                    INSERT OR IGNORE INTO accounts(code, name_ar, type, parent, is_system) VALUES ('5200', 'مصروفات عمومية وإدارية', 'expense', '5000', 1);"
+                ).map_err(|e| {
+                    eprintln!("Migration 30 failed: {}", e);
+                    e
+                })?;
+            }
+            31 => {
+                let has_col: bool = conn
+                    .prepare("SELECT COUNT(*) FROM pragma_table_info('customers') WHERE name='payment_terms_days'")
+                    .and_then(|mut stmt| stmt.query_row([], |r| r.get::<_, i64>(0)))
+                    .map(|c| c > 0)
+                    .unwrap_or(false);
+                if !has_col {
+                    conn.execute_batch(
+                        "-- Customer credit terms: net payment days for AR aging
+                        ALTER TABLE customers ADD COLUMN payment_terms_days INTEGER NOT NULL DEFAULT 30;"
+                    ).map_err(|e| {
+                        eprintln!("Migration 31 failed: {}", e);
+                        e
+                    })?;
+                }
+            }
             _ => {}
         }
         Ok(())
@@ -818,12 +873,59 @@ mod tests {
     }
 
     #[test]
+    fn fresh_install_admin_logs_in_with_default_password() {
+        let db_path = std::env::temp_dir().join(format!("promax_fresh_{}.db", uuid::Uuid::new_v4()));
+        let conn = super::init_database(&db_path).expect("fresh init_database must succeed");
+
+        let (hash, must_change): (String, i64) = conn
+            .query_row(
+                "SELECT password_hash, must_change_password FROM users WHERE username='admin'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+
+        assert_eq!(must_change, 1, "fresh admin must be forced to change password");
+        assert!(
+            crate::crypto::verify_password("Admin@2026", &hash).unwrap(),
+            "freshly installed admin must accept the documented default password"
+        );
+
+        cleanup_db(&db_path);
+    }
+
+    #[test]
+    fn test_next_sequence_increments_per_doc_type_and_year() {
+        let conn = test_conn();
+
+        // First allocation starts at 1 and the upsert persists it.
+        assert_eq!(next_sequence(&conn, "INV", "2026").unwrap(), 1);
+        // Subsequent allocations for the same doc_type/year increment atomically.
+        assert_eq!(next_sequence(&conn, "INV", "2026").unwrap(), 2);
+        assert_eq!(next_sequence(&conn, "INV", "2026").unwrap(), 3);
+
+        // Different doc_types and years are independent sequences.
+        assert_eq!(next_sequence(&conn, "EXP", "2026").unwrap(), 1);
+        assert_eq!(next_sequence(&conn, "INV", "2027").unwrap(), 1);
+
+        // The stored value matches the last returned number.
+        let stored: i64 = conn
+            .query_row(
+                "SELECT last_number FROM doc_sequences WHERE doc_type='INV' AND year='2026'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(stored, 3);
+    }
+
+    #[test]
     fn test_schema_creates_all_core_tables() {
         let conn = test_conn();
         let tables_empty = [
             "customers", "suppliers", "inventory_items",
             "sales_invoices", "purchases", "production_orders",
-            "accounts", "journal_entries", "audit_logs",
+            "journal_entries", "audit_logs",
             "einvoice_settings", "cashbank_accounts",
         ];
         for table in &tables_empty {
@@ -832,6 +934,11 @@ mod tests {
                 .unwrap_or_else(|e| panic!("Table '{}' not found: {}", table, e));
             assert_eq!(count, 0, "Table '{}' should be empty after init", table);
         }
+        // Chart of accounts is seeded by migration 30
+        let account_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM accounts", [], |r| r.get(0))
+            .unwrap();
+        assert!(account_count >= 16, "accounts table should be seeded by migration 30, found {}", account_count);
         // Users table has admin user
         let user_count: i64 = conn.query_row("SELECT COUNT(*) FROM users", [], |r| r.get(0)).unwrap();
         assert!(user_count >= 1, "users table should have at least admin user");
@@ -1026,6 +1133,137 @@ mod tests {
     }
 
     #[test]
+    fn test_void_invoice_restores_stock() {
+        let conn = test_conn();
+
+        // Product + inventory item (finished) with 10 cartons on hand
+        conn.execute(
+            "INSERT INTO products(code, name_ar, default_price_milli) VALUES('P-VOID', 'Void Test', 5000)",
+            [],
+        )
+        .unwrap();
+        let prod_id: i64 = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO inventory_items(code, name_ar, kind, uom, product_id, qty_on_hand, avg_cost_milli, active)
+             VALUES('IV-VOID', 'Void Item', 'finished', 'carton', ?, 10, 2000, 1)",
+            [prod_id],
+        )
+        .unwrap();
+        let item_id: i64 = conn.last_insert_rowid();
+
+        // Customer + invoice header + line
+        conn.execute(
+            "INSERT INTO customers(code, name, ctype) VALUES('C-VOID', 'Void Customer', 'credit')",
+            [],
+        )
+        .unwrap();
+        let cust_id: i64 = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO sales_invoices(inv_no, date, customer_id, vat_enabled, net_milli, vat_milli, total_milli, status)
+             VALUES('INV-VOID-1', '2026-08-01', ?, 1, 5000, 250, 5250, 'Posted')",
+            [cust_id],
+        )
+        .unwrap();
+        let inv_id: i64 = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO sales_invoice_lines(invoice_id, product_id, cartons, unit_price_milli, line_net_milli, vat_pct, vat_milli)
+             VALUES(?, ?, 4, 5000, 5000, 5.0, 250)",
+            rusqlite::params![inv_id, prod_id],
+        )
+        .unwrap();
+
+        // Simulate the deduction performed by post_invoice
+        conn.execute(
+            "UPDATE inventory_items SET qty_on_hand = qty_on_hand - 4 WHERE id = ?",
+            [item_id],
+        )
+        .unwrap();
+        let after_post: f64 = conn
+            .query_row("SELECT qty_on_hand FROM inventory_items WHERE id=?", [item_id], |r| r.get(0))
+            .unwrap();
+        assert_eq!(after_post, 6.0);
+
+        // Void restores the sold quantities
+        crate::commands::invoices::restore_invoice_stock(&conn, inv_id).unwrap();
+
+        let after_void: f64 = conn
+            .query_row("SELECT qty_on_hand FROM inventory_items WHERE id=?", [item_id], |r| r.get(0))
+            .unwrap();
+        assert_eq!(after_void, 10.0);
+
+        let reversal_movements: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM inventory_movements WHERE item_id=? AND mtype='sale_reversal' AND ref_id=?",
+                rusqlite::params![item_id, inv_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(reversal_movements, 1);
+    }
+
+    #[test]
+    fn test_post_cogs_uses_milli_unit_cost() {
+        let conn = test_conn();
+
+        conn.execute(
+            "INSERT INTO products(code, name_ar, default_price_milli) VALUES('P-COGS', 'Cogs Test', 5000)",
+            [],
+        )
+        .unwrap();
+        let prod_id: i64 = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO inventory_items(code, name_ar, kind, uom, product_id, qty_on_hand, avg_cost_milli, active)
+             VALUES('IV-COGS', 'Cogs Item', 'finished', 'carton', ?, 100, 2000, 1)",
+            [prod_id],
+        )
+        .unwrap();
+        let item_id: i64 = conn.last_insert_rowid();
+
+        conn.execute(
+            "INSERT INTO customers(code, name, ctype) VALUES('C-COGS', 'Cogs Customer', 'credit')",
+            [],
+        )
+        .unwrap();
+        let cust_id: i64 = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO sales_invoices(inv_no, date, customer_id, vat_enabled, net_milli, vat_milli, total_milli, status)
+             VALUES('INV-COGS-1', '2026-08-01', ?, 1, 10000, 500, 10500, 'draft')",
+            [cust_id],
+        )
+        .unwrap();
+        let inv_id: i64 = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO sales_invoice_lines(invoice_id, product_id, cartons, unit_price_milli, line_net_milli, vat_pct, vat_milli)
+             VALUES(?, ?, 5, 2000, 10000, 5.0, 500)",
+            rusqlite::params![inv_id, prod_id],
+        )
+        .unwrap();
+
+        // avg_cost_milli=2000 (2 OMR) per carton x 5 cartons = 10000 milli (10 OMR),
+        // NOT 10,000,000 (which a stray x1000 would produce).
+        let cogs = crate::commands::invoices::deduct_invoice_stock(&conn, inv_id).unwrap();
+        assert_eq!(cogs, 10000);
+
+        let unit_cost: i64 = conn
+            .query_row(
+                "SELECT unit_cost_milli FROM inventory_movements WHERE item_id=? AND mtype='sale'",
+                [item_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(unit_cost, 2000);
+
+        let qty: f64 = conn
+            .query_row(
+                "SELECT qty_on_hand FROM inventory_items WHERE id=?",
+                [item_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(qty, 95.0);
+    }
+
+    #[test]
     fn test_journal_entry_double_entry() {
         let conn = test_conn();
 
@@ -1183,6 +1421,432 @@ mod tests {
             "SELECT COUNT(*) FROM supplier_payments WHERE supplier_id = ?", [supp_id], |r| r.get(0),
         ).unwrap();
         assert_eq!(pay_count, 1);
+    }
+
+    #[test]
+    fn test_post_purchase_posts_journal() {
+        let conn = test_conn();
+
+        conn.execute(
+            "INSERT INTO suppliers (name, active) VALUES ('Paper Supplier', 1)",
+            [],
+        ).unwrap();
+        let supp_id: i64 = conn.last_insert_rowid();
+
+        conn.execute(
+            "INSERT INTO purchases (pur_no, date, supplier_id, vat_enabled, net_milli, vat_milli, total_milli, paid_milli, status)
+             VALUES ('PUR-2026-0001', '2026-07-26', ?, 1, 1000000, 50000, 1050000, 0, 'draft')",
+            [supp_id],
+        ).unwrap();
+        let pur_id: i64 = conn.last_insert_rowid();
+
+        let journal_id = crate::commands::purchases::post_purchase_inner(&conn, pur_id).unwrap();
+
+        let line_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM journal_entry_lines WHERE entry_id = ?", [journal_id], |r| r.get(0),
+        ).unwrap();
+        assert_eq!(line_count, 3);
+
+        let (inventory_dr, vat_dr): (i64, i64) = conn.query_row(
+            "SELECT SUM(CASE WHEN account_code='1400' THEN debit_milli ELSE 0 END),
+                    SUM(CASE WHEN account_code='2100' THEN debit_milli ELSE 0 END)
+             FROM journal_entry_lines WHERE entry_id = ?",
+            [journal_id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        ).unwrap();
+        assert_eq!(inventory_dr, 1000000);
+        assert_eq!(vat_dr, 50000);
+
+        let ap_credit: i64 = conn.query_row(
+            "SELECT credit_milli FROM journal_entry_lines WHERE entry_id = ? AND account_code = '2200'",
+            [journal_id], |r| r.get(0),
+        ).unwrap();
+        assert_eq!(ap_credit, 1050000);
+
+        let (status, stored_journal): (String, i64) = conn.query_row(
+            "SELECT status, journal_id FROM purchases WHERE id = ?", [pur_id], |r| Ok((r.get(0)?, r.get(1)?)),
+        ).unwrap();
+        assert_eq!(status, "Posted");
+        assert_eq!(stored_journal, journal_id);
+
+        assert!(crate::commands::purchases::post_purchase_inner(&conn, pur_id).is_err());
+    }
+
+    #[test]
+    fn test_post_purchase_updates_stock_and_avg_cost() {
+        let conn = test_conn();
+
+        conn.execute("INSERT INTO suppliers (name, active) VALUES ('Stock Supplier', 1)", []).unwrap();
+        let supp_id: i64 = conn.last_insert_rowid();
+
+        conn.execute(
+            "INSERT INTO inventory_items(code, name_ar, kind, uom, qty_on_hand, avg_cost_milli, active)
+             VALUES('IV-PUR', 'Raw Item', 'raw_material', 'kg', 100, 3000, 1)",
+            [],
+        )
+        .unwrap();
+        let item_id: i64 = conn.last_insert_rowid();
+
+        conn.execute(
+            "INSERT INTO purchases (pur_no, date, supplier_id, vat_enabled, net_milli, vat_milli, total_milli, paid_milli, status)
+             VALUES ('PUR-2026-0002', '2026-08-01', ?, 1, 500000, 25000, 525000, 0, 'draft')",
+            [supp_id],
+        )
+        .unwrap();
+        let pur_id: i64 = conn.last_insert_rowid();
+
+        conn.execute(
+            "INSERT INTO purchase_lines(purchase_id, item_id, qty, unit_cost_milli, line_net_milli, vat_pct, vat_milli)
+             VALUES(?, ?, 50, 4000, 200000, 5.0, 10000)",
+            rusqlite::params![pur_id, item_id],
+        )
+        .unwrap();
+
+        crate::commands::purchases::post_purchase_inner(&conn, pur_id).unwrap();
+
+        // qty 100 + 50 = 150; weighted avg = (100*3000 + 50*4000)/150 = 3333.33 -> 3333
+        let (qty, avg_cost): (f64, i64) = conn
+            .query_row(
+                "SELECT qty_on_hand, avg_cost_milli FROM inventory_items WHERE id=?",
+                [item_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(qty, 150.0);
+        assert_eq!(avg_cost, 3333);
+
+        let movement_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM inventory_movements WHERE item_id=? AND mtype='purchase' AND ref_id=?",
+                rusqlite::params![item_id, pur_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(movement_count, 1);
+    }
+
+    #[test]
+    fn test_supplier_payment_fifo_allocation() {
+        let conn = test_conn();
+
+        conn.execute("INSERT INTO suppliers (name, active) VALUES ('Fifo Supplier', 1)", []).unwrap();
+        let supp_id: i64 = conn.last_insert_rowid();
+
+        conn.execute(
+            "INSERT INTO purchases(pur_no, date, supplier_id, total_milli, paid_milli, status)
+             VALUES('PUR-FIFO-1','2026-07-01',?,100000,0,'Posted')",
+            [supp_id],
+        )
+        .unwrap();
+        let p1: i64 = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO purchases(pur_no, date, supplier_id, total_milli, paid_milli, status)
+             VALUES('PUR-FIFO-2','2026-07-10',?,50000,0,'Posted')",
+            [supp_id],
+        )
+        .unwrap();
+        let p2: i64 = conn.last_insert_rowid();
+        // Draft purchases must never absorb payments.
+        conn.execute(
+            "INSERT INTO purchases(pur_no, date, supplier_id, total_milli, paid_milli, status)
+             VALUES('PUR-FIFO-3','2026-07-11',?,50000,0,'draft')",
+            [supp_id],
+        )
+        .unwrap();
+
+        // Pay 120,000: oldest (P1) absorbs 100,000, P2 absorbs the remaining 20,000.
+        let leftover =
+            crate::commands::purchases::allocate_payment_fifo(&conn, supp_id, 120000, None).unwrap();
+        assert_eq!(leftover, 0);
+        let (paid1, paid2): (i64, i64) = conn
+            .query_row(
+                "SELECT (SELECT paid_milli FROM purchases WHERE id=?),
+                        (SELECT paid_milli FROM purchases WHERE id=?)",
+                rusqlite::params![p1, p2],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(paid1, 100000);
+        assert_eq!(paid2, 20000);
+
+        // Overpay: P2 absorbs its remaining 30,000, the excess stays on account.
+        let leftover2 =
+            crate::commands::purchases::allocate_payment_fifo(&conn, supp_id, 40000, None).unwrap();
+        assert_eq!(leftover2, 10000);
+        let paid2_after: i64 = conn
+            .query_row("SELECT paid_milli FROM purchases WHERE id=?", [p2], |r| r.get(0))
+            .unwrap();
+        assert_eq!(paid2_after, 50000);
+    }
+
+    #[test]
+    fn test_customer_payment_fifo_allocation() {
+        let conn = test_conn();
+
+        conn.execute("INSERT INTO customers (name, active) VALUES ('Fifo Customer', 1)", []).unwrap();
+        let cust_id: i64 = conn.last_insert_rowid();
+
+        conn.execute(
+            "INSERT INTO sales_invoices(inv_no, date, customer_id, payment_type, total_milli, paid_milli, status)
+             VALUES('INV-FIFO-1','2026-07-01',?, 'credit', 100000, 0, 'Posted')",
+            [cust_id],
+        )
+        .unwrap();
+        let i1: i64 = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO sales_invoices(inv_no, date, customer_id, payment_type, total_milli, paid_milli, status)
+             VALUES('INV-FIFO-2','2026-07-10',?, 'credit', 50000, 0, 'Posted')",
+            [cust_id],
+        )
+        .unwrap();
+        let i2: i64 = conn.last_insert_rowid();
+        // Cash invoices and drafts must never absorb credit payments.
+        conn.execute(
+            "INSERT INTO sales_invoices(inv_no, date, customer_id, payment_type, total_milli, paid_milli, status)
+             VALUES('INV-FIFO-3','2026-07-11',?, 'cash', 50000, 0, 'Posted')",
+            [cust_id],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO sales_invoices(inv_no, date, customer_id, payment_type, total_milli, paid_milli, status)
+             VALUES('INV-FIFO-4','2026-07-12',?, 'credit', 50000, 0, 'draft')",
+            [cust_id],
+        )
+        .unwrap();
+
+        // Pay 120,000: oldest (I1) absorbs 100,000, I2 absorbs the remaining 20,000.
+        let leftover =
+            crate::commands::customers::allocate_customer_payment_fifo(&conn, cust_id, 120000, None).unwrap();
+        assert_eq!(leftover, 0);
+        let (paid1, paid2): (i64, i64) = conn
+            .query_row(
+                "SELECT (SELECT paid_milli FROM sales_invoices WHERE id=?),
+                        (SELECT paid_milli FROM sales_invoices WHERE id=?)",
+                rusqlite::params![i1, i2],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(paid1, 100000);
+        assert_eq!(paid2, 20000);
+
+        // Overpay: I2 absorbs its remaining 30,000, the excess stays on account.
+        let leftover2 =
+            crate::commands::customers::allocate_customer_payment_fifo(&conn, cust_id, 40000, None).unwrap();
+        assert_eq!(leftover2, 10000);
+        let paid2_after: i64 = conn
+            .query_row("SELECT paid_milli FROM sales_invoices WHERE id=?", [i2], |r| r.get(0))
+            .unwrap();
+        assert_eq!(paid2_after, 50000);
+
+        // exclude_id: allocating while skipping a fully-open invoice leaves it untouched.
+        conn.execute("UPDATE sales_invoices SET paid_milli = 0", []).unwrap();
+        let leftover3 =
+            crate::commands::customers::allocate_customer_payment_fifo(&conn, cust_id, 50000, Some(i1)).unwrap();
+        assert_eq!(leftover3, 0);
+        let (paid1b, paid2b): (i64, i64) = conn
+            .query_row(
+                "SELECT (SELECT paid_milli FROM sales_invoices WHERE id=?),
+                        (SELECT paid_milli FROM sales_invoices WHERE id=?)",
+                rusqlite::params![i1, i2],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(paid1b, 0);
+        assert_eq!(paid2b, 50000);
+    }
+
+    #[test]
+    fn test_void_purchase_reverses_stock_and_journal() {
+        let mut conn = test_conn();
+
+        conn.execute("INSERT INTO suppliers (name, active) VALUES ('Void Supplier', 1)", []).unwrap();
+        let supp_id: i64 = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO inventory_items(code, name_ar, kind, uom, qty_on_hand, avg_cost_milli, active)
+             VALUES('IV-VP', 'VP Item', 'raw_material', 'kg', 100, 3000, 1)",
+            [],
+        )
+        .unwrap();
+        let item_id: i64 = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO purchases(pur_no, date, supplier_id, vat_enabled, net_milli, vat_milli, total_milli, status)
+             VALUES('PUR-VP-1','2026-08-01',?,1,500000,25000,525000,'draft')",
+            [supp_id],
+        )
+        .unwrap();
+        let pur_id: i64 = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO purchase_lines(purchase_id, item_id, qty, unit_cost_milli, line_net_milli, vat_pct, vat_milli)
+             VALUES(?,?,100,5000,500000,5.0,25000)",
+            rusqlite::params![pur_id, item_id],
+        )
+        .unwrap();
+
+        let journal = crate::commands::purchases::post_purchase_inner(&conn, pur_id).unwrap();
+        // 100@3000 + 100@5000 -> 200 qty @ 4000 (exact weighted average).
+        let (qty, avg): (f64, i64) = conn
+            .query_row(
+                "SELECT qty_on_hand, avg_cost_milli FROM inventory_items WHERE id=?",
+                [item_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(qty, 200.0);
+        assert_eq!(avg, 4000);
+
+        crate::commands::purchases::void_purchase_inner(&mut conn, 1, pur_id, Some("خطأ في التوريد".to_string())).unwrap();
+
+        let (qty2, avg2): (f64, i64) = conn
+            .query_row(
+                "SELECT qty_on_hand, avg_cost_milli FROM inventory_items WHERE id=?",
+                [item_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(qty2, 100.0);
+        assert_eq!(avg2, 3000);
+
+        let (status, stored_journal): (String, i64) = conn
+            .query_row(
+                "SELECT status, journal_id FROM purchases WHERE id=?",
+                [pur_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(status, "Void");
+        assert_eq!(stored_journal, journal);
+
+        let reversed_by: Option<i64> = conn
+            .query_row(
+                "SELECT reversed_by FROM journal_entries WHERE id=?",
+                [journal],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(reversed_by.is_some());
+
+        let reversal_movements: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM inventory_movements WHERE item_id=? AND mtype='purchase_reversal' AND ref_id=?",
+                rusqlite::params![item_id, pur_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(reversal_movements, 1);
+    }
+
+    #[test]
+    fn test_supplier_statement_columns_exist() {
+        let conn = test_conn();
+        let pur_cols: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('purchases') WHERE name='pur_no'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(pur_cols, 1);
+        let pay_cols: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('supplier_payments') WHERE name='pay_no'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(pay_cols, 1);
+    }
+
+    #[test]
+    fn test_supplier_balance_lifecycle() {
+        let mut conn = test_conn();
+
+        conn.execute("INSERT INTO suppliers (name, active) VALUES ('Bal Supplier', 1)", []).unwrap();
+        let supp_id: i64 = conn.last_insert_rowid();
+
+        conn.execute(
+            "INSERT INTO purchases(pur_no, date, supplier_id, vat_enabled, net_milli, vat_milli, total_milli, status)
+             VALUES('PUR-BAL-1','2026-08-05',?,1,400000,20000,420000,'draft')",
+            [supp_id],
+        ).unwrap();
+        let pur_id: i64 = conn.last_insert_rowid();
+
+        // A draft purchase creates no obligation yet.
+        let draft_balance: i64 = conn.query_row("SELECT balance_milli FROM suppliers WHERE id=?", [supp_id], |r| r.get(0)).unwrap();
+        assert_eq!(draft_balance, 0);
+
+        // Posting adds the full invoice total to what we owe the supplier.
+        crate::commands::purchases::post_purchase_inner(&conn, pur_id).unwrap();
+        let posted_balance: i64 = conn.query_row("SELECT balance_milli FROM suppliers WHERE id=?", [supp_id], |r| r.get(0)).unwrap();
+        assert_eq!(posted_balance, 420000);
+
+        // Payment reduces the balance (mirror of create_supplier_payment).
+        conn.execute(
+            "INSERT INTO supplier_payments(pay_no, supplier_id, date, amount_milli, method, created_by)
+             VALUES('PAY-BAL-1', ?, '2026-08-06', 200000, 'cash', 'system')",
+            [supp_id],
+        ).unwrap();
+        let leftover = crate::commands::purchases::allocate_payment_fifo(&conn, supp_id, 200000, None).unwrap();
+        assert_eq!(leftover, 0);
+        conn.execute(
+            "UPDATE suppliers SET balance_milli = COALESCE(balance_milli, 0) - 200000 WHERE id = ?",
+            [supp_id],
+        ).unwrap();
+        let after_payment: i64 = conn.query_row("SELECT balance_milli FROM suppliers WHERE id=?", [supp_id], |r| r.get(0)).unwrap();
+        assert_eq!(after_payment, 220000);
+
+        // Voiding the posted purchase drops the obligation; the 200,000 already paid
+        // becomes an on-account credit, so the running balance mirrors that.
+        crate::commands::purchases::void_purchase_inner(&mut conn, 1, pur_id, None).unwrap();
+        let after_void: i64 = conn.query_row("SELECT balance_milli FROM suppliers WHERE id=?", [supp_id], |r| r.get(0)).unwrap();
+        assert_eq!(after_void, -200000);
+    }
+
+    #[test]
+    fn test_customer_balance_lifecycle() {
+        let mut conn = test_conn();
+
+        conn.execute("INSERT INTO customers (name, active) VALUES ('Bal Customer', 1)", []).unwrap();
+        let cust_id: i64 = conn.last_insert_rowid();
+
+        conn.execute(
+            "INSERT INTO sales_invoices(inv_no, date, customer_id, payment_type, net_milli, vat_milli, total_milli, status)
+             VALUES('INV-BAL-1','2026-08-05',?,'credit',100000,5000,105000,'Draft')",
+            [cust_id],
+        ).unwrap();
+        let inv_id: i64 = conn.last_insert_rowid();
+
+        // A draft invoice creates no receivable yet.
+        let draft_balance: i64 = conn.query_row("SELECT balance_milli FROM customers WHERE id=?", [cust_id], |r| r.get(0)).unwrap();
+        assert_eq!(draft_balance, 0);
+
+        // Posting a credit invoice adds the full total to the customer's balance.
+        crate::commands::invoices::post_invoice_inner(&mut conn, 1, inv_id).unwrap();
+        let posted_balance: i64 = conn.query_row("SELECT balance_milli FROM customers WHERE id=?", [cust_id], |r| r.get(0)).unwrap();
+        assert_eq!(posted_balance, 105000);
+
+        // Voiding the posted invoice reverses the receivable.
+        crate::commands::invoices::void_invoice_inner(&mut conn, 1, inv_id, None).unwrap();
+        let after_void: i64 = conn.query_row("SELECT balance_milli FROM customers WHERE id=?", [cust_id], |r| r.get(0)).unwrap();
+        assert_eq!(after_void, 0);
+    }
+
+    #[test]
+    fn test_cash_invoice_does_not_affect_customer_balance() {
+        let mut conn = test_conn();
+
+        conn.execute("INSERT INTO customers (name, active) VALUES ('Cash Customer', 1)", []).unwrap();
+        let cust_id: i64 = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO sales_invoices(inv_no, date, customer_id, payment_type, net_milli, vat_milli, total_milli, status)
+             VALUES('INV-CASH-1','2026-08-06',?,'cash',50000,0,50000,'Draft')",
+            [cust_id],
+        ).unwrap();
+        let inv_id: i64 = conn.last_insert_rowid();
+
+        // Cash sales settle immediately: no AR receivable, no balance change.
+        crate::commands::invoices::post_invoice_inner(&mut conn, 1, inv_id).unwrap();
+        let balance: i64 = conn.query_row("SELECT balance_milli FROM customers WHERE id=?", [cust_id], |r| r.get(0)).unwrap();
+        assert_eq!(balance, 0);
     }
 
     #[test]

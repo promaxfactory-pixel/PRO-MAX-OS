@@ -35,7 +35,13 @@ function isTokenExpired(): boolean {
 export const useAuthStore = create<AuthState>((set) => {
   const storedToken = localStorage.getItem("auth_token");
   const storedUser = localStorage.getItem("auth_user");
-  const initialUser = storedUser ? JSON.parse(storedUser) : null;
+  let initialUser: User | null = null;
+  try {
+    initialUser = storedUser ? JSON.parse(storedUser) : null;
+  } catch {
+    localStorage.removeItem("auth_user");
+    localStorage.removeItem("auth_token");
+  }
   const tokenExpired = storedToken ? isTokenExpired() : true;
 
   if (tokenExpired && storedToken) {
@@ -51,7 +57,7 @@ export const useAuthStore = create<AuthState>((set) => {
     login: async (username: string, password: string) => {
       set({ isLoading: true, error: null });
       try {
-        const { invoke } = await import("@tauri-apps/api/core");
+        const { invoke } = await import("@/lib/tauri");
         const result = await invoke<{ user: User; token: string }>("login", { username, password });
         localStorage.setItem("auth_token", result.token);
         localStorage.setItem("auth_user", JSON.stringify(result.user));
@@ -83,7 +89,7 @@ export const useAuthStore = create<AuthState>((set) => {
           set({ user: null, isAuthenticated: false });
           return false;
         }
-        const { invoke } = await import("@tauri-apps/api/core");
+        const { invoke } = await import("@/lib/tauri");
         await invoke("validate_token", { token });
         return true;
       } catch {

@@ -3,7 +3,7 @@ import DataTable, { Column } from "@/components/ui/DataTable";
 import Card, { StatCard } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { formatOMR, formatDate } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import { useUIStore } from "@/stores/uiStore";
 import { Ship, Plus, Truck, CheckCircle2, Anchor } from "lucide-react";
 

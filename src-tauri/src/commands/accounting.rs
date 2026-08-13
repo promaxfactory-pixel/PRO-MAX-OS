@@ -1,5 +1,5 @@
 use crate::commands::rbac;
-use crate::db::DbState;
+use crate::db::{next_sequence, DbState};
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -124,7 +124,7 @@ pub fn get_account(state: State<'_, DbState>, code: String) -> Result<Account, A
             })
         },
     )
-    .map_err(|_| AppError::not_found("Account not found"))
+    .map_err(|_| AppError::not_found("الحساب غير موجود"))
 }
 
 #[tauri::command]
@@ -142,6 +142,7 @@ pub fn create_account(state: State<'_, DbState>, user_id: i64, input: CreateAcco
             input.is_system.unwrap_or(0),
         ],
     )?;
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "create_account", "accounts", None, None, Some(&input.code), None);
     Ok(input.code)
 }
 
@@ -197,58 +198,97 @@ pub fn create_journal_entry(
 ) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
     rbac::require_role(&conn, user_id, &["admin", "accountant"])?;
+    let lines: Vec<(String, i64, i64, Option<String>)> = input
+        .lines
+        .iter()
+        .map(|l| (l.account_code.clone(), l.debit_milli, l.credit_milli, l.memo.clone()))
+        .collect();
+    let ref_type = input.ref_type.unwrap_or_else(|| "journal".to_string());
+    let entry_id = post_to_journal(&conn, &ref_type, input.ref_id.unwrap_or(0), &input.date, &input.memo.unwrap_or_default(), &lines, "manual")?;
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "create_journal_entry", "journal_entries", Some(entry_id), None, Some(&format!("ref_type={}", ref_type)), None);
+    Ok(entry_id)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn post_to_journal(
+    conn: &rusqlite::Connection,
+    ref_type: &str,
+    ref_id: i64,
+    date: &str,
+    memo: &str,
+    lines: &[(String, i64, i64, Option<String>)],
+    created_by: &str,
+) -> Result<i64, AppError> {
     let year = chrono::Utc::now().format("%Y").to_string();
 
-    let seq: i64 = conn
-        .query_row(
-            "SELECT COALESCE(last_number,0)+1 FROM doc_sequences WHERE doc_type='JE' AND year=?",
-            [&year],
-            |r| r.get(0),
-        )
-        .unwrap_or(1);
-    conn.execute(
-        "INSERT INTO doc_sequences(doc_type, year, last_number) VALUES('JE',?,?) ON CONFLICT(doc_type, year) DO UPDATE SET last_number=excluded.last_number",
-        rusqlite::params![year, seq],
-    )
-    .map_err(|e| AppError::business(format!("Failed to increment journal entry sequence: {}", e)))?;
+    let seq = next_sequence(conn, "JE", &year)?;
     let entry_no = format!("JE-{}-{:04}", year, seq);
 
-    let total_debit: i64 = input.lines.iter().map(|l| l.debit_milli).sum();
-    let total_credit: i64 = input.lines.iter().map(|l| l.credit_milli).sum();
+    let total_debit: i64 = lines.iter().map(|l| l.1).sum();
+    let total_credit: i64 = lines.iter().map(|l| l.2).sum();
     if total_debit != total_credit {
-        return Err(AppError::validation("Total debit must equal total credit"));
+        return Err(AppError::validation("يجب أن يتساوى مجموع المدين مع مجموع الدائن"));
     }
     if total_debit == 0 {
-        return Err(AppError::validation("At least one line is required"));
+        return Err(AppError::validation("يجب إدخال بند واحد على الأقل"));
+    }
+
+    for (account_code, ..) in lines {
+        let exists: i64 = conn
+            .query_row("SELECT COUNT(*) FROM accounts WHERE code=?1", [&account_code], |r| r.get(0))
+            .unwrap_or(0);
+        if exists == 0 {
+            return Err(AppError::validation(format!("الحساب المحاسبي غير موجود: {}", account_code)));
+        }
     }
 
     conn.execute(
         "INSERT INTO journal_entries(entry_no, date, memo, ref_type, ref_id, created_by) VALUES(?,?,?,?,?,?)",
-        rusqlite::params![
-            entry_no,
-            input.date,
-            input.memo,
-            input.ref_type,
-            input.ref_id,
-            chrono::Utc::now().to_string(),
-        ],
+        rusqlite::params![entry_no, date, memo, ref_type, ref_id, created_by],
     )?;
     let entry_id = conn.last_insert_rowid();
 
-    for line in &input.lines {
+    for (account_code, debit_milli, credit_milli, line_memo) in lines {
         conn.execute(
             "INSERT INTO journal_entry_lines(entry_id, account_code, debit_milli, credit_milli, memo) VALUES(?,?,?,?,?)",
-            rusqlite::params![
-                entry_id,
-                line.account_code,
-                line.debit_milli,
-                line.credit_milli,
-                line.memo
-            ],
+            rusqlite::params![entry_id, account_code, debit_milli, credit_milli, line_memo],
         )?;
     }
 
     Ok(entry_id)
+}
+
+pub(crate) fn resolve_cash_account(
+    conn: &rusqlite::Connection,
+    cashbank_id: Option<i64>,
+    method: &str,
+) -> Result<String, AppError> {
+    if let Some(cid) = cashbank_id {
+        let code: Option<String> = conn
+            .query_row(
+                "SELECT account_code FROM cashbank_accounts WHERE id=?1",
+                [cid],
+                |r| r.get(0),
+            )
+            .unwrap_or(None);
+        if let Some(code) = code {
+            let code = code.trim().to_string();
+            if !code.is_empty() {
+                let exists: i64 = conn
+                    .query_row("SELECT COUNT(*) FROM accounts WHERE code=?1", [&code], |r| r.get(0))
+                    .unwrap_or(0);
+                if exists > 0 {
+                    return Ok(code);
+                }
+            }
+        }
+    }
+    let m = method.to_lowercase();
+    if m.contains("bank") || m.contains("cheque") || m.contains("transfer") || m.contains("بنك") || m.contains("شيك") {
+        Ok("1101".to_string())
+    } else {
+        Ok("1100".to_string())
+    }
 }
 
 #[tauri::command]

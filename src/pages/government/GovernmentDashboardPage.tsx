@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import Card from "@/components/ui/Card";
 import { Building2, ScrollText, IdCard, Globe, Clock, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";

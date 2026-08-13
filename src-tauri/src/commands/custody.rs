@@ -213,7 +213,7 @@ pub fn create_custody_spend(
         )?;
 
     if current_balance < input.amount_milli {
-        return Err(AppError::validation("Insufficient balance"));
+        return Err(AppError::validation("الرصيد غير كافٍ"));
     }
 
     let new_balance = current_balance - input.amount_milli;
@@ -273,7 +273,7 @@ pub fn create_custody_transfer(
         )?;
 
     if from_balance < input.amount_milli {
-        return Err(AppError::validation("Insufficient balance in source account"));
+        return Err(AppError::validation("الرصيد غير كافٍ في الحساب المصدر"));
     }
 
     let new_from = from_balance - input.amount_milli;

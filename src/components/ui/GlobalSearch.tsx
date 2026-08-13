@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import { Search, X, User, Package, FileText, Truck, UserCog } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
@@ -17,27 +17,27 @@ const typeMeta: Record<
   { label: string; icon: typeof User; route: (id: number) => string }
 > = {
   customer: {
-    label: "ط§ظ„ط¹ظ…ظ„ط§ط،",
+    label: "العملاء",
     icon: User,
     route: (id) => `/customers/${id}`,
   },
   product: {
-    label: "ط§ظ„ظ…ظ†طھط¬ط§طھ",
+    label: "المنتجات",
     icon: Package,
     route: (id) => `/products/${id}`,
   },
   invoice: {
-    label: "ط§ظ„ظپظˆط§طھظٹط±",
+    label: "الفواتير",
     icon: FileText,
     route: (id) => `/invoices/${id}`,
   },
   supplier: {
-    label: "ط§ظ„ظ…ظˆط±ط¯ظٹظ†",
+    label: "الموردين",
     icon: Truck,
     route: (id) => `/suppliers/${id}`,
   },
   employee: {
-    label: "ط§ظ„ظ…ظˆط¸ظپظٹظ†",
+    label: "الموظفين",
     icon: UserCog,
     route: (id) => `/hr/employees/${id}`,
   },
@@ -177,7 +177,7 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
         setResults(all);
       } catch {
         setResults([]);
-        addNotification({ type: "error", title: "ط®ط·ط£", message: "ظپط´ظ„ ط§ظ„ط¨ط­ط«" });
+        addNotification({ type: "error", title: "خطأ", message: "فشل البحث" });
       } finally {
         setLoading(false);
       }
@@ -220,7 +220,7 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="ط¨ط­ط«..."
+            placeholder="بحث..."
             className="flex-1 bg-transparent text-sm outline-none"
             style={{ color: "var(--text-primary)" }}
           />
@@ -244,18 +244,18 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
           {!query && (
             <div className="flex flex-col items-center justify-center py-12" style={{ color: "var(--text-muted)" }}>
               <Search className="h-10 w-10 mb-3 opacity-30" />
-              <p className="text-sm">ط§ظƒطھط¨ ظ„ظ„ط¨ط­ط«...</p>
+              <p className="text-sm">اكتب للبحث...</p>
             </div>
           )}
 
           {query && !loading && results.length === 0 && (
             <div className="py-12 text-center text-sm" style={{ color: "var(--text-muted)" }}>
-              ظ„ط§ طھظˆط¬ط¯ ظ†طھط§ط¦ط¬ ظ„ظ€ &quot;{query}&quot;
+              لا توجد نتائج لـ &quot;{query}&quot;
             </div>
           )}
 
           {loading && (
-            <div className="py-12 text-center text-sm" style={{ color: "var(--text-muted)" }}>ط¬ط§ط±ظٹ ط§ظ„ط¨ط­ط«...</div>
+            <div className="py-12 text-center text-sm" style={{ color: "var(--text-muted)" }}>جاري البحث...</div>
           )}
 
           {Object.entries(groupedResults).map(([type, items]) => {

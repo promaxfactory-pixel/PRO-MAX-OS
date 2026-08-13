@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { formatOMR } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import { ArrowRight, Printer, Download } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useUIStore } from "@/stores/uiStore";

@@ -1442,7 +1442,7 @@ async fn call_openai(api_key: &str, model: &str, system: &str, user: &str, max_t
     json["choices"][0]["message"]["content"]
         .as_str()
         .map(|s| s.to_string())
-        .ok_or_else(|| AppError::business("No response content from OpenAI".to_string()))
+        .ok_or_else(|| AppError::business("لا يوجد محتوى استجابة من OpenAI".to_string()))
 }
 
 async fn call_anthropic(api_key: &str, model: &str, system: &str, user: &str, max_tokens: i64, temperature: f64) -> Result<String, AppError> {
@@ -1480,7 +1480,7 @@ async fn call_anthropic(api_key: &str, model: &str, system: &str, user: &str, ma
     json["content"][0]["text"]
         .as_str()
         .map(|s| s.to_string())
-        .ok_or_else(|| AppError::business("No response content from Anthropic".to_string()))
+        .ok_or_else(|| AppError::business("لا يوجد محتوى استجابة من Anthropic".to_string()))
 }
 
 #[tauri::command]

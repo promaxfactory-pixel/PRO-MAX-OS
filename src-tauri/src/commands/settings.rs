@@ -120,8 +120,9 @@ pub fn get_company_settings(state: State<'_, DbState>) -> Result<CompanySettings
 }
 
 #[tauri::command]
-pub fn update_company_settings(state: State<'_, DbState>, input: UpdateSettingsInput) -> Result<String, AppError> {
+pub fn update_company_settings(state: State<'_, DbState>, user_id: i64, input: UpdateSettingsInput) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager"])?;
 
     let existing = conn.query_row(
         "SELECT id FROM company_settings LIMIT 1",
@@ -165,6 +166,7 @@ pub fn update_company_settings(state: State<'_, DbState>, input: UpdateSettingsI
         }
     }
 
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "update_company_settings", "company_settings", Some(1), None, None, None);
     Ok("تم حفظ الإعدادات بنجاح".to_string())
 }
 
@@ -267,7 +269,7 @@ pub fn delete_user(state: State<'_, DbState>, caller_id: i64, id: i64) -> Result
         "SELECT username FROM users WHERE id=?",
         [id],
         |r| r.get(0),
-    ).map_err(|_| AppError::not_found("User not found"))?;
+    ).map_err(|_| AppError::not_found("المستخدم غير موجود"))?;
 
     if username == "admin" {
         return Err(AppError::business("لا يمكن حذف المستخدم الرئيسي"));

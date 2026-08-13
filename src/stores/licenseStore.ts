@@ -28,7 +28,7 @@ export const useLicenseStore = create<LicenseState>((set) => ({
   checkLicense: async () => {
     set({ isChecking: true });
     try {
-      const { invoke } = await import("@tauri-apps/api/core");
+      const { invoke } = await import("@/lib/tauri");
       const result = await invoke<{ valid: boolean; message: string; license: LicenseInfo | null }>("check_license");
       set({
         isLicensed: result.valid,
@@ -43,7 +43,7 @@ export const useLicenseStore = create<LicenseState>((set) => ({
   activateLicense: async (key: string) => {
     set({ isLoading: true });
     try {
-      const { invoke } = await import("@tauri-apps/api/core");
+      const { invoke } = await import("@/lib/tauri");
       const result = await invoke<{ valid: boolean; message: string; license: LicenseInfo | null }>("activate_license", { licenseKey: key });
       if (result.valid) {
         set({ isLicensed: true, isLoading: false, license: result.license, message: result.message });

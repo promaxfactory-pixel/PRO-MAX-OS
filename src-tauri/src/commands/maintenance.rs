@@ -124,9 +124,11 @@ pub fn get_maintenance_sheet(
 #[tauri::command]
 pub fn create_maintenance_sheet(
     state: State<'_, DbState>,
+    user_id: i64,
     input: CreateMaintenanceSheetInput,
 ) -> Result<MaintenanceSheet, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "operator"])?;
 
     let seq: i64 = conn
         .query_row(

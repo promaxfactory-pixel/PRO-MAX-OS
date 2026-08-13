@@ -1,5 +1,5 @@
 use crate::commands::rbac;
-use crate::db::DbState;
+use crate::db::{next_sequence, DbState};
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -248,22 +248,14 @@ pub fn list_employees_for_production(
 #[tauri::command]
 pub fn create_employee(
     state: State<'_, DbState>,
+    user_id: i64,
     input: CreateEmployeeInput,
 ) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "hr"])?;
     let year = chrono::Utc::now().format("%Y").to_string();
 
-    let seq: i64 = conn
-        .query_row(
-            "SELECT COALESCE(last_number,0)+1 FROM doc_sequences WHERE doc_type='EMP' AND year=?",
-            [&year],
-            |r| r.get(0),
-        )
-        .unwrap_or(1);
-    conn.execute(
-        "INSERT INTO doc_sequences(doc_type, year, last_number) VALUES('EMP',?,?) ON CONFLICT(doc_type, year) DO UPDATE SET last_number=excluded.last_number",
-        rusqlite::params![year, seq],
-    ).map_err(|e| format!("Failed to increment employee sequence: {}", e))?;
+    let seq = next_sequence(&conn, "EMP", &year)?;
     let emp_code = format!("EMP-{}-{:04}", year, seq);
 
     conn.execute(
@@ -313,10 +305,12 @@ pub fn create_employee(
 #[tauri::command]
 pub fn update_employee(
     state: State<'_, DbState>,
+    user_id: i64,
     id: i64,
     input: UpdateEmployeeInput,
 ) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "hr"])?;
     let mut sets = Vec::new();
     let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
@@ -458,7 +452,7 @@ pub fn update_employee(
     }
 
     if sets.is_empty() {
-        return Err(AppError::validation("No changes provided"));
+        return Err(AppError::validation("لا توجد تعديلات"));
     }
 
     params.push(Box::new(id));
@@ -469,8 +463,9 @@ pub fn update_employee(
 }
 
 #[tauri::command]
-pub fn delete_employee(state: State<'_, DbState>, id: i64) -> Result<String, AppError> {
+pub fn delete_employee(state: State<'_, DbState>, user_id: i64, id: i64) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "hr"])?;
     conn.execute("UPDATE employees SET active=0 WHERE id=?", [id])?;
     let _ = rbac::log_audit(&conn, None, None, "delete_employee", "employees", Some(id), None, None, None);
     Ok("Deleted successfully".to_string())

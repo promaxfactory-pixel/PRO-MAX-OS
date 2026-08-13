@@ -1,3 +1,4 @@
+use crate::commands::rbac;
 use crate::db::DbState;
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
@@ -29,8 +30,8 @@ pub fn list_boms(state: State<'_, DbState>) -> Result<Vec<BomEntry>, AppError> {
     let conn = state.0.lock()?;
     let mut stmt = conn
         .prepare(
-            "SELECT b.id, b.product_id, p.name AS product_name,
-                    b.item_id, i.name AS item_name,
+            "SELECT b.id, b.product_id, COALESCE(p.name_ar, p.name_en, '') AS product_name,
+                    b.item_id, COALESCE(i.name_ar, i.name_en, '') AS item_name,
                     b.qty_per_carton, b.waste_pct, b.active
              FROM bom b
              LEFT JOIN products p ON p.id = b.product_id
@@ -57,8 +58,9 @@ pub fn list_boms(state: State<'_, DbState>) -> Result<Vec<BomEntry>, AppError> {
 }
 
 #[tauri::command]
-pub fn create_bom(state: State<'_, DbState>, input: CreateBomInput) -> Result<i64, AppError> {
+pub fn create_bom(state: State<'_, DbState>, user_id: i64, input: CreateBomInput) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "operator"])?;
     conn.execute(
         "INSERT INTO bom (product_id, item_id, qty_per_carton, waste_pct, active)
          VALUES (?1, ?2, ?3, ?4, 1)",
@@ -69,5 +71,7 @@ pub fn create_bom(state: State<'_, DbState>, input: CreateBomInput) -> Result<i6
             input.waste_pct.unwrap_or(0.0),
         ],
     )?;
-    Ok(conn.last_insert_rowid())
+    let id = conn.last_insert_rowid();
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "create_bom", "bom", Some(id), None, Some(&format!("product={}", input.product_id)), None);
+    Ok(id)
 }

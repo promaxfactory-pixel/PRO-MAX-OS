@@ -9,7 +9,7 @@ export function useTauriCommand<T, A = void>(command: string) {
     setLoading(true);
     setError(null);
     try {
-      const { invoke } = await import("@tauri-apps/api/core");
+      const { invoke } = await import("@/lib/tauri");
       const result = await invoke<T>(command, args as Record<string, unknown>);
       setData(result);
       setLoading(false);

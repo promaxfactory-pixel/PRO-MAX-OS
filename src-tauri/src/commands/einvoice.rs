@@ -1,4 +1,5 @@
-﻿use crate::db::DbState;
+﻿use crate::commands::rbac;
+use crate::db::DbState;
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -218,10 +219,12 @@ fn generate_pint_om_xml(
 #[tauri::command]
 pub fn einvoice_generate(
     state: State<'_, DbState>,
+    user_id: i64,
     invoice_id: i64,
 ) -> Result<EInvoiceResult, AppError> {
     crate::commands::licensing::require_feature(crate::commands::licensing::FEAT_EINVOICE)?;
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
 
     let inv = conn
         .query_row(
@@ -331,6 +334,7 @@ pub fn einvoice_generate(
     )
     ?;
 
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "einvoice_generate", "e_invoices", Some(invoice_id), None, Some(&inv_no), None);
     Ok(EInvoiceResult {
         invoice_id,
         invoice_no: inv_no,
@@ -344,6 +348,7 @@ pub fn einvoice_generate(
 #[tauri::command]
 pub fn einvoice_validate(
     state: State<'_, DbState>,
+    user_id: i64,
     invoice_id: i64,
 ) -> Result<EInvoiceValidation, AppError> {
     let conn = state.0.lock()?;
@@ -458,6 +463,8 @@ pub fn einvoice_validate(
         rusqlite::params![compliance_score, invoice_id],
     ).ok();
 
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "einvoice_validate", "e_invoices", Some(invoice_id), None, Some(&format!("score={}", compliance_score)), None);
+
     Ok(EInvoiceValidation {
         is_valid: errors.is_empty(),
         errors,
@@ -560,10 +567,12 @@ pub fn einvoice_list(
 #[tauri::command]
 pub fn einvoice_mark_submitted(
     state: State<'_, DbState>,
+    user_id: i64,
     invoice_id: i64,
     submission_ref: Option<String>,
 ) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     let now = chrono::Utc::now().to_rfc3339();
     let rows = conn
         .execute(
@@ -575,16 +584,19 @@ pub fn einvoice_mark_submitted(
     if rows == 0 {
         return Err(AppError::not_found(format!("No e-invoice found for invoice_id {}", invoice_id)));
     }
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "einvoice_mark_submitted", "e_invoices", Some(invoice_id), None, Some("submitted"), None);
     Ok(format!("Invoice {} marked as submitted", invoice_id))
 }
 
 #[tauri::command]
 pub fn einvoice_cancel(
     state: State<'_, DbState>,
+    user_id: i64,
     invoice_id: i64,
     reason: String,
 ) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     let now = chrono::Utc::now().to_rfc3339();
     let rows = conn
         .execute(
@@ -596,15 +608,18 @@ pub fn einvoice_cancel(
     if rows == 0 {
         return Err(AppError::business(format!("Cannot cancel invoice {}. Already processed or not found.", invoice_id)));
     }
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "einvoice_cancel", "e_invoices", Some(invoice_id), None, Some("cancelled"), Some(&reason));
     Ok(format!("Invoice {} cancelled: {}", invoice_id, reason))
 }
 
 #[tauri::command]
 pub fn einvoice_submit(
     state: State<'_, DbState>,
+    user_id: i64,
     invoice_id: i64,
 ) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
 
     let einv = conn
         .query_row(
@@ -671,6 +686,7 @@ pub fn einvoice_submit(
                 "UPDATE einvoice_queue SET status = 'completed' WHERE invoice_id = ?1",
                 [invoice_id],
             ).ok();
+            let _ = rbac::log_audit(&conn, Some(user_id), None, "einvoice_submit", "e_invoices", None, None, Some(&format!("invoice={} ref={}", invoice_id, ref_no)), None);
             Ok(format!("Invoice {} submitted successfully. Ref: {}", invoice_id, ref_no))
         }
         Err(e) => {
@@ -683,6 +699,7 @@ pub fn einvoice_submit(
                 "UPDATE einvoice_queue SET status = 'failed', last_error = ?1, retry_count = retry_count + 1 WHERE invoice_id = ?2",
                 rusqlite::params![err_str, invoice_id],
             ).ok();
+            let _ = rbac::log_audit(&conn, Some(user_id), None, "einvoice_submit_failed", "e_invoices", None, None, Some(&format!("invoice={}", invoice_id)), Some(&err_str));
             Err(AppError::business(format!("Submission failed: {}", e)))
         }
     }
@@ -799,11 +816,13 @@ fn is_uuid_like(s: &str) -> bool {
 #[tauri::command]
 pub fn einvoice_add_to_queue(
     state: State<'_, DbState>,
+    user_id: i64,
     invoice_id: i64,
     action: Option<String>,
     priority: Option<i32>,
 ) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     let act = action.unwrap_or_else(|| "submit".into());
     let pri = priority.unwrap_or(0);
 
@@ -822,6 +841,7 @@ pub fn einvoice_add_to_queue(
         "INSERT INTO einvoice_queue (invoice_id, action, priority) VALUES (?1, ?2, ?3)",
         rusqlite::params![invoice_id, act, pri],
     )?;
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "einvoice_add_to_queue", "einvoice_queue", None, None, Some(&format!("invoice={} action={}", invoice_id, act)), None);
 
     Ok(format!("Invoice {} queued for {}", invoice_id, act))
 }
@@ -829,7 +849,10 @@ pub fn einvoice_add_to_queue(
 #[tauri::command]
 pub fn einvoice_process_queue(
     state: State<'_, DbState>,
+    user_id: i64,
 ) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     let (env, endpoint, api_key, api_secret): (String, Option<String>, Option<String>, Option<String>) = {
         let conn = state.0.lock()?;
         conn.query_row(
@@ -929,6 +952,8 @@ pub fn einvoice_process_queue(
             }
         }
     }
+
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "einvoice_process_queue", "einvoice_queue", None, None, Some(&format!("processed={} failed={}", processed, failed)), None);
 
     Ok(format!("Processed: {}, Failed: {}", processed, failed))
 }
@@ -1036,6 +1061,7 @@ pub fn einvoice_get_settings(
 #[tauri::command]
 pub fn einvoice_save_settings(
     state: State<'_, DbState>,
+    user_id: i64,
     environment: String,
     auto_submit: bool,
     submit_on_post: bool,
@@ -1046,6 +1072,7 @@ pub fn einvoice_save_settings(
     portal_password: Option<String>,
 ) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
 
     let company_id: i64 = conn
         .query_row("SELECT id FROM companies LIMIT 1", [], |row| row.get(0))
@@ -1086,6 +1113,7 @@ pub fn einvoice_save_settings(
         )?;
     }
 
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "einvoice_save_settings", "einvoice_settings", None, None, Some(&environment), None);
     Ok("Settings saved".into())
 }
 
@@ -1132,13 +1160,16 @@ pub fn einvoice_get_queue(
 #[tauri::command]
 pub fn einvoice_retry_queue_item(
     state: State<'_, DbState>,
+    user_id: i64,
     queue_id: i64,
 ) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     conn.execute(
         "UPDATE einvoice_queue SET status = 'pending', last_error = NULL, next_retry_at = datetime('now') WHERE id = ?1",
         [queue_id],
     )?;
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "einvoice_retry_queue_item", "einvoice_queue", Some(queue_id), None, Some("pending"), None);
     Ok("Queue item reset for retry".into())
 }
 
@@ -1195,16 +1226,18 @@ pub fn einvoice_get_xml(
             [invoice_id],
             |row| row.get::<_, String>(0),
         )
-        .map_err(|_| AppError::not_found("XML not found"))?;
+        .map_err(|_| AppError::not_found("ملف XML غير موجود"))?;
     Ok(xml)
 }
 
 #[tauri::command]
 pub fn einvoice_bulk_generate(
     state: State<'_, DbState>,
+    user_id: i64,
     invoice_ids: Vec<i64>,
 ) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     let mut count = 0i64;
     for inv_id in &invoice_ids {
         let exists: bool = conn
@@ -1221,12 +1254,13 @@ pub fn einvoice_bulk_generate(
                 [inv_id],
             ).map_err(|e| format!("Failed to create e-invoice record for invoice {}: {}", inv_id, e))?;
         }
-        conn.execute(
-            "INSERT OR IGNORE INTO einvoice_queue (invoice_id, action, priority) VALUES (?1, 'submit', 0)",
-            [inv_id],
-        ).ok();
+    conn.execute(
+        "INSERT OR IGNORE INTO einvoice_queue (invoice_id, action, priority) VALUES (?1, 'submit', 0)",
+        [inv_id],
+    ).ok();
         count += 1;
     }
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "einvoice_bulk_generate", "e_invoices", None, None, Some(&format!("count={}", count)), None);
     Ok(count)
 }
 

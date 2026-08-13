@@ -38,7 +38,7 @@ fn main() {
 mod tests {
     #[test]
     fn test_mcp_help() {
-        let _args = vec!["promax-mcp".to_string(), "--help".to_string()];
-        assert!(true);
+        let args = ["promax-mcp".to_string(), "--help".to_string()];
+        assert_eq!(args.len(), 2);
     }
 }

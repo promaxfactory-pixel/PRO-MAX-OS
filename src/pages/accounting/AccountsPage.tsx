@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import DataTable, { Column, type BadgeVariant } from "@/components/ui/DataTable";
 import Badge from "@/components/ui/Badge";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import { useUIStore } from "../../stores/uiStore";
 import { Account } from "@/types";
 

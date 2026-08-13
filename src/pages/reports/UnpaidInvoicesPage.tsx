@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Card from "@/components/ui/Card";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import { formatOMR, formatDate } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import { Calendar, AlertTriangle } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 

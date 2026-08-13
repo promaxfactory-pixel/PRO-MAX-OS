@@ -1,5 +1,5 @@
 use crate::commands::rbac;
-use crate::db::DbState;
+use crate::db::{next_sequence, DbState};
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -108,17 +108,7 @@ pub fn create_expense(input: CreateExpenseInput, state: State<'_, DbState>, user
     rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     let year: String = conn
         .query_row("SELECT substr(?1, 1, 4)", [&input.date], |row| row.get(0))?;
-    let next_num: i64 = conn
-        .query_row(
-            "SELECT COALESCE(last_number,0)+1 FROM doc_sequences WHERE doc_type=? AND year=?",
-            ["EXP", &year],
-            |row| row.get(0),
-        )
-        .unwrap_or(1);
-    conn.execute(
-        "INSERT INTO doc_sequences(doc_type, year, last_number) VALUES(?,?,?) ON CONFLICT(doc_type, year) DO UPDATE SET last_number=excluded.last_number",
-        ["EXP", &year, &next_num.to_string()],
-    )?;
+    let next_num = next_sequence(&conn, "EXP", &year)?;
     let exp_no = format!("EXP-{}-{:04}", year, next_num);
 
     let source = input.paid_from_source.unwrap_or_else(|| "company".to_string());
@@ -169,25 +159,127 @@ pub fn create_expense(input: CreateExpenseInput, state: State<'_, DbState>, user
 
 #[tauri::command]
 pub fn reimburse_expense(state: State<'_, DbState>, user_id: i64, expense_id: i64, reimbursed_by: String) -> Result<String, AppError> {
-    let conn = state.0.lock()?;
+    let mut conn = state.0.lock()?;
     rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
-    conn.execute(
-        "UPDATE expenses SET reimbursement_status='reimbursed', reimbursement_date=date('now'), reimbursed_by=?1 WHERE id=?2 AND reimbursement_status='pending'",
+    let tx = conn.transaction()?;
+
+    let current_status: Option<String> = tx
+        .query_row("SELECT reimbursement_status FROM expenses WHERE id=?1", [expense_id], |r| r.get(0))
+        .unwrap_or_default();
+    if current_status.as_deref() == Some("reimbursed") {
+        return Ok("تم رد المبلغ سلفاً".to_string());
+    }
+    if current_status.as_deref() != Some("pending") {
+        return Err(AppError::validation("المصروف غير مؤهل للرد"));
+    }
+
+    tx.execute(
+        "UPDATE expenses SET reimbursement_status='reimbursed', reimbursement_date=date('now'), reimbursed_by=?1 WHERE id=?2",
         rusqlite::params![reimbursed_by, expense_id],
     )?;
-    let _ = rbac::log_audit(&conn, None, None, "reimburse_expense", "expenses", Some(expense_id), None, Some(&reimbursed_by), None);
+
+    // Personal expenses have no journal entry yet (approval only books company-paid
+    // ones). Reimbursement is when the money actually leaves the company, so book
+    // the expense against the payment account now.
+    let journal_id: Option<i64> = tx
+        .query_row("SELECT journal_id FROM expenses WHERE id=?1", [expense_id], |r| r.get(0))
+        .unwrap_or(None);
+    if journal_id.is_none() {
+        let (amount_milli, vat_milli, account_code, method, date, exp_no): (i64, i64, Option<String>, Option<String>, String, Option<String>) = tx
+            .query_row(
+                "SELECT amount_milli, vat_milli, account_code, method, date, exp_no FROM expenses WHERE id=?1",
+                [expense_id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)),
+            )
+            .map_err(|_| AppError::not_found("المصروف غير موجود"))?;
+        let expense_account = account_code
+            .filter(|c| !c.trim().is_empty())
+            .unwrap_or_else(|| "5200".to_string());
+        let cash_account = crate::commands::accounting::resolve_cash_account(&tx, None, &method.unwrap_or_default())?;
+        let total = amount_milli + vat_milli;
+        let lines: Vec<(String, i64, i64, Option<String>)> = vec![
+            (expense_account, total, 0, Some("مصروف".to_string())),
+            (cash_account, 0, total, None),
+        ];
+        let jid = crate::commands::accounting::post_to_journal(
+            &tx,
+            "expense_reimbursement",
+            expense_id,
+            &date,
+            &format!("رد مصروف {}", exp_no.unwrap_or_default()),
+            &lines,
+            "system",
+        )?;
+        tx.execute(
+            "UPDATE expenses SET journal_id=?1 WHERE id=?2",
+            rusqlite::params![jid, expense_id],
+        )?;
+    }
+
+    let _ = rbac::log_audit(&tx, Some(user_id), None, "reimburse_expense", "expenses", Some(expense_id), None, Some(&reimbursed_by), None);
+    tx.commit()?;
     Ok("تم رد المبلغ بنجاح".to_string())
 }
 
 #[tauri::command]
 pub fn approve_expense(state: State<'_, DbState>, user_id: i64, expense_id: i64) -> Result<String, AppError> {
-    let conn = state.0.lock()?;
+    let mut conn = state.0.lock()?;
     rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
-    conn.execute(
+    let tx = conn.transaction()?;
+
+    let current_status: Option<String> = tx
+        .query_row("SELECT approval_status FROM expenses WHERE id=?1", [expense_id], |r| r.get(0))
+        .unwrap_or_default();
+    if current_status.as_deref() == Some("approved") {
+        return Ok("تم اعتماد المصروف مسبقاً".to_string());
+    }
+
+    tx.execute(
         "UPDATE expenses SET approval_status='approved' WHERE id=?1",
         [expense_id],
     )?;
-    let _ = rbac::log_audit(&conn, None, None, "approve_expense", "expenses", Some(expense_id), None, None, None);
+
+    let journal_id: Option<i64> = tx
+        .query_row("SELECT journal_id FROM expenses WHERE id=?1", [expense_id], |r| r.get(0))
+        .unwrap_or(None);
+    let source: Option<String> = tx
+        .query_row("SELECT paid_from_source FROM expenses WHERE id=?1", [expense_id], |r| r.get(0))
+        .unwrap_or_default();
+
+    if journal_id.is_none() && source.as_deref() == Some("company") {
+        let (amount_milli, vat_milli, account_code, method, date, exp_no): (i64, i64, Option<String>, Option<String>, String, Option<String>) = tx
+            .query_row(
+                "SELECT amount_milli, vat_milli, account_code, method, date, exp_no FROM expenses WHERE id=?1",
+                [expense_id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)),
+            )
+            .map_err(|_| AppError::not_found("المصروف غير موجود"))?;
+        let expense_account = account_code
+            .filter(|c| !c.trim().is_empty())
+            .unwrap_or_else(|| "5200".to_string());
+        let cash_account = crate::commands::accounting::resolve_cash_account(&tx, None, &method.unwrap_or_default())?;
+        let total = amount_milli + vat_milli;
+        let lines: Vec<(String, i64, i64, Option<String>)> = vec![
+            (expense_account, total, 0, Some("مصروف".to_string())),
+            (cash_account, 0, total, None),
+        ];
+        let jid = crate::commands::accounting::post_to_journal(
+            &tx,
+            "expense",
+            expense_id,
+            &date,
+            &format!("مصروف {}", exp_no.unwrap_or_default()),
+            &lines,
+            "system",
+        )?;
+        tx.execute(
+            "UPDATE expenses SET journal_id=?1 WHERE id=?2",
+            rusqlite::params![jid, expense_id],
+        )?;
+    }
+
+    let _ = rbac::log_audit(&tx, Some(user_id), None, "approve_expense", "expenses", Some(expense_id), None, None, None);
+    tx.commit()?;
     Ok("تم اعتماد المصروف".to_string())
 }
 

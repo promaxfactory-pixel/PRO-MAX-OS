@@ -4,7 +4,7 @@ import DataTable, { Column } from "@/components/ui/DataTable";
 import Button from "@/components/ui/Button";
 import { StatCard } from "@/components/ui/Card";
 import { formatOMR, formatDate } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import { ShoppingCart } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
@@ -33,8 +33,33 @@ export default function PurchaseListPage() {
 
   useEffect(() => { loadPurchases(); }, [loadPurchases]);
 
-  const totalAmount = purchases.reduce((s: number, p: any) => s + (p.total_milli || 0), 0);
-  const totalPaid = purchases.reduce((s: number, p: any) => s + (p.paid_milli || 0), 0);
+  const postPurchase = useCallback(async (id: number) => {
+    if (!window.confirm("ترحيل هذه المشتريات إلى دفتر الأستاذ؟")) return;
+    try {
+      await invoke("post_purchase", { id });
+      addNotification({ id: crypto.randomUUID(), type: "success", title: "تم الترحيل", message: "تم ترحيل المشتريات إلى دفتر الأستاذ" });
+      loadPurchases();
+    } catch (err) {
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(err) });
+    }
+  }, [addNotification, loadPurchases]);
+
+  const voidPurchase = useCallback(async (id: number) => {
+    const reason = window.prompt("سبب الإلغاء (اختياري):");
+    if (reason === null) return; // cancelled
+    if (!window.confirm("إلغاء هذه المشتريات؟ سيتم عكس قيد الأستاذ ورد البضاعة للمخزون.")) return;
+    try {
+      await invoke("void_purchase", { id, reason: reason || null });
+      addNotification({ id: crypto.randomUUID(), type: "success", title: "تم الإلغاء", message: "تم إلغاء المشتريات وعكس القيد" });
+      loadPurchases();
+    } catch (err) {
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(err) });
+    }
+  }, [addNotification, loadPurchases]);
+
+  const activePurchases = purchases.filter((p) => p.status?.toLowerCase() !== "void");
+  const totalAmount = activePurchases.reduce((s: number, p: any) => s + (p.total_milli || 0), 0);
+  const totalPaid = activePurchases.reduce((s: number, p: any) => s + (p.paid_milli || 0), 0);
 
   const columns: Column<PurchaseOrder>[] = useMemo(() => [
     { key: "pur_no", header: "رقم المشتريات", sortable: true, render: (r) => <span className="font-mono text-brand-400">{r.pur_no || "—"}</span> },
@@ -42,14 +67,35 @@ export default function PurchaseListPage() {
     { key: "supplier_name", header: "المورد", render: (r) => r.supplier_name || "—" },
     { key: "total_milli", header: "المبلغ", sortable: true, align: "left", render: (r) => <span className="font-bold text-gold-400">{formatOMR(r.total_milli)}</span> },
     { key: "paid_milli", header: "المدفوع", align: "left", render: (r) => formatOMR(r.paid_milli) },
-    { key: "status", header: "الحالة", render: (r) => (
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-        r.status === "Posted" ? "bg-emerald-500/20 text-emerald-400" :
-          r.status === "Draft" ? "bg-yellow-500/20 text-yellow-400" :
-            "bg-surface-600 text-surface-300"
-      }`}>{r.status === "Posted" ? "مرسل" : r.status === "Draft" ? "مسودة" : r.status}</span>
-    )},
-  ], []);
+    { key: "status", header: "الحالة", render: (r) => {
+      const posted = r.status?.toLowerCase() === "posted";
+      const draft = r.status?.toLowerCase() === "draft";
+      const voided = r.status?.toLowerCase() === "void";
+      return (
+        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+          voided ? "bg-red-500/20 text-red-400" :
+            posted ? "bg-emerald-500/20 text-emerald-400" :
+              draft ? "bg-yellow-500/20 text-yellow-400" :
+                "bg-surface-600 text-surface-300"
+        }`}>{voided ? "ملغي" : posted ? "مرحّل" : draft ? "مسودة" : r.status}</span>
+      );
+    }},
+    { key: "actions", header: "الإجراءات", render: (r) => {
+      const voided = r.status?.toLowerCase() === "void";
+      if (voided) return <span className="text-xs text-red-400">ملغي</span>;
+      const posted = r.status?.toLowerCase() === "posted";
+      return (
+        <div className="flex items-center gap-2">
+          {!posted ? (
+            <Button size="sm" variant="success" onClick={() => postPurchase(r.id)}>ترحيل</Button>
+          ) : (
+            <span className="text-xs text-emerald-400">تم الترحيل</span>
+          )}
+          <Button size="sm" variant="outline" className="!text-red-400 !border-red-500/40" onClick={() => voidPurchase(r.id)}>إلغاء</Button>
+        </div>
+      );
+    }},
+  ], [postPurchase, voidPurchase]);
 
   return (
     <div className="space-y-6">
@@ -66,7 +112,7 @@ export default function PurchaseListPage() {
         <StatCard title="المتبقي" value={formatOMR(totalAmount - totalPaid)} icon={<ShoppingCart className="w-6 h-6" />} />
       </div>
       <DataTable columns={columns} data={purchases} loading={loading}
-        onRowClick={(r) => navigate(`/purchases/${r.id}`)} emptyMessage="لا توجد مشتريات" />
+        emptyMessage="لا توجد مشتريات" />
     </div>
   );
 }

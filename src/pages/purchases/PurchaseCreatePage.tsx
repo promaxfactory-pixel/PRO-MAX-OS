@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import { formatOMR } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import { ArrowRight, Plus, Save, Trash2 } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 

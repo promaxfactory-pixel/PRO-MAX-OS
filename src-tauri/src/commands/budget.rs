@@ -107,7 +107,7 @@ pub fn get_budget(state: State<'_, DbState>, id: i64) -> Result<Budget, AppError
             approved_by: row.get(13)?,
             approved_at: row.get(14)?,
         }),
-    ).map_err(|_| AppError::not_found("Budget not found"))
+    ).map_err(|_| AppError::not_found("الميزانية غير موجودة"))
 }
 
 #[tauri::command]
@@ -156,6 +156,7 @@ pub fn create_budget(state: State<'_, DbState>, user_id: i64, input: CreateBudge
         }
     }
 
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "create_budget", "budgets", Some(budget_id), None, Some(&budget_no), None);
     Ok(budget_id)
 }
 
@@ -167,6 +168,7 @@ pub fn approve_budget(state: State<'_, DbState>, user_id: i64, id: i64, approved
         "UPDATE budgets SET status = 'Approved', approved_by = ?, approved_at = datetime('now') WHERE id = ? AND status = 'Draft'",
         rusqlite::params![approved_by, id],
     )?;
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "approve_budget", "budgets", Some(id), None, Some("Approved"), None);
     Ok("Budget approved".to_string())
 }
 
@@ -193,6 +195,7 @@ pub fn update_budget_actuals(state: State<'_, DbState>, user_id: i64, budget_id:
     }
 
     conn.execute("UPDATE budgets SET total_actual_milli = ? WHERE id = ?", rusqlite::params![total_actual, budget_id])?;
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "update_budget_actuals", "budgets", Some(budget_id), None, Some(&format!("total={}", total_actual)), None);
     Ok(format!("Updated actuals: {} milli", total_actual))
 }
 

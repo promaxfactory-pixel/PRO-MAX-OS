@@ -61,9 +61,11 @@ pub fn list_quality_inspections(
 #[tauri::command]
 pub fn create_quality_inspection(
     state: State<'_, DbState>,
+    user_id: i64,
     input: CreateQualityInspectionInput,
 ) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "operator"])?;
     conn.execute(
         "INSERT INTO quality_inspections (production_line_id, date, inspector, result, defect_type, defect_qty, notes, status)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",

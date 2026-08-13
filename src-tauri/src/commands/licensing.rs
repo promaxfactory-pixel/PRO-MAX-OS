@@ -2,6 +2,52 @@ use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use sha2::{Sha256, Digest};
 use std::path::PathBuf;
+use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+// Brute-force protection for the developer PIN used by license-minting tools.
+const MAX_PIN_ATTEMPTS: usize = 5;
+const PIN_LOCK_WINDOW_SECS: u64 = 900;
+
+static PIN_FAILURES: Mutex<Vec<u64>> = Mutex::new(Vec::new());
+static PIN_LOCKED_UNTIL: Mutex<u64> = Mutex::new(0);
+
+fn now_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+fn dev_pin_is_locked() -> bool {
+    let locked = *PIN_LOCKED_UNTIL.lock().unwrap_or_else(|p| p.into_inner());
+    now_secs() < locked
+}
+
+fn record_dev_pin_failure() {
+    let now = now_secs();
+    let mut failures = PIN_FAILURES.lock().unwrap_or_else(|p| p.into_inner());
+    failures.retain(|&ts| now - ts < PIN_LOCK_WINDOW_SECS);
+    failures.push(now);
+    if failures.len() >= MAX_PIN_ATTEMPTS {
+        *PIN_LOCKED_UNTIL.lock().unwrap_or_else(|p| p.into_inner()) = now + PIN_LOCK_WINDOW_SECS;
+        failures.clear();
+    }
+}
+
+fn verify_dev_pin_checked(pin: &str) -> bool {
+    if dev_pin_is_locked() {
+        return false;
+    }
+    if crate::crypto::verify_developer_pin(pin) {
+        let mut failures = PIN_FAILURES.lock().unwrap_or_else(|p| p.into_inner());
+        failures.clear();
+        true
+    } else {
+        record_dev_pin_failure();
+        false
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LicenseData {
@@ -117,10 +163,20 @@ pub fn require_feature(feature: &str) -> Result<(), AppError> {
 }
 
 fn get_license_path() -> PathBuf {
-    let data_dir = std::env::current_exe()
+    let exe_dir = std::env::current_exe()
         .map(|p| p.parent().unwrap_or(std::path::Path::new(".")).to_path_buf())
         .unwrap_or_else(|_| std::path::PathBuf::from("."));
-    data_dir.join(".promax_os_license")
+    // Prefer an existing license file, wherever it was shipped (next to the
+    // executable, or in the bundled resources subfolder).
+    for candidate in [
+        exe_dir.join(".promax_os_license"),
+        exe_dir.join("resources").join(".promax_os_license"),
+    ] {
+        if candidate.exists() {
+            return candidate;
+        }
+    }
+    exe_dir.join(".promax_os_license")
 }
 
 fn get_hardware_id() -> String {
@@ -281,56 +337,22 @@ pub fn activate_license(license_key: String) -> LicenseStatus {
     let json = match base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &license_key) {
         Ok(b) => b,
         Err(_) => {
-            let auto_license = auto_generate_pro_license();
-            let path = get_license_path();
-            if let Err(e) = std::fs::write(&path, auto_license) {
-                return LicenseStatus {
-                    valid: false,
-                    message: format!("خطأ في حفظ الترخيص التلقائي: {}", e),
-                    license: None,
-                };
-            }
             return LicenseStatus {
-                valid: true,
-                message: "تم التفعيل التلقائي بنجاح (ترخيص PRO)".to_string(),
-                license: Some(LicenseInfo {
-                    customer_name: "Mayadeen Bahla".to_string(),
-                    license_type: TIER_PRO.to_string(),
-                    expires_at: Some((chrono::Local::now().date_naive() + chrono::Duration::days(3650)).to_string()),
-                    features: tier_features(TIER_PRO),
-                    max_users: 999,
-                    days_remaining: Some(3650),
-                    is_trial: false,
-                }),
+                valid: false,
+                message: "مفتاح التفعيل غير صالح. تأكد من صحة المفتاح وحاول مرة أخرى.".to_string(),
+                license: None,
             };
-        },
+        }
     };
     let license: LicenseData = match serde_json::from_slice(&json) {
         Ok(l) => l,
         Err(_) => {
-            let auto_license = auto_generate_pro_license();
-            let path = get_license_path();
-            if let Err(e) = std::fs::write(&path, auto_license) {
-                return LicenseStatus {
-                    valid: false,
-                    message: format!("خطأ في حفظ الترخيص التلقائي: {}", e),
-                    license: None,
-                };
-            }
             return LicenseStatus {
-                valid: true,
-                message: "تم التفعيل التلقائي بنجاح (ترخيص PRO)".to_string(),
-                license: Some(LicenseInfo {
-                    customer_name: "Mayadeen Bahla".to_string(),
-                    license_type: TIER_PRO.to_string(),
-                    expires_at: Some((chrono::Local::now().date_naive() + chrono::Duration::days(3650)).to_string()),
-                    features: tier_features(TIER_PRO),
-                    max_users: 999,
-                    days_remaining: Some(3650),
-                    is_trial: false,
-                }),
+                valid: false,
+                message: "مفتاح التفعيل غير صالح. تأكد من صحة المفتاح وحاول مرة أخرى.".to_string(),
+                license: None,
             };
-        },
+        }
     };
     let current_hw_id = get_hardware_id();
     if let Err(msg) = validate_license_data(&license, &current_hw_id) {
@@ -369,35 +391,6 @@ pub fn activate_license(license_key: String) -> LicenseStatus {
     }
 }
 
-fn auto_generate_pro_license() -> String {
-    let customer_name = "Mayadeen Bahla";
-    let license_type = TIER_PRO;
-    let expires_at = Some((chrono::Local::now().date_naive() + chrono::Duration::days(3650)).to_string());
-    let hardware_id = get_hardware_id();
-    let features = tier_features(TIER_PRO);
-    let max_users = 999;
-    let secret = crate::crypto::get_secrets().licensing_secret.clone();
-    let data = format!("{}|{}|{}|{}|{}|{}|{}",
-        customer_name, license_type, expires_at.as_deref().unwrap_or(""), hardware_id, features.join(","), max_users, secret);
-    let mut hasher = Sha256::new();
-    hasher.update(data.as_bytes());
-    hasher.update(secret.as_bytes());
-    let signature = format!("{:x}", hasher.finalize());
-    let license = LicenseData {
-        customer_name: customer_name.to_string(),
-        license_type: license_type.to_string(),
-        expires_at: expires_at.clone(),
-        hardware_id,
-        features,
-        max_users,
-        signature,
-        trial_days: None,
-        created_at: Some(chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string()),
-    };
-    let json = serde_json::to_string(&license).unwrap_or_default();
-    base64::Engine::encode(&base64::engine::general_purpose::STANDARD, json.as_bytes())
-}
-
 #[tauri::command]
 pub fn get_license_info() -> LicenseStatus {
     check_license()
@@ -423,7 +416,7 @@ pub fn require_license() -> bool {
 
 #[tauri::command]
 pub fn verify_developer_pin(pin: String) -> bool {
-    crate::crypto::verify_developer_pin(&pin)
+    verify_dev_pin_checked(&pin)
 }
 
 #[tauri::command]
@@ -435,7 +428,7 @@ pub fn generate_license_key(
     max_users: i32,
     features: Vec<String>,
 ) -> Result<String, AppError> {
-    if !crate::crypto::verify_developer_pin(&pin) {
+    if !verify_dev_pin_checked(&pin) {
         return Err(AppError::validation("رقم التعريف غير صحيح"));
     }
     let expires_at = expires_days.map(|days| {
@@ -462,7 +455,7 @@ pub fn generate_tier_license(
     max_users: Option<i32>,
     target_hardware_id: Option<String>,
 ) -> Result<String, AppError> {
-    if !crate::crypto::verify_developer_pin(&pin) {
+    if !verify_dev_pin_checked(&pin) {
         return Err(AppError::validation("رقم التعريف غير صحيح"));
     }
     let features = tier_features(&tier);

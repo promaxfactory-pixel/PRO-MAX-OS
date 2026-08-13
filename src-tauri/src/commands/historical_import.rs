@@ -1,4 +1,4 @@
-﻿use crate::db::DbState;
+﻿use crate::db::{next_sequence, DbState};
 use crate::error::AppError;
 use calamine::{open_workbook_auto, Data, Reader};
 use serde::{Deserialize, Serialize};
@@ -43,7 +43,7 @@ pub struct ImportResult {
 #[derive(Debug, Deserialize)]
 pub struct ImportRequest {
     pub entity_type: String,
-    pub data: Vec<Vec<String>>,
+    pub file_path: String,
     pub mappings: Vec<FieldMapping>,
     pub skip_first_row: Option<bool>,
 }
@@ -690,15 +690,18 @@ pub fn preview_import(
 #[tauri::command]
 pub fn execute_import(
     state: State<'_, DbState>,
+    user_id: i64,
     input: ImportRequest,
 ) -> Result<ImportResult, AppError> {
     let conn = state.0.lock()?;
+    crate::commands::rbac::require_role(&conn, user_id, &["admin", "manager", "accountant"])?;
     let skip_header = input.skip_first_row.unwrap_or(true);
-    let data = if skip_header && !input.data.is_empty() {
-        &input.data[1..]
-    } else {
-        &input.data
-    };
+    let (_, raw_data) = read_file_data(&input.file_path)?;
+    let mut data: Vec<Vec<String>> = raw_data.iter().map(|row| row_data_to_strings(row)).collect();
+    let total_rows = data.len();
+    if skip_header && !data.is_empty() {
+        data.remove(0);
+    }
 
     let mut imported = 0usize;
     let mut skipped = 0usize;
@@ -954,13 +957,6 @@ pub fn execute_import(
                 }
             }
             let year = chrono::Utc::now().format("%Y").to_string();
-            let mut current_seq: i64 = conn
-                .query_row(
-                    "SELECT COALESCE(last_number,0) FROM doc_sequences WHERE doc_type='INV' AND year=?",
-                    [&year],
-                    |r| r.get(0),
-                )
-                .unwrap_or(0);
 
             for (i, row) in data.iter().enumerate() {
                 let row_num = i + 2;
@@ -997,8 +993,7 @@ pub fn execute_import(
                 let vat_milli = parse_amount_to_milli(&vat_str);
                 let total_milli = net_milli + vat_milli;
 
-                current_seq += 1;
-                let inv_no = format!("INV-{}-{:04}", year, current_seq);
+                let inv_no = format!("INV-{}-{:04}", year, next_sequence(&conn, "INV", &year)?);
                 let ptype = if payment_type.trim().is_empty() { "credit".to_string() } else { payment_type };
 
                 conn.execute(
@@ -1036,10 +1031,6 @@ pub fn execute_import(
 
                 imported += 1;
             }
-            let _ = conn.execute(
-                "INSERT INTO doc_sequences(doc_type, year, last_number) VALUES('INV',?1,?2) ON CONFLICT(doc_type, year) DO UPDATE SET last_number=excluded.last_number",
-                rusqlite::params![year, current_seq],
-            );
         }
         "purchases" => {
             let mut supplier_cache: HashMap<String, i64> = HashMap::new();
@@ -1069,13 +1060,6 @@ pub fn execute_import(
                 }
             }
             let year = chrono::Utc::now().format("%Y").to_string();
-            let mut current_seq: i64 = conn
-                .query_row(
-                    "SELECT COALESCE(last_number,0) FROM doc_sequences WHERE doc_type='PUR' AND year=?",
-                    [&year],
-                    |r| r.get(0),
-                )
-                .unwrap_or(0);
 
             for (i, row) in data.iter().enumerate() {
                 let row_num = i + 2;
@@ -1111,8 +1095,7 @@ pub fn execute_import(
                 let vat_milli = parse_amount_to_milli(&vat_str);
                 let total_milli = net_milli + vat_milli;
 
-                current_seq += 1;
-                let pur_no = format!("PUR-{}-{:04}", year, current_seq);
+                let pur_no = format!("PUR-{}-{:04}", year, next_sequence(&conn, "PUR", &year)?);
 
                 conn.execute(
                     "INSERT INTO purchases(pur_no, date, supplier_id, supplier_invoice_no, vat_enabled, net_milli, vat_milli, total_milli, status, notes) VALUES(?,?,?,?,?,?,?,?,?,?)",
@@ -1144,20 +1127,9 @@ pub fn execute_import(
 
                 imported += 1;
             }
-            let _ = conn.execute(
-                "INSERT INTO doc_sequences(doc_type, year, last_number) VALUES('PUR',?1,?2) ON CONFLICT(doc_type, year) DO UPDATE SET last_number=excluded.last_number",
-                rusqlite::params![year, current_seq],
-            );
         }
         "expenses" => {
             let year = chrono::Utc::now().format("%Y").to_string();
-            let mut current_seq: i64 = conn
-                .query_row(
-                    "SELECT COALESCE(last_number,0) FROM doc_sequences WHERE doc_type='EXP' AND year=?",
-                    [&year],
-                    |r| r.get(0),
-                )
-                .unwrap_or(0);
 
             for (i, row) in data.iter().enumerate() {
                 let row_num = i + 2;
@@ -1181,8 +1153,7 @@ pub fn execute_import(
                     continue;
                 }
 
-                current_seq += 1;
-                let exp_no = format!("EXP-{}-{:04}", year, current_seq);
+                let exp_no = format!("EXP-{}-{:04}", year, next_sequence(&conn, "EXP", &year)?);
 
                 conn.execute(
                     "INSERT INTO expenses(exp_no, date, category, account_code, amount_milli, vat_milli, method, vendor, reference, notes, approval_status) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
@@ -1201,10 +1172,6 @@ pub fn execute_import(
 
                 imported += 1;
             }
-            let _ = conn.execute(
-                "INSERT INTO doc_sequences(doc_type, year, last_number) VALUES('EXP',?1,?2) ON CONFLICT(doc_type, year) DO UPDATE SET last_number=excluded.last_number",
-                rusqlite::params![year, current_seq],
-            );
         }
         "opening_balances" => {
             for (i, row) in data.iter().enumerate() {
@@ -1343,12 +1310,53 @@ pub fn execute_import(
         }
     }
 
+    let file_name = Path::new(&input.file_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown")
+        .to_string();
+    let _ = conn.execute(
+        "INSERT INTO import_history(import_type, file_name, total_rows, imported, skipped, status, created_by) VALUES(?1,?2,?3,?4,?5,'completed',datetime('now','localtime'))",
+        rusqlite::params![input.entity_type, file_name, total_rows as i64, imported as i64, skipped as i64],
+    );
+
+    let _ = crate::commands::rbac::log_audit(&conn, Some(user_id), None, "execute_import", "import_history", None, None, Some(&input.entity_type), Some(&file_name));
+
     Ok(ImportResult {
         entity_type: input.entity_type,
         imported,
         skipped,
         errors,
     })
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ImportHistoryEntry {
+    pub id: i64,
+    pub entity_type: String,
+    pub file_name: String,
+    pub rows_imported: i64,
+    pub rows_skipped: i64,
+    pub created_at: String,
+}
+
+#[tauri::command]
+pub fn import_get_history(state: State<'_, DbState>) -> Result<Vec<ImportHistoryEntry>, AppError> {
+    let conn = state.0.lock()?;
+    let mut stmt = conn.prepare(
+        "SELECT id, import_type, file_name, imported, skipped, COALESCE(created_at, '') FROM import_history ORDER BY id DESC LIMIT 100"
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(ImportHistoryEntry {
+            id: row.get(0)?,
+            entity_type: row.get(1)?,
+            file_name: row.get(2)?,
+            rows_imported: row.get(3)?,
+            rows_skipped: row.get(4)?,
+            created_at: row.get(5)?,
+        })
+    })?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
 #[tauri::command]
@@ -1522,17 +1530,6 @@ fn load_existing_names(
 
 fn auto_generate_code(conn: &rusqlite::Connection, prefix: &str) -> Result<String, AppError> {
     let year = chrono::Utc::now().format("%Y").to_string();
-    let doc_type = prefix;
-    let seq: i64 = conn
-        .query_row(
-            "SELECT COALESCE(last_number,0)+1 FROM doc_sequences WHERE doc_type=? AND year=?",
-            [doc_type, &year],
-            |r| r.get(0),
-        )
-        .unwrap_or(1);
-    let _ = conn.execute(
-        "INSERT INTO doc_sequences(doc_type, year, last_number) VALUES(?1,?2,?3) ON CONFLICT(doc_type, year) DO UPDATE SET last_number=excluded.last_number",
-        rusqlite::params![doc_type, &year, seq],
-    );
+    let seq = next_sequence(conn, prefix, &year)?;
     Ok(format!("{}-{}-{:04}", prefix, year, seq))
 }

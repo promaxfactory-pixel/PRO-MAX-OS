@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import Card, { StatCard } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { formatOMR, formatDate, cn } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import {
   FileCheck, Send, Eye, CheckCircle2, XCircle, Clock, RefreshCw,
   Settings2, ListOrdered, AlertTriangle, Hash, Ban,

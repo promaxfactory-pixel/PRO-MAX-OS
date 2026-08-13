@@ -105,9 +105,11 @@ pub fn get_machine(state: State<'_, DbState>, id: i64) -> Result<Machine, AppErr
 #[tauri::command]
 pub fn create_machine(
     state: State<'_, DbState>,
+    user_id: i64,
     input: CreateMachineInput,
 ) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "operator"])?;
 
     conn.execute(
         "INSERT INTO machines(code, name, mtype, supported_products, purchase_date, supplier, cost_milli, capacity_cpm, status, notes, active) VALUES(?,?,?,?,?,?,?,?,?,?,1)",
@@ -132,10 +134,12 @@ pub fn create_machine(
 #[tauri::command]
 pub fn update_machine(
     state: State<'_, DbState>,
+    user_id: i64,
     id: i64,
     input: UpdateMachineInput,
 ) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "operator"])?;
     let mut sets = Vec::new();
     let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
@@ -185,7 +189,7 @@ pub fn update_machine(
     }
 
     if sets.is_empty() {
-        return Err(AppError::validation("No changes provided"));
+        return Err(AppError::validation("لا توجد تعديلات"));
     }
 
     params.push(Box::new(id));
@@ -208,14 +212,18 @@ pub struct TemperatureLog {
 #[tauri::command]
 pub fn record_temperature(
     state: State<'_, DbState>,
+    user_id: i64,
     machine_id: i64,
     temperature: f64,
 ) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "operator"])?;
     conn.execute(
         "INSERT INTO machine_temp_logs (machine_id, temperature) VALUES (?1, ?2)",
         params![machine_id, temperature],
     )?;
+    let id = conn.last_insert_rowid();
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "record_temperature", "machine_temp_logs", Some(id), None, Some(&format!("machine={} temp={}", machine_id, temperature)), None);
     Ok("تم تسجيل درجة الحرارة".to_string())
 }
 

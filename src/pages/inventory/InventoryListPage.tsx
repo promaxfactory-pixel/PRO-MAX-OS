@@ -3,7 +3,7 @@ import DataTable, { Column } from "@/components/ui/DataTable";
 import Badge from "@/components/ui/Badge";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { formatOMR } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import { AlertTriangle } from "lucide-react";
 import { useUIStore } from "../../stores/uiStore";
 import { InventoryItem } from "@/types";

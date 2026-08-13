@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import { useNavigate } from "react-router-dom";
 import {
   Users, Truck, Package, Warehouse, FileText, ShoppingCart,
@@ -27,20 +27,34 @@ interface Template {
   columns: { field: string; label: string; required: boolean; description: string }[];
 }
 
-interface PreviewData {
-  headers: string[];
-  rows: Record<string, any>[];
-  mappings: { source: string; target: string }[];
-  validation: { row: number; column: string; message: string; severity: "error" | "warning" }[];
+interface ImportError {
+  row: number;
+  field: string;
+  message: string;
+  severity: string;
+}
+
+interface FieldMapping {
+  source_column: string;
+  target_field: string;
+  auto_matched: boolean;
+}
+
+interface ImportPreview {
+  entity_type: string;
   total_rows: number;
   valid_rows: number;
-  error_count: number;
+  errors: ImportError[];
+  headers: string[];
+  sample_data: string[][];
+  mappings: FieldMapping[];
 }
 
 interface ImportResult {
+  entity_type: string;
   imported: number;
   skipped: number;
-  errors: { row: number; message: string }[];
+  errors: ImportError[];
 }
 
 interface HistoryEntry {
@@ -82,8 +96,8 @@ export default function HistoricalImportPage() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [entityType, setEntityType] = useState<EntityType | null>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<PreviewData | null>(null);
-  const [mappings, setMappings] = useState<{ source: string; target: string }[]>([]);
+  const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [mappings, setMappings] = useState<FieldMapping[]>([]);
   const [skipFirstRow, setSkipFirstRow] = useState(true);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
@@ -128,12 +142,12 @@ export default function HistoricalImportPage() {
     setLoading(true);
     try {
       const path = (selected as FileWithPath).path || selected.name;
-      const data = await invoke<PreviewData>("preview_import", {
+      const data = await invoke<ImportPreview>("preview_import", {
         filePath: path,
         entityType,
       });
       setPreview(data);
-      setMappings(data.mappings.length > 0 ? data.mappings : data.headers.map((h: string) => ({ source: h, target: "" })));
+      setMappings(data.mappings);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err) || "فشل تحميل الملف");
     } finally {
@@ -141,8 +155,8 @@ export default function HistoricalImportPage() {
     }
   };
 
-  const handleMappingChange = (index: number, target: string) => {
-    setMappings((prev) => prev.map((m, i) => (i === index ? { ...m, target } : m)));
+  const handleMappingChange = (index: number, target_field: string) => {
+    setMappings((prev) => prev.map((m, i) => (i === index ? { ...m, target_field } : m)));
   };
 
   const handleExecuteImport = async () => {
@@ -151,12 +165,12 @@ export default function HistoricalImportPage() {
     setError(null);
     try {
       const path = (file as FileWithPath).path || file.name;
-      const activeMappings = mappings.filter((m) => m.target);
+      const activeMappings = mappings.filter((m) => m.target_field);
       const data = await invoke<ImportResult>("execute_import", {
         entityType,
-        data: { filePath: path },
+        file_path: path,
         mappings: activeMappings,
-        skipFirstRow,
+        skip_first_row: skipFirstRow,
       });
       setResult(data);
       setStep(3);
@@ -308,7 +322,7 @@ export default function HistoricalImportPage() {
                   </div>
                   <div className="stat-card flex-1 text-center">
                     <p className="text-xs text-surface-500">أخطاء</p>
-                    <p className="text-lg font-bold text-red-400">{preview.error_count}</p>
+                    <p className="text-lg font-bold text-red-400">{preview.errors.length}</p>
                   </div>
                 </div>
 
@@ -322,9 +336,9 @@ export default function HistoricalImportPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {preview.rows.slice(0, 5).map((r, i) => (
+                        {preview.sample_data.slice(0, 5).map((row, i) => (
                           <tr key={i} className="border-b border-surface-700/20">
-                            {preview.headers.map((h) => <td key={h} className="p-2 whitespace-nowrap">{String(r[h] ?? "")}</td>)}
+                            {row.map((cell, ci) => <td key={ci} className="p-2 whitespace-nowrap">{cell}</td>)}
                           </tr>
                         ))}
                       </tbody>
@@ -337,16 +351,16 @@ export default function HistoricalImportPage() {
                   <div className="space-y-3">
                     {mappings.map((m, i) => (
                       <div key={i} className="flex items-center gap-4">
-                        <span className="text-sm text-surface-300 w-40 truncate">{m.source}</span>
+                        <span className="text-sm text-surface-300 w-40 truncate">{m.source_column}</span>
                         <ArrowRight className="w-4 h-4 text-surface-500 flex-shrink-0" />
                         <select
-                          value={m.target}
+                          value={m.target_field}
                           onChange={(e) => handleMappingChange(i, e.target.value)}
                           className="input-field flex-1"
                         >
                           <option value="">— تخطي —</option>
                           {targetFields.map((f) => {
-                            const autoMapped = preview.mappings.find((pm) => pm.source === m.source)?.target;
+                            const autoMapped = preview.mappings.find((pm) => pm.source_column === m.source_column)?.target_field;
                             return (
                               <option key={f} value={f}>
                                 {f} {autoMapped === f ? "(مقترح)" : ""}
@@ -354,7 +368,7 @@ export default function HistoricalImportPage() {
                             );
                           })}
                         </select>
-                        {preview.validation.filter((v) => v.column === m.source).length > 0 && (
+                        {preview.errors.some((v) => v.field === m.source_column) && (
                           <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
                         )}
                       </div>
@@ -376,11 +390,11 @@ export default function HistoricalImportPage() {
                   </div>
                 </Card>
 
-                {preview.validation.filter((v) => v.severity === "error" || v.severity === "warning").length > 0 && (
+                {preview.errors.filter((v) => v.severity === "error" || v.severity === "warning").length > 0 && (
                   <Card>
                     <h3 className="section-title mb-3">نتائج التحقق</h3>
                     <div className="space-y-2 max-h-48 overflow-y-auto">
-                      {preview.validation.map((v, i) => (
+                      {preview.errors.map((v, i) => (
                         <div
                           key={i}
                           className={cn(
@@ -395,7 +409,7 @@ export default function HistoricalImportPage() {
                           ) : (
                             <AlertTriangle className="w-4 h-4 flex-shrink-0" />
                           )}
-                          <span>صف {v.row}: {v.column} - {v.message}</span>
+                          <span>صف {v.row}: {v.field} - {v.message}</span>
                         </div>
                       ))}
                     </div>

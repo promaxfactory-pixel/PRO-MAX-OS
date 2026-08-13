@@ -1,5 +1,5 @@
 use crate::commands::rbac;
-use crate::db::DbState;
+use crate::db::{next_sequence, DbState};
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -143,16 +143,7 @@ pub fn create_invoice(state: State<'_, DbState>, user_id: i64, input: CreateInvo
     let now = chrono::Utc::now().format("%Y-%m-%d").to_string();
     let year = chrono::Utc::now().format("%Y").to_string();
     
-    let seq: i64 = tx.query_row(
-        "SELECT COALESCE(last_number,0)+1 FROM doc_sequences WHERE doc_type='INV' AND year=?",
-        [&year],
-        |r| r.get(0),
-    ).unwrap_or(1);
-    tx.execute(
-        "INSERT INTO doc_sequences(doc_type, year, last_number) VALUES('INV',?,?) ON CONFLICT(doc_type, year) DO UPDATE SET last_number=excluded.last_number",
-        rusqlite::params![year, seq],
-    )
-    .map_err(|e| format!("Failed to increment invoice sequence: {}", e))?;
+    let seq = next_sequence(&tx, "INV", &year)?;
     let inv_no = format!("INV-{}-{:04}", year, seq);
     
     let mut net: i64 = 0;
@@ -209,6 +200,10 @@ pub fn create_invoice(state: State<'_, DbState>, user_id: i64, input: CreateInvo
 pub fn post_invoice(state: State<'_, DbState>, user_id: i64, id: i64) -> Result<String, AppError> {
     let mut conn = state.0.lock()?;
     rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
+    post_invoice_inner(&mut conn, user_id, id)
+}
+
+pub(crate) fn post_invoice_inner(conn: &mut rusqlite::Connection, user_id: i64, id: i64) -> Result<String, AppError> {
     let tx = conn.transaction()?;
 
     let current_status: String = tx
@@ -218,93 +213,239 @@ pub fn post_invoice(state: State<'_, DbState>, user_id: i64, id: i64) -> Result<
         return Err(AppError::validation("يمكن ترحيل الفواتير المسودة فقط"));
     }
 
-    let lines: Vec<(i64, f64, i64)> = {
-        let mut stmt = tx
-            .prepare("SELECT product_id, cartons, unit_price_milli FROM sales_invoice_lines WHERE invoice_id=?")
-            ?;
-        let rows = stmt
-            .query_map([id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
-            ?;
+    let (payment_type, inv_date, inv_no, net_milli, vat_milli, total_milli, customer_id): (String, String, String, i64, i64, i64, i64) = tx
+        .query_row(
+            "SELECT COALESCE(payment_type,'credit'), date, inv_no, net_milli, vat_milli, total_milli, customer_id FROM sales_invoices WHERE id=?",
+            [id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?)),
+        )
+        .map_err(|e| format!("Invoice not found: {}", e))?;
+
+    let total_cogs = deduct_invoice_stock(&tx, id)?;
+
+    let mut lines: Vec<(String, i64, i64, Option<String>)> = Vec::new();
+    let cash_account = match payment_type.as_str() {
+        "cash" => "1100",
+        "cheque" => "1101",
+        _ => "1200",
+    };
+    lines.push((cash_account.to_string(), total_milli, 0, Some("فاتورة مبيعات".to_string())));
+    lines.push(("4100".to_string(), 0, net_milli, None));
+    if vat_milli > 0 {
+        lines.push(("2100".to_string(), 0, vat_milli, None));
+    }
+    if total_cogs > 0 {
+        lines.push(("5100".to_string(), total_cogs, 0, Some("تكلفة البضاعة المباعة".to_string())));
+        lines.push(("1400".to_string(), 0, total_cogs, None));
+    }
+    let journal_id = crate::commands::accounting::post_to_journal(
+        &tx,
+        "invoice",
+        id,
+        &inv_date,
+        &format!("فاتورة مبيعات {}", inv_no),
+        &lines,
+        "system",
+    )?;
+
+    tx.execute(
+        "UPDATE sales_invoices SET status='Posted', cogs_milli=?1, journal_id=?2 WHERE id=?3",
+        rusqlite::params![total_cogs, journal_id, id],
+    )
+    ?;
+
+    // Credit sales create an AR receivable: keep the denormalized customer balance in sync.
+    if payment_type == "credit" {
+        tx.execute(
+            "UPDATE customers SET balance_milli = COALESCE(balance_milli,0) + ?1 WHERE id=?2",
+            rusqlite::params![total_milli, customer_id],
+        )?;
+    }
+
+    let _ = rbac::log_audit(&tx, Some(user_id), None, "post_invoice", "sales_invoices", Some(id), None, Some(&format!("COGS: {} mil, status: Posted, journal: {}", total_cogs, journal_id)), None);
+
+    tx.commit()?;
+    Ok("تم ترحيل الفاتورة بنجاح".to_string())
+}
+
+/// Deducts sold quantities from stock at posting time and computes COGS in milli.
+/// Mirrored by `restore_invoice_stock` when a posted invoice is voided.
+pub(crate) fn deduct_invoice_stock(conn: &rusqlite::Connection, invoice_id: i64) -> Result<i64, AppError> {
+    let mut total_cogs: i64 = 0;
+    let lines: Vec<(i64, f64)> = {
+        let mut stmt = conn
+            .prepare("SELECT product_id, cartons FROM sales_invoice_lines WHERE invoice_id=?")?;
+        let rows = stmt.query_map([invoice_id], |row| Ok((row.get(0)?, row.get(1)?)))?;
         let mut v = Vec::new();
         for r in rows {
             v.push(r?);
         }
         v
     };
-
-    let mut total_cogs: i64 = 0;
-    for (product_id, cartons, _unit_price) in &lines {
-        let inv_items: Vec<(i64, f64, i64)> = {
-            let mut stmt = tx
-                .prepare("SELECT id, qty_on_hand, CAST(avg_cost_milli AS INTEGER) FROM inventory_items WHERE product_id=? AND active=1 ORDER BY kind DESC LIMIT 1")
-                ?;
-            let rows = stmt
-                .query_map([product_id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
-                ?;
+    for (product_id, cartons) in &lines {
+        let inv_items: Vec<(i64, i64)> = {
+            let mut stmt = conn
+                .prepare("SELECT id, CAST(avg_cost_milli AS INTEGER) FROM inventory_items WHERE product_id=? AND active=1 ORDER BY kind DESC LIMIT 1")?;
+            let rows = stmt.query_map([product_id], |row| Ok((row.get(0)?, row.get(1)?)))?;
             let mut v = Vec::new();
             for r in rows {
                 v.push(r?);
             }
             v
         };
-        for (inv_id, _qty_on_hand, avg_cost) in &inv_items {
+        for (inv_id, avg_cost) in &inv_items {
             let qty_to_deduct = *cartons;
-            let cost_milli = (qty_to_deduct * *avg_cost as f64 * 1000.0).round() as i64;
+            let cost_milli = (qty_to_deduct * *avg_cost as f64).round() as i64;
             total_cogs += cost_milli;
 
-            tx.execute(
+            conn.execute(
                 "UPDATE inventory_items SET qty_on_hand = qty_on_hand - ?1 WHERE id = ?2",
                 rusqlite::params![qty_to_deduct, inv_id],
-            )
-            ?;
+            )?;
 
-            tx.execute(
+            conn.execute(
                 "INSERT INTO inventory_movements(ts, item_id, mtype, qty_in, qty_out, unit_cost_milli, ref_type, ref_id, notes)
                  VALUES(datetime('now'), ?1, 'sale', 0, ?2, ?3, 'invoice', ?4, 'فاتورة مبيعات')",
-                rusqlite::params![inv_id, qty_to_deduct, (*avg_cost as f64 * 1000.0).round() as i64, id],
-            )
-            ?;
+                rusqlite::params![inv_id, qty_to_deduct, avg_cost, invoice_id],
+            )?;
         }
     }
+    Ok(total_cogs)
+}
 
-    tx.execute(
-        "UPDATE sales_invoices SET status='Posted', cogs_milli=?1 WHERE id=?2",
-        rusqlite::params![total_cogs, id],
-    )
-    ?;
-
-    let _ = rbac::log_audit(&tx, None, None, "post_invoice", "sales_invoices", Some(id), None, Some(&format!("COGS: {} mil, status: Posted", total_cogs)), None);
-
-    tx.commit()?;
-    Ok("تم ترحيل الفاتورة بنجاح".to_string())
+/// Returns sold quantities back to stock for a voided (previously posted) invoice.
+/// Mirrors the deduction performed by `deduct_invoice_stock` so on-hand quantities stay in sync.
+pub(crate) fn restore_invoice_stock(conn: &rusqlite::Connection, invoice_id: i64) -> Result<(), AppError> {
+    let line_rows: Vec<(i64, f64)> = {
+        let mut stmt = conn.prepare(
+            "SELECT product_id, cartons FROM sales_invoice_lines WHERE invoice_id=?",
+        )?;
+        let rows = stmt.query_map([invoice_id], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        let mut v = Vec::new();
+        for r in rows {
+            v.push(r?);
+        }
+        v
+    };
+    for (product_id, cartons) in line_rows {
+        let inv_id: Option<i64> = conn
+            .query_row(
+                "SELECT id FROM inventory_items WHERE product_id=? AND active=1 ORDER BY kind DESC LIMIT 1",
+                [product_id],
+                |row| row.get(0),
+            )
+            .ok();
+        if let Some(inv_id) = inv_id {
+            conn.execute(
+                "UPDATE inventory_items SET qty_on_hand = qty_on_hand + ?1 WHERE id = ?2",
+                rusqlite::params![cartons, inv_id],
+            )?;
+            let _ = conn.execute(
+                "INSERT INTO inventory_movements(ts, item_id, mtype, qty_in, qty_out, unit_cost_milli, ref_type, ref_id, notes)
+                 VALUES(datetime('now'), ?1, 'sale_reversal', ?2, 0, 0, 'invoice', ?3, 'إلغاء فاتورة مبيعات')",
+                rusqlite::params![inv_id, cartons, invoice_id],
+            );
+        }
+    }
+    Ok(())
 }
 
 #[tauri::command]
 pub fn void_invoice(state: State<'_, DbState>, user_id: i64, id: i64, reason: Option<String>) -> Result<String, AppError> {
-    let conn = state.0.lock()?;
+    let mut conn = state.0.lock()?;
     rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
+    void_invoice_inner(&mut conn, user_id, id, reason)
+}
 
-    let status: String = conn.query_row(
-        "SELECT status FROM sales_invoices WHERE id=?",
-        [id],
-        |r| r.get(0),
-    ).map_err(|e| format!("Invoice not found: {}", e))?;
+pub(crate) fn void_invoice_inner(conn: &mut rusqlite::Connection, user_id: i64, id: i64, reason: Option<String>) -> Result<String, AppError> {
+    let tx = conn.transaction()?;
+
+    let (status, inv_date, payment_type, total_milli, customer_id, paid_milli): (String, String, String, i64, i64, i64) = tx
+        .query_row(
+            "SELECT status, COALESCE(date, date('now')), COALESCE(payment_type,'credit'), total_milli, customer_id, COALESCE(paid_milli,0) FROM sales_invoices WHERE id=?",
+            [id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)),
+        )
+        .map_err(|e| AppError::not_found(format!("Invoice not found: {}", e)))?;
 
     if status != "Draft" && status != "Posted" {
         return Err(AppError::validation("يمكن إلغاء الفواتير المسودة أو المرحلة فقط"));
     }
 
+    if status == "Posted" {
+        let existing_journal: Option<i64> = tx.query_row(
+            "SELECT journal_id FROM sales_invoices WHERE id=?",
+            [id],
+            |r| r.get(0),
+        ).unwrap_or(None);
+        if let Some(jid) = existing_journal {
+            let already_reversed: Option<i64> = tx.query_row(
+                "SELECT reversed_by FROM journal_entries WHERE id=?",
+                [jid],
+                |r| r.get(0),
+            ).unwrap_or(None);
+            if already_reversed.is_none() {
+                let mut lines: Vec<(String, i64, i64, Option<String>)> = Vec::new();
+                let mut stmt = tx.prepare(
+                    "SELECT account_code, debit_milli, credit_milli FROM journal_entry_lines WHERE entry_id=?",
+                )?;
+                let rows = stmt.query_map([jid], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?, row.get::<_, i64>(2)?))
+                })?;
+                for r in rows {
+                    let (code, d, c) = r?;
+                    lines.push((code, c, d, None));
+                }
+                let rev_id = crate::commands::accounting::post_to_journal(
+                    &tx,
+                    "invoice_reversal",
+                    id,
+                    &inv_date,
+                    "إلغاء فاتورة مبيعات",
+                    &lines,
+                    "system",
+                )?;
+                tx.execute(
+                    "UPDATE journal_entries SET reversed_by=? WHERE id=?",
+                    rusqlite::params![rev_id, jid],
+                )?;
+            }
+        }
+
+        // Restore inventory deducted at posting time (mirror of post_invoice).
+        restore_invoice_stock(&tx, id)?;
+
+        // Reverse the AR receivable created at posting time.
+        if payment_type == "credit" {
+            tx.execute(
+                "UPDATE customers SET balance_milli = COALESCE(balance_milli,0) - ?1 WHERE id=?2",
+                rusqlite::params![total_milli, customer_id],
+            )?;
+        }
+
+        // Payments that had been allocated to this invoice now cover the customer's
+        // remaining open invoices (FIFO); any surplus stays as an on-account credit.
+        if paid_milli > 0 {
+            crate::commands::customers::allocate_customer_payment_fifo(&tx, customer_id, paid_milli, Some(id))?;
+            tx.execute(
+                "UPDATE sales_invoices SET paid_milli = 0 WHERE id=?",
+                [id],
+            )?;
+        }
+    }
+
     let notes_addon = reason.unwrap_or_default();
     if notes_addon.is_empty() {
-        conn.execute("UPDATE sales_invoices SET status='Void' WHERE id=?", [id])?;
+        tx.execute("UPDATE sales_invoices SET status='Void' WHERE id=?", [id])?;
     } else {
-        conn.execute(
+        tx.execute(
             "UPDATE sales_invoices SET status='Void', notes=COALESCE(notes,'') || '\n[إلغاء] ' || ? WHERE id=?",
             rusqlite::params![notes_addon, id],
         )?;
     }
 
-    let _ = rbac::log_audit(&conn, None, None, "void_invoice", "sales_invoices", Some(id), None, Some("Void"), Some(&notes_addon));
+    let _ = rbac::log_audit(&tx, Some(user_id), None, "void_invoice", "sales_invoices", Some(id), None, Some("Void"), Some(&notes_addon));
+    tx.commit()?;
     Ok("تم إلغاء الفاتورة".to_string())
 }
 
@@ -341,15 +482,7 @@ pub fn duplicate_invoice(state: State<'_, DbState>, user_id: i64, id: i64) -> Re
     let now = chrono::Utc::now().format("%Y-%m-%d").to_string();
     let year = chrono::Utc::now().format("%Y").to_string();
     
-    let seq: i64 = conn.query_row(
-        "SELECT COALESCE(last_number,0)+1 FROM doc_sequences WHERE doc_type='INV' AND year=?",
-        [&year],
-        |r| r.get(0),
-    ).unwrap_or(1);
-    conn.execute(
-        "INSERT INTO doc_sequences(doc_type, year, last_number) VALUES('INV',?,?) ON CONFLICT(doc_type, year) DO UPDATE SET last_number=excluded.last_number",
-        rusqlite::params![year, seq],
-    ).map_err(|e| format!("Failed to increment invoice sequence: {}", e))?;
+    let seq = next_sequence(&conn, "INV", &year)?;
     let inv_no = format!("INV-{}-{:04}", year, seq);
     
     let mut net: i64 = 0;
@@ -391,6 +524,7 @@ pub fn duplicate_invoice(state: State<'_, DbState>, user_id: i64, id: i64) -> Re
         )?;
     }
     
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "duplicate_invoice", "sales_invoices", Some(new_id), None, Some(&format!("source_id={}", id)), None);
     Ok(new_id)
 }
 
@@ -401,6 +535,7 @@ pub fn update_invoice(state: State<'_, DbState>, user_id: i64, id: i64, notes: O
     if let Some(n) = notes {
         conn.execute("UPDATE sales_invoices SET notes=? WHERE id=?", rusqlite::params![n, id])?;
     }
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "update_invoice", "sales_invoices", Some(id), None, Some("notes"), None);
     Ok("تم التحديث".to_string())
 }
 

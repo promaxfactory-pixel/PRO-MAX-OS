@@ -1,4 +1,5 @@
-use crate::db::DbState;
+use crate::commands::rbac;
+use crate::db::{next_sequence, DbState};
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -379,24 +380,28 @@ pub fn ai_get_extraction(state: State<'_, DbState>, id: i64) -> Result<AiExtract
             })
         },
     )
-    .map_err(|_| AppError::not_found("Extraction record not found"))
+    .map_err(|_| AppError::not_found("سجل الاستخراج غير موجود"))
 }
 
 #[tauri::command]
-pub fn ai_delete_extraction(state: State<'_, DbState>, id: i64) -> Result<String, AppError> {
+pub fn ai_delete_extraction(state: State<'_, DbState>, user_id: i64, id: i64) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "accountant"])?;
     conn.execute("DELETE FROM ai_extractions WHERE id=?", [id])?;
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "ai_delete_extraction", "ai_extractions", Some(id), None, None, None);
     Ok("Extraction record deleted".to_string())
 }
 
 #[tauri::command]
 pub fn ai_update_extraction(
     state: State<'_, DbState>,
+    user_id: i64,
     id: i64,
     doc_type: String,
     extracted_json: String,
 ) -> Result<AiExtractionRecord, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "accountant"])?;
     let parsed: Value = serde_json::from_str(&extracted_json)
         .map_err(|e| AppError::validation(format!("Invalid extraction JSON: {e}")))?;
     let confidence = compute_confidence(&parsed);
@@ -405,6 +410,7 @@ pub fn ai_update_extraction(
         "UPDATE ai_extractions SET doc_type=?, extracted_json=?, fields_json=?, confidence=?, updated_at=? WHERE id=?",
         rusqlite::params![doc_type, extracted_json, extracted_json, confidence, now, id],
     )?;
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "ai_update_extraction", "ai_extractions", Some(id), None, Some(&doc_type), None);
     drop(conn);
     ai_get_extraction(state, id)
 }
@@ -412,10 +418,11 @@ pub fn ai_update_extraction(
 #[tauri::command]
 pub async fn ai_analyze_document(
     state: State<'_, DbState>,
+    user_id: i64,
     input: AiDocumentInput,
 ) -> Result<AiExtractionRecord, AppError> {
     if input.path.trim().is_empty() {
-        return Err(AppError::validation("File path cannot be empty"));
+        return Err(AppError::validation("مسار الملف لا يمكن أن يكون فارغاً"));
     }
     if !std::path::Path::new(&input.path).exists() {
         return Err(AppError::not_found(format!("File does not exist: {}", input.path)));
@@ -468,6 +475,7 @@ pub async fn ai_analyze_document(
         ],
     )?;
     let id = conn.last_insert_rowid();
+    let _ = crate::commands::rbac::log_audit(&conn, Some(user_id), None, "ai_analyze_document", "ai_extractions", Some(id), None, Some(&doc_type), None);
     drop(conn);
 
     ai_get_extraction(state, id)
@@ -481,7 +489,7 @@ fn resolve_or_create_customer(
     phone: &str,
 ) -> Result<i64, AppError> {
     if name.trim().is_empty() {
-        return Err(AppError::validation("Customer name is required"));
+        return Err(AppError::validation("اسم العميل مطلوب"));
     }
     if let Ok(id) = conn.query_row(
         "SELECT id FROM customers WHERE name=? COLLATE NOCASE LIMIT 1",
@@ -505,7 +513,7 @@ fn resolve_or_create_supplier(
     phone: &str,
 ) -> Result<i64, AppError> {
     if name.trim().is_empty() {
-        return Err(AppError::validation("Supplier name is required"));
+        return Err(AppError::validation("اسم المورد مطلوب"));
     }
     if let Ok(id) = conn.query_row(
         "SELECT id FROM suppliers WHERE name=? COLLATE NOCASE LIMIT 1",
@@ -525,7 +533,7 @@ fn resolve_or_create_supplier(
 
 fn resolve_or_create_product(conn: &rusqlite::Connection, desc: &str, unit_price: f64) -> Result<i64, AppError> {
     if desc.trim().is_empty() {
-        return Err(AppError::validation("Product description is required"));
+        return Err(AppError::validation("وصف المنتج مطلوب"));
     }
     if let Ok(id) = conn.query_row(
         "SELECT id FROM products WHERE name_en=? COLLATE NOCASE OR name_ar=? COLLATE NOCASE LIMIT 1",
@@ -553,20 +561,11 @@ fn commit_invoice(conn: &rusqlite::Connection, parsed: &Value) -> Result<AiCommi
 
     let items = parsed.get("items").and_then(|i| i.as_array()).cloned().unwrap_or_default();
     if items.is_empty() {
-        return Err(AppError::validation("No line items extracted to commit as invoice"));
+        return Err(AppError::validation("لا توجد بنود مستخرجة لإنشاء الفاتورة"));
     }
 
     let year = date.get(0..4).unwrap_or("").to_string();
-    let seq: i64 = conn.query_row(
-        "SELECT COALESCE(last_number,0)+1 FROM doc_sequences WHERE doc_type='INV' AND year=?",
-        [&year],
-        |r| r.get(0),
-    ).unwrap_or(1);
-    conn.execute(
-        "INSERT INTO doc_sequences(doc_type, year, last_number) VALUES('INV',?,?)
-         ON CONFLICT(doc_type, year) DO UPDATE SET last_number=excluded.last_number",
-        rusqlite::params![year, seq],
-    )?;
+    let seq = next_sequence(conn, "INV", &year)?;
     let inv_no = format!("INV-{}-{:04}", year, seq);
 
     let mut net: i64 = 0;
@@ -660,20 +659,11 @@ fn commit_purchase(conn: &rusqlite::Connection, parsed: &Value) -> Result<AiComm
 
     let items = parsed.get("items").and_then(|i| i.as_array()).cloned().unwrap_or_default();
     if items.is_empty() {
-        return Err(AppError::validation("No line items extracted to commit as purchase"));
+        return Err(AppError::validation("لا توجد بنود مستخرجة لإنشاء المشتريات"));
     }
 
     let year = date.get(0..4).unwrap_or("").to_string();
-    let seq: i64 = conn.query_row(
-        "SELECT COALESCE(last_number,0)+1 FROM doc_sequences WHERE doc_type='PUR' AND year=?",
-        [&year],
-        |r| r.get(0),
-    ).unwrap_or(1);
-    conn.execute(
-        "INSERT INTO doc_sequences(doc_type, year, last_number) VALUES('PUR',?,?)
-         ON CONFLICT(doc_type, year) DO UPDATE SET last_number=excluded.last_number",
-        rusqlite::params![year, seq],
-    )?;
+    let seq = next_sequence(conn, "PUR", &year)?;
     let pur_no = format!("PUR-{}-{:04}", year, seq);
 
     conn.execute(
@@ -734,7 +724,7 @@ fn commit_purchase(conn: &rusqlite::Connection, parsed: &Value) -> Result<AiComm
 fn commit_customers(conn: &rusqlite::Connection, parsed: &Value) -> Result<AiCommitResult, AppError> {
     let items = parsed.get("items").and_then(|i| i.as_array()).cloned().unwrap_or_default();
     if items.is_empty() {
-        return Err(AppError::validation("No customers extracted to commit"));
+        return Err(AppError::validation("لا يوجد عملاء مستخرجون للإنشاء"));
     }
     let mut created = Vec::new();
     let mut resolved = Vec::new();
@@ -774,7 +764,7 @@ fn commit_customers(conn: &rusqlite::Connection, parsed: &Value) -> Result<AiCom
 fn commit_products(conn: &rusqlite::Connection, parsed: &Value) -> Result<AiCommitResult, AppError> {
     let items = parsed.get("items").and_then(|i| i.as_array()).cloned().unwrap_or_default();
     if items.is_empty() {
-        return Err(AppError::validation("No products extracted to commit"));
+        return Err(AppError::validation("لا توجد منتجات مستخرجة للإنشاء"));
     }
     let mut created = Vec::new();
     let mut resolved = Vec::new();
@@ -864,7 +854,7 @@ fn record_inventory_movement(
 fn commit_suppliers(conn: &rusqlite::Connection, parsed: &Value) -> Result<AiCommitResult, AppError> {
     let items = parsed.get("items").and_then(|i| i.as_array()).cloned().unwrap_or_default();
     if items.is_empty() {
-        return Err(AppError::validation("No suppliers extracted to commit"));
+        return Err(AppError::validation("لا يوجد موردون مستخرجون للإنشاء"));
     }
     let mut created = Vec::new();
     let mut resolved = Vec::new();
@@ -907,19 +897,10 @@ fn commit_expense(conn: &rusqlite::Connection, parsed: &Value) -> Result<AiCommi
     let amount = milli_from(num_field(&fields, "amount"));
     let vat = milli_from(num_field(&fields, "vat"));
     if amount <= 0 {
-        return Err(AppError::validation("Expense amount is required"));
+        return Err(AppError::validation("قيمة المصروف مطلوبة"));
     }
     let year = date.get(0..4).unwrap_or("").to_string();
-    let seq: i64 = conn.query_row(
-        "SELECT COALESCE(last_number,0)+1 FROM doc_sequences WHERE doc_type='EXP' AND year=?",
-        [&year],
-        |r| r.get(0),
-    ).unwrap_or(1);
-    conn.execute(
-        "INSERT INTO doc_sequences(doc_type, year, last_number) VALUES('EXP',?,?)
-         ON CONFLICT(doc_type, year) DO UPDATE SET last_number=excluded.last_number",
-        rusqlite::params![year, seq],
-    )?;
+    let seq = next_sequence(conn, "EXP", &year)?;
     let exp_no = format!("EXP-{}-{:04}", year, seq);
     conn.execute(
         "INSERT INTO expenses(exp_no, date, category, account_code, amount_milli, vat_milli, method, vendor, reference, notes, approval_status, created_by)
@@ -941,8 +922,9 @@ fn commit_expense(conn: &rusqlite::Connection, parsed: &Value) -> Result<AiCommi
 }
 
 #[tauri::command]
-pub fn ai_commit_extraction(state: State<'_, DbState>, id: i64) -> Result<AiCommitResult, AppError> {
+pub fn ai_commit_extraction(state: State<'_, DbState>, user_id: i64, id: i64) -> Result<AiCommitResult, AppError> {
     let mut conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     let tx = conn.transaction()?;
 
     let (doc_type, extracted_json): (String, String) = tx.query_row(
@@ -950,7 +932,7 @@ pub fn ai_commit_extraction(state: State<'_, DbState>, id: i64) -> Result<AiComm
         [id],
         |r| Ok((r.get(0)?, r.get(1)?)),
     )
-    .map_err(|_| AppError::not_found("Extraction record not found"))?;
+    .map_err(|_| AppError::not_found("سجل الاستخراج غير موجود"))?;
 
     let parsed: Value = serde_json::from_str(&extracted_json)
         .map_err(|e| AppError::validation(format!("Stored extraction is invalid JSON: {e}")))?;
@@ -970,6 +952,8 @@ pub fn ai_commit_extraction(state: State<'_, DbState>, id: i64) -> Result<AiComm
     )?;
 
     tx.commit()?;
+
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "ai_commit_extraction", &result.target_table, Some(result.target_id), None, Some(&result.target_table), None);
 
     Ok(result)
 }

@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Factory, Package, Plus, Trash2, Clock,
@@ -45,7 +45,7 @@ function safeNumber(v: string): number {
 
 export default function LiveProductionPage() {
   const [today] = useState(() => new Date().toISOString().split("T")[0]);
-  const [shift, setShift] = useState<"طµط¨ط§ط­ظٹ" | "ظ…ط³ط§ط¦ظٹ">("طµط¨ط§ط­ظٹ");
+  const [shift, setShift] = useState<"صباحي" | "مسائي">("صباحي");
   const [sheetId, setSheetId] = useState<number | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [lines, setLines] = useState<ShiftLine[]>([]);
@@ -71,7 +71,7 @@ export default function LiveProductionPage() {
       const prods = await invoke<Product[]>("list_products", {});
       setProducts(prods.filter((p: any) => p.active !== 0));
     } catch (e) {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "ط®ط·ط£", message: "ظپط´ظ„ طھط­ظ…ظٹظ„ ط§ظ„ظ…ظ†طھط¬ط§طھ: " + String(e) });
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "فشل تحميل المنتجات: " + String(e) });
     }
   }, [addNotification]);
 
@@ -91,7 +91,7 @@ export default function LiveProductionPage() {
       const shiftLines = await invoke<ShiftLine[]>("get_shift_lines", { sheetId: id });
       setLines(shiftLines);
     } catch (e) {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "ط®ط·ط£", message: "ظپط´ظ„ طھظ‡ظٹط¦ط© ط§ظ„ظˆط±ط¯ظٹط©: " + String(e) });
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "فشل تهيئة الوردية: " + String(e) });
     }
   }, [today, shift, addNotification]);
 
@@ -100,7 +100,7 @@ export default function LiveProductionPage() {
       const data = await invoke<DashboardData>("get_live_dashboard", {});
       setDashboard(data);
     } catch {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "ط®ط·ط£", message: "ط­ط¯ط« ط®ط·ط£ ط£ط«ظ†ط§ط، طھط­ظ…ظٹظ„ ط§ظ„ط¨ظٹط§ظ†ط§طھ" });
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" });
     }
   }, []);
 
@@ -141,9 +141,9 @@ export default function LiveProductionPage() {
       const shiftLines = await invoke<ShiftLine[]>("get_shift_lines", { sheetId });
       setLines(shiftLines);
       await refreshDashboard();
-      addNotification({ id: crypto.randomUUID(), type: "success", title: "طھظ…", message: "طھظ… طھط³ط¬ظٹظ„ ط§ظ„ط¥ظ†طھط§ط¬ ط¨ظ†ط¬ط§ط­" });
+      addNotification({ id: crypto.randomUUID(), type: "success", title: "تم", message: "تم تسجيل الإنتاج بنجاح" });
     } catch (e) {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "ط®ط·ط£", message: "ظپط´ظ„ طھط³ط¬ظٹظ„ ط§ظ„ط¥ظ†طھط§ط¬: " + String(e) });
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "فشل تسجيل الإنتاج: " + String(e) });
     }
     setSaving(false);
   };
@@ -155,9 +155,9 @@ export default function LiveProductionPage() {
       const shiftLines = await invoke<ShiftLine[]>("get_shift_lines", { sheetId });
       setLines(shiftLines);
       await refreshDashboard();
-      addNotification({ id: crypto.randomUUID(), type: "info", title: "طھظ…", message: "طھظ… ط­ط°ظپ ط§ظ„طھط³ط¬ظٹظ„" });
+      addNotification({ id: crypto.randomUUID(), type: "info", title: "تم", message: "تم حذف التسجيل" });
     } catch (e) {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "ط®ط·ط£", message: "ظپط´ظ„ ط­ط°ظپ ط§ظ„طھط³ط¬ظٹظ„: " + String(e) });
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "فشل حذف التسجيل: " + String(e) });
     }
     setDeletingLine(null);
   };
@@ -170,9 +170,9 @@ export default function LiveProductionPage() {
       setSheetId(null);
       setLines([]);
       await refreshDashboard();
-      addNotification({ id: crypto.randomUUID(), type: "success", title: "طھظ…", message: "طھظ… ط¥ظ‚ظپط§ظ„ ط§ظ„ظˆط±ط¯ظٹط© ظˆطھط­ط¯ظٹط« ط§ظ„ظ…ط®ط²ظˆظ†" });
+      addNotification({ id: crypto.randomUUID(), type: "success", title: "تم", message: "تم إقفال الوردية وتحديث المخزون" });
     } catch (e) {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "ط®ط·ط£", message: String(e) });
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(e) });
     }
     setClosingShift(false);
   };
@@ -188,7 +188,7 @@ export default function LiveProductionPage() {
       setLines(shiftLines);
       await refreshDashboard();
     } catch (e) {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "ط®ط·ط£", message: "ظپط´ظ„ طھط­ط¯ظٹط« ط§ظ„ظƒظ…ظٹط©: " + String(e) });
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "فشل تحديث الكمية: " + String(e) });
     }
   };
 
@@ -207,28 +207,28 @@ export default function LiveProductionPage() {
             <Factory className="w-6 h-6 text-amber-400" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-white">ط§ظ„ط¥ظ†طھط§ط¬ ط§ظ„ظ…ط¨ط§ط´ط±</h1>
-            <p className="text-sm text-surface-400">{today} â€” ط±ط§ظ‚ط¨ ظˆط³ط¬ظ„ ط§ظ„ط¥ظ†طھط§ط¬ ظ„ط­ط¸ط© ط¨ظ„ط­ط¸ط©</p>
+            <h1 className="text-2xl font-bold text-white">الإنتاج المباشر</h1>
+            <p className="text-sm text-surface-400">{today} — راقب وسجل الإنتاج لحظة بلحظة</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {sheetId && lines.length > 0 && (
             <>
               <button onClick={async () => {
-                try { await invoke("print_shift_report_thermal", { sheetId, printerName: null }); addNotification({ id: crypto.randomUUID(), type: "success", title: "ط·ط¨ط§ط¹ط©", message: "طھظ… ط¥ط±ط³ط§ظ„ طھظ‚ط±ظٹط± ط§ظ„ظˆط±ط¯ظٹط© ط¥ظ„ظ‰ ط§ظ„ط·ط§ط¨ط¹ط©" }); } catch (e) { addNotification({ id: crypto.randomUUID(), type: "error", title: "ط®ط·ط£ ظپظٹ ط§ظ„ط·ط¨ط§ط¹ط©", message: String(e) }); }
+                try { await invoke("print_shift_report_thermal", { sheetId, printerName: null }); addNotification({ id: crypto.randomUUID(), type: "success", title: "طباعة", message: "تم إرسال تقرير الوردية إلى الطابعة" }); } catch (e) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ في الطباعة", message: String(e) }); }
               }} className="btn-outline flex items-center gap-2">
                 <Printer className="w-4 h-4" />
-                ط·ط¨ط§ط¹ط© ط§ظ„ظˆط±ط¯ظٹط©
+                طباعة الوردية
               </button>
               <button onClick={handleCompleteShift} disabled={closingShift} className="btn-gold flex items-center gap-2 disabled:opacity-50">
                 {closingShift ? <div className="w-4 h-4 border-2 border-surface-900/30 border-t-surface-900 rounded-full animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                ط¥ظ‚ظپط§ظ„ ط§ظ„ظˆط±ط¯ظٹط©
+                إقفال الوردية
               </button>
             </>
           )}
           <button onClick={() => { refreshDashboard(); initShift(); }} className="btn-outline flex items-center gap-2">
             <BarChart3 className="w-4 h-4" />
-            طھط­ط¯ظٹط«
+            تحديث
           </button>
         </div>
       </div>
@@ -242,38 +242,38 @@ export default function LiveProductionPage() {
         <motion.div className="card relative overflow-hidden" whileHover={{ scale: 1.02 }}>
           <div className="flex items-center gap-3 mb-2">
             <TrendingUp className="w-5 h-5 text-emerald-400" />
-            <span className="text-sm text-surface-400">ط¥ط¬ظ…ط§ظ„ظٹ ط§ظ„ظٹظˆظ…</span>
+            <span className="text-sm text-surface-400">إجمالي اليوم</span>
           </div>
           <p className="text-3xl font-bold text-white">{totalCartons.toFixed(0)}</p>
-          <p className="text-xs text-surface-500">ظƒط±طھظˆظ†</p>
+          <p className="text-xs text-surface-500">كرتون</p>
           <div className="absolute top-0 left-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl" />
         </motion.div>
 
         <motion.div className="card" whileHover={{ scale: 1.02 }}>
           <div className="flex items-center gap-3 mb-2">
             <Sun className="w-5 h-5 text-amber-400" />
-            <span className="text-sm text-surface-400">طµط¨ط§ط­ظٹ</span>
+            <span className="text-sm text-surface-400">صباحي</span>
           </div>
           <p className="text-3xl font-bold text-amber-400">{morningCartons.toFixed(0)}</p>
-          <p className="text-xs text-surface-500">ظƒط±طھظˆظ†</p>
+          <p className="text-xs text-surface-500">كرتون</p>
         </motion.div>
 
         <motion.div className="card" whileHover={{ scale: 1.02 }}>
           <div className="flex items-center gap-3 mb-2">
             <Moon className="w-5 h-5 text-indigo-400" />
-            <span className="text-sm text-surface-400">ظ…ط³ط§ط¦ظٹ</span>
+            <span className="text-sm text-surface-400">مسائي</span>
           </div>
           <p className="text-3xl font-bold text-indigo-400">{eveningCartons.toFixed(0)}</p>
-          <p className="text-xs text-surface-500">ظƒط±طھظˆظ†</p>
+          <p className="text-xs text-surface-500">كرتون</p>
         </motion.div>
 
         <motion.div className="card" whileHover={{ scale: 1.02 }}>
           <div className="flex items-center gap-3 mb-2">
             <Package className="w-5 h-5 text-gold-400" />
-            <span className="text-sm text-surface-400">ط¥ط¬ظ…ط§ظ„ظٹ ط§ظ„ط£ظƒظˆط§ط¨</span>
+            <span className="text-sm text-surface-400">إجمالي الأكواب</span>
           </div>
           <p className="text-3xl font-bold gradient-text">{totalCupsFormatted}</p>
-          <p className="text-xs text-surface-500">ظƒظˆط¨</p>
+          <p className="text-xs text-surface-500">كوب</p>
         </motion.div>
       </motion.div>
 
@@ -287,37 +287,37 @@ export default function LiveProductionPage() {
           <div className="card">
             <h3 className="section-title mb-4">
               <Clock className="w-4 h-4" />
-              ط§ظ„ظˆط±ط¯ظٹط© ط§ظ„ط­ط§ظ„ظٹط©
+              الوردية الحالية
             </h3>
             <div className="flex gap-2 mb-4">
               <button
-                onClick={() => setShift("طµط¨ط§ط­ظٹ")}
+                onClick={() => setShift("صباحي")}
                 className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${
-                  shift === "طµط¨ط§ط­ظٹ"
+                  shift === "صباحي"
                     ? "bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-glow-gold"
                     : "bg-surface-800 text-surface-400 border border-surface-700 hover:border-surface-600"
                 }`}
               >
                 <Sun className="w-4 h-4 mx-auto mb-1" />
-                طµط¨ط§ط­ظٹ
+                صباحي
               </button>
               <button
-                onClick={() => setShift("ظ…ط³ط§ط¦ظٹ")}
+                onClick={() => setShift("مسائي")}
                 className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${
-                  shift === "ظ…ط³ط§ط¦ظٹ"
+                  shift === "مسائي"
                     ? "bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 shadow-lg"
                     : "bg-surface-800 text-surface-400 border border-surface-700 hover:border-surface-600"
                 }`}
               >
                 <Moon className="w-4 h-4 mx-auto mb-1" />
-                ظ…ط³ط§ط¦ظٹ
+                مسائي
               </button>
             </div>
 
             {sheetId && (
               <div className="flex items-center gap-2 text-xs text-emerald-400 bg-emerald-500/10 rounded-lg px-3 py-2">
                 <CheckCircle2 className="w-3 h-3" />
-                ط§ظ„ظˆط±ط¯ظٹط© ظ…ظپطھظˆط­ط© â€” ط±ظ‚ظ… {sheetId}
+                الوردية مفتوحة — رقم {sheetId}
               </div>
             )}
           </div>
@@ -326,46 +326,46 @@ export default function LiveProductionPage() {
           <div className="card">
             <h3 className="section-title mb-4">
               <Plus className="w-4 h-4" />
-              طھط³ط¬ظٹظ„ ط¥ظ†طھط§ط¬
+              تسجيل إنتاج
             </h3>
             <div className="space-y-3">
               <div>
-                <label className="form-label">ط§ظ„ظ…ظ†طھط¬</label>
+                <label className="form-label">المنتج</label>
                 <select
                   value={entryForm.product_id}
                   onChange={(e) => setEntryForm({ ...entryForm, product_id: Number(e.target.value) })}
                   className="input-field"
-                  aria-label="ط§ظ„ظ…ظ†طھط¬"
+                  aria-label="المنتج"
                 >
-                  <option value={0}>â€” ط§ط®طھط± ط§ظ„ظ…ظ†طھط¬ â€”</option>
+                  <option value={0}>— اختر المنتج —</option>
                   {products.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.name_ar || p.code || `ظ…ظ†طھط¬ #${p.id}`}
+                      {p.name_ar || p.code || `منتج #${p.id}`}
                     </option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="form-label">ط§ظ„ط¹ظ„ط§ظ…ط© ط§ظ„طھط¬ط§ط±ظٹط© ظ„ظ„ط¹ظ…ظٹظ„</label>
+                <label className="form-label">العلامة التجارية للعميل</label>
                 <input
                   type="text"
                   value={entryForm.customer_brand}
                   onChange={(e) => setEntryForm({ ...entryForm, customer_brand: e.target.value })}
-                  placeholder="ظ…ط«ط§ظ„: ط±ظٹط´ظˆط³"
+                  placeholder="مثال: ريشوس"
                   className="input-field"
                   dir="rtl"
-                  aria-label="ط§ظ„ط¹ظ„ط§ظ…ط© ط§ظ„طھط¬ط§ط±ظٹط© ظ„ظ„ط¹ظ…ظٹظ„"
+                  aria-label="العلامة التجارية للعميل"
                 />
               </div>
               <div>
-                <label className="form-label">ط§ظ„ط¹ط§ظ…ظ„ *</label>
+                <label className="form-label">العامل *</label>
                 <select
                   className="input-field"
                   value={workerId || ""}
                   onChange={(e) => setWorkerId(Number(e.target.value) || null)}
-                  aria-label="ط§ط®طھط± ط§ظ„ط¹ط§ظ…ظ„"
+                  aria-label="اختر العامل"
                 >
-                  <option value="">ط§ط®طھط± ط§ظ„ط¹ط§ظ…ظ„...</option>
+                  <option value="">اختر العامل...</option>
                   {workers.map((w) => (
                     <option key={w.id} value={w.id}>{w.name} ({w.code || w.job})</option>
                   ))}
@@ -373,7 +373,7 @@ export default function LiveProductionPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="form-label">ظƒط±طھظˆظ† ظ…ظ†طھط¬</label>
+                  <label className="form-label">كرتون منتج</label>
                   <input
                     type="number"
                     value={entryForm.cartons_produced || ""}
@@ -381,11 +381,11 @@ export default function LiveProductionPage() {
                     className="input-field"
                     min="0"
                     placeholder="0"
-                    aria-label="ظƒط±طھظˆظ† ظ…ظ†طھط¬"
+                    aria-label="كرتون منتج"
                   />
                 </div>
                 <div>
-                  <label className="form-label">طھط§ظ„ظپ (ظƒط±طھظˆظ†)</label>
+                  <label className="form-label">تالف (كرتون)</label>
                   <input
                     type="number"
                     value={entryForm.waste_cartons || ""}
@@ -393,7 +393,7 @@ export default function LiveProductionPage() {
                     className="input-field"
                     min="0"
                     placeholder="0"
-                    aria-label="طھط§ظ„ظپ ظƒط±طھظˆظ†"
+                    aria-label="تالف كرتون"
                   />
                 </div>
               </div>
@@ -409,7 +409,7 @@ export default function LiveProductionPage() {
                 ) : (
                   <>
                     <Plus className="w-4 h-4" />
-                    طھط³ط¬ظٹظ„ ط§ظ„ط¥ظ†طھط§ط¬
+                    تسجيل الإنتاج
                   </>
                 )}
               </motion.button>
@@ -422,10 +422,10 @@ export default function LiveProductionPage() {
           <div className="card">
             <div className="flex items-center justify-between mb-4">
               <h3 className="section-title">
-                ط³ط¬ظ„ ط¥ظ†طھط§ط¬ ط§ظ„ظˆط±ط¯ظٹط© {shift}
+                سجل إنتاج الوردية {shift}
               </h3>
               <span className="text-sm text-surface-400">
-                {loading ? "ط¬ط§ط±ظچ ط§ظ„طھط­ظ…ظٹظ„..." : `${lines.length} طھط³ط¬ظٹظ„${lines.length !== 1 ? "ط§طھ" : ""}`}
+                {loading ? "جارٍ التحميل..." : `${lines.length} تسجيل${lines.length !== 1 ? "ات" : ""}`}
               </span>
             </div>
 
@@ -436,8 +436,8 @@ export default function LiveProductionPage() {
             ) : lines.length === 0 ? (
               <div className="text-center py-12 text-surface-500">
                 <Package className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                <p>ظ„ط§ ظٹظˆط¬ط¯ ط¥ظ†طھط§ط¬ ظ…ط³ط¬ظ„ ظپظٹ ظ‡ط°ظ‡ ط§ظ„ظˆط±ط¯ظٹط©</p>
-                <p className="text-xs mt-1">ط³ط¬ظ„ ط£ظˆظ„ ط¥ظ†طھط§ط¬ ظ…ظ† ط§ظ„ظ†ظ…ظˆط°ط¬ ط¹ظ„ظ‰ ط§ظ„ظٹط³ط§ط±</p>
+                <p>لا يوجد إنتاج مسجل في هذه الوردية</p>
+                <p className="text-xs mt-1">سجل أول إنتاج من النموذج على اليسار</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -454,7 +454,7 @@ export default function LiveProductionPage() {
                         <span className="text-xs font-bold text-brand-400 w-6">#</span>
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-white truncate">
-                            {line.product_name || `ظ…ظ†طھط¬ #${line.product_id}`}
+                            {line.product_name || `منتج #${line.product_id}`}
                           </p>
                           {line.customer_brand && (
                             <p className="text-xs text-gold-400/80">{line.customer_brand}</p>
@@ -472,7 +472,7 @@ export default function LiveProductionPage() {
                                 onChange={(e) => setEditingQty({ id: line.id, val: safeNumber(e.target.value) })}
                                 className="w-20 text-center input-field text-sm py-1"
                                 autoFocus
-                                aria-label="طھط¹ط¯ظٹظ„ ط§ظ„ظƒظ…ظٹط©"
+                                aria-label="تعديل الكمية"
                                 onBlur={() => handleUpdateLine(line.id, editingQty.val)}
                                 onKeyDown={(e) => {
                                   if (e.key === "Enter") handleUpdateLine(line.id, editingQty.val);
@@ -488,17 +488,17 @@ export default function LiveProductionPage() {
                               </span>
                             )}
                           </p>
-                          <p className="text-xs text-surface-500">ظƒط±طھظˆظ†</p>
+                          <p className="text-xs text-surface-500">كرتون</p>
                         </div>
                         <div className="text-center">
                           <p className="text-sm font-bold text-surface-300">{line.cups_per_carton}</p>
-                          <p className="text-xs text-surface-500">ظƒظˆط¨/ظƒط±طھظˆظ†</p>
+                          <p className="text-xs text-surface-500">كوب/كرتون</p>
                         </div>
                         <div className="text-center">
                           <p className="text-sm font-bold text-surface-300">
                             {(line.cartons_produced * line.cups_per_carton).toLocaleString()}
                           </p>
-                          <p className="text-xs text-surface-500">ظƒظˆط¨</p>
+                          <p className="text-xs text-surface-500">كوب</p>
                         </div>
                         <button
                           onClick={() => handleDeleteLine(line.id)}
@@ -524,24 +524,24 @@ export default function LiveProductionPage() {
             <div className="card">
               <h3 className="section-title mb-4">
                 <BarChart3 className="w-4 h-4" />
-                ظ…ظ„ط®طµ ط§ظ„ط¥ظ†طھط§ط¬ ط§ظ„ظٹظˆظ… â€” ط­ط³ط¨ ط§ظ„ظ…ظ†طھط¬
+                ملخص الإنتاج اليوم — حسب المنتج
               </h3>
               <div className="overflow-hidden rounded-xl border border-surface-700/50">
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>ط§ظ„ظ…ظ†طھط¬</th>
-                      <th>ط§ظ„ط¹ظ„ط§ظ…ط© ط§ظ„طھط¬ط§ط±ظٹط©</th>
-                      <th>ظƒط±طھظˆظ†</th>
-                      <th>ط£ظƒظˆط§ط¨</th>
-                      <th>طھط§ظ„ظپ</th>
+                      <th>المنتج</th>
+                      <th>العلامة التجارية</th>
+                      <th>كرتون</th>
+                      <th>أكواب</th>
+                      <th>تالف</th>
                     </tr>
                   </thead>
                   <tbody>
                     {dashboard.products.map((p) => (
                       <tr key={p.product_id}>
                         <td className="font-medium text-white">{p.product_name || `#${p.product_id}`}</td>
-                        <td>{p.customer_brand || <span className="text-surface-500">â€”</span>}</td>
+                        <td>{p.customer_brand || <span className="text-surface-500">—</span>}</td>
                         <td>{p.total_cartons.toFixed(0)}</td>
                         <td>{p.total_cups.toLocaleString()}</td>
                         <td>{p.waste_cartons.toFixed(0)}</td>

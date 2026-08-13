@@ -99,27 +99,40 @@ pub fn list_approval_requests(
 #[tauri::command]
 pub fn create_approval_request(
     state: State<'_, DbState>,
+    user_id: i64,
     input: CreateApprovalInput,
 ) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    crate::commands::rbac::require_role(&conn, user_id, &["admin", "manager", "accountant"])?;
     let priority = input.priority.unwrap_or_else(|| "normal".to_string());
+    let requested_by: String = conn
+        .query_row("SELECT username FROM users WHERE id=?", [user_id], |r| r.get(0))
+        .unwrap_or_else(|_| input.requested_by.clone());
     conn.execute(
         "INSERT INTO approval_requests (request_type, entity_type, entity_id, entity_number, requested_by, requested_at, amount_milli, description, status, priority) VALUES (?, ?, ?, ?, ?, datetime('now'), ?, ?, 'pending', ?)",
-        rusqlite::params![input.request_type, input.entity_type, input.entity_id, input.entity_number, input.requested_by, input.amount_milli, input.description, priority],
+        rusqlite::params![input.request_type, input.entity_type, input.entity_id, input.entity_number, requested_by, input.amount_milli, input.description, priority],
     )?;
-    Ok(conn.last_insert_rowid())
+    let request_id = conn.last_insert_rowid();
+    let _ = crate::commands::rbac::log_audit(&conn, Some(user_id), None, "create_approval_request", "approval_requests", Some(request_id), None, None, None);
+    Ok(request_id)
 }
 
 #[tauri::command]
 pub fn decide_approval(
     state: State<'_, DbState>,
+    user_id: i64,
     input: DecideApprovalInput,
 ) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    crate::commands::rbac::require_role(&conn, user_id, &["admin", "manager"])?;
+
+    let decided_by: String = conn
+        .query_row("SELECT username FROM users WHERE id=?", [user_id], |r| r.get(0))
+        .unwrap_or_else(|_| input.decided_by.clone());
 
     let current_status: String = conn.query_row(
         "SELECT status FROM approval_requests WHERE id = ?", [input.id], |r| r.get(0)
-    ).map_err(|_| AppError::not_found("Approval request not found"))?;
+    ).map_err(|_| AppError::not_found("طلب الاعتماد غير موجود"))?;
 
     if current_status != "pending" {
         return Err(AppError::business(format!("Cannot decide on request with status '{}'", current_status)));
@@ -129,19 +142,19 @@ pub fn decide_approval(
         "approve" => {
             conn.execute(
                 "UPDATE approval_requests SET status = 'approved', approved_by = ?, approved_at = datetime('now') WHERE id = ?",
-                rusqlite::params![input.decided_by, input.id],
+                rusqlite::params![decided_by, input.id],
             )?;
         }
         "reject" => {
             conn.execute(
                 "UPDATE approval_requests SET status = 'rejected', approved_by = ?, approved_at = datetime('now'), rejection_reason = ? WHERE id = ?",
-                rusqlite::params![input.decided_by, input.reason, input.id],
+                rusqlite::params![decided_by, input.reason, input.id],
             )?;
         }
-        _ => return Err(AppError::validation("Decision must be 'approve' or 'reject'")),
+        _ => return Err(AppError::validation("القرار يجب أن يكون 'اعتماد' أو 'رفض'")),
     }
 
-    crate::commands::rbac::log_audit(&conn, None, Some(&input.decided_by), "decide", "approval_requests", Some(input.id), None, Some(&input.decision), input.reason.as_deref()).ok();
+    crate::commands::rbac::log_audit(&conn, Some(user_id), None, "decide", "approval_requests", Some(input.id), None, Some(&input.decision), input.reason.as_deref()).ok();
     Ok("Decision recorded".to_string())
 }
 

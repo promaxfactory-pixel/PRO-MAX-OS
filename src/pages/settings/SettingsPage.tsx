@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import { useLicenseStore } from "@/stores/licenseStore";
 import { Save, Building2, Shield, Key, Eye, EyeOff, CheckCircle, Copy } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";

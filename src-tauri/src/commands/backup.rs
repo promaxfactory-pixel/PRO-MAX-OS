@@ -19,12 +19,12 @@ pub struct BackupResult {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct BackupInfo {
-    pub file_path: String,
+pub struct BackupEntry {
+    pub id: i64,
     pub file_name: String,
-    pub file_size: i64,
+    pub size: i64,
     pub created_at: String,
-    pub description: Option<String>,
+    pub kind: String,
 }
 
 fn is_leap_year(year: i64) -> bool {
@@ -95,7 +95,18 @@ fn get_db_path(conn: &rusqlite::Connection) -> Result<String, AppError> {
             return Ok(file);
         }
     }
-    Err(AppError::not_found("Could not determine database path"))
+    Err(AppError::not_found("تعذر تحديد مسار قاعدة البيانات"))
+}
+
+fn get_backup_dir(conn: &rusqlite::Connection) -> Result<std::path::PathBuf, AppError> {
+    let db_path = get_db_path(conn)?;
+    let db_file = Path::new(&db_path);
+    let dir = db_file
+        .parent()
+        .ok_or_else(|| AppError::business("تعذر تحديد المجلد الأب لقاعدة البيانات"))?
+        .join("backups");
+    fs::create_dir_all(&dir)?;
+    Ok(dir)
 }
 
 fn is_valid_sqlite(path: &Path) -> bool {
@@ -155,208 +166,66 @@ fn get_backup_metadata(conn: &rusqlite::Connection) -> Result<(i32, i32, i64), A
     Ok((version, table_count, record_count))
 }
 
-#[tauri::command]
-pub fn backup_create(
-    state: State<'_, DbState>,
-    backup_path: String,
-) -> Result<BackupResult, AppError> {
-    let conn = state.0.lock()?;
-
-    let path = Path::new(&backup_path);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-
-    conn.execute("VACUUM INTO ?", [backup_path.clone()])
-        .map_err(|e| format!("Failed to create backup: {}", e))?;
-
-    let (version, table_count, record_count) = get_backup_metadata(&conn)?;
-    let metadata = fs::metadata(&backup_path)?;
-    let created_at = current_timestamp();
-
-    Ok(BackupResult {
-        success: true,
-        file_path: backup_path,
-        file_size: metadata.len() as i64,
-        created_at,
-        database_version: version,
-        table_count,
-        record_count,
-    })
+fn backup_file_name(ts: u64, kind: &str) -> String {
+    format!("backup_{}_{}.db", kind, ts)
 }
 
-#[tauri::command]
-pub fn backup_restore(
-    state: State<'_, DbState>,
-    backup_path: String,
-) -> Result<String, AppError> {
-    let path = Path::new(&backup_path);
-
-    if !path.exists() {
-        return Err(AppError::not_found(format!("Backup file not found: {}", backup_path)));
-    }
-
-    if !is_valid_sqlite(path) {
-        return Err(AppError::validation("Invalid backup file: not a valid SQLite database"));
-    }
-
-    let conn = state.0.lock()?;
-    let db_path = get_db_path(&conn)?;
-    drop(conn);
-
-    fs::copy(path, &db_path).map_err(|e| {
-        format!(
-            "Failed to restore backup to '{}': {}. The database file may be locked. \
-             Close all instances of the application and try again, or manually copy '{}' to '{}'.",
-            db_path, e, backup_path, db_path
-        )
-    })?;
-
-    Ok(format!(
-        "Backup restored successfully to '{}'. Please restart the application for changes to take effect.",
-        db_path
-    ))
-}
-
-#[tauri::command]
-pub fn backup_list(backup_dir: String) -> Result<Vec<BackupInfo>, AppError> {
-    let dir = Path::new(&backup_dir);
-    if !dir.exists() || !dir.is_dir() {
-        return Err(AppError::not_found(format!("Directory not found: {}", backup_dir)));
-    }
-
-    let mut entries: Vec<BackupInfo> = Vec::new();
-
-    let dir_entries = fs::read_dir(dir)?;
-    for entry in dir_entries {
-        let entry = entry?;
-        let entry_path = entry.path();
-
-        if !entry_path.is_file() {
-            continue;
-        }
-
-        let is_backup = entry_path
-            .extension()
-            .and_then(|ext| ext.to_str())
-            .map(|ext| matches!(ext, "db" | "sqlite" | "sqlite3" | "backup" | "bak"))
-            .unwrap_or(false);
-
-        if !is_backup {
-            continue;
-        }
-
-        let metadata = fs::metadata(&entry_path)?;
-        let file_name = entry_path
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_default();
-
-        let created_at = metadata
-            .modified()
-            .ok()
-            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-            .map(|d| format_timestamp(d.as_secs()))
-            .unwrap_or_else(|| "unknown".to_string());
-
-        entries.push(BackupInfo {
-            file_path: entry_path.to_string_lossy().to_string(),
-            file_name,
-            file_size: metadata.len() as i64,
-            created_at,
-            description: None,
-        });
-    }
-
-    entries.sort_by(|a, b| b.created_at.cmp(&a.created_at));
-
-    Ok(entries)
-}
-
-#[tauri::command]
-pub fn backup_get_info(backup_path: String) -> Result<BackupInfo, AppError> {
-    let path = Path::new(&backup_path);
-
-    if !path.exists() {
-        return Err(AppError::not_found(format!("Backup file not found: {}", backup_path)));
-    }
-
-    if !is_valid_sqlite(path) {
-        return Err(AppError::validation("Not a valid SQLite backup file"));
-    }
-
-    let metadata = fs::metadata(path)?;
-    let file_name = path
-        .file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_default();
-
+fn entry_from_path(path: &Path) -> Option<BackupEntry> {
+    let file_name = path.file_name()?.to_string_lossy().to_string();
+    let base = file_name.trim_end_matches(".db").to_string();
+    let id = base
+        .split('_')
+        .next_back()
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(0);
+    let kind = if base.starts_with("backup_auto_") {
+        "auto".to_string()
+    } else {
+        "manual".to_string()
+    };
+    let metadata = fs::metadata(path).ok()?;
     let created_at = metadata
         .modified()
         .ok()
         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
         .map(|d| format_timestamp(d.as_secs()))
         .unwrap_or_else(|| "unknown".to_string());
-
-    let description = if is_valid_sqlite(path) {
-        match fs::File::open(path) {
-            Ok(mut f) => {
-                use std::io::Read;
-                let mut buf = [0u8; 100];
-                if f.read(&mut buf).is_ok() {
-                    let header = String::from_utf8_lossy(&buf[..64]).to_string();
-                    Some(format!("SQLite file. Header: {}", header.trim()))
-                } else {
-                    Some("SQLite file".to_string())
-                }
-            }
-            Err(_) => Some("SQLite file".to_string()),
-        }
-    } else {
-        None
-    };
-
-    Ok(BackupInfo {
-        file_path: backup_path,
+    Some(BackupEntry {
+        id,
         file_name,
-        file_size: metadata.len() as i64,
+        size: metadata.len() as i64,
         created_at,
-        description,
+        kind,
     })
 }
 
 #[tauri::command]
-pub fn backup_auto(state: State<'_, DbState>) -> Result<BackupResult, AppError> {
+pub fn backup_create(
+    state: State<'_, DbState>,
+    user_id: i64,
+) -> Result<BackupResult, AppError> {
     let conn = state.0.lock()?;
+    crate::commands::rbac::require_role(&conn, user_id, &["admin"])?;
 
-    let db_path = get_db_path(&conn)?;
-    let db_file = Path::new(&db_path);
-
-    let backup_dir = db_file
-        .parent()
-        .ok_or_else(|| AppError::business("Could not determine database parent directory"))?
-        .join("backups");
-
-    fs::create_dir_all(&backup_dir)?;
-
-    let timestamp = SystemTime::now()
+    let dir = get_backup_dir(&conn)?;
+    let ts = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
-    let backup_filename = format!("backup_{}.db", timestamp);
-    let backup_path = backup_dir.join(&backup_filename);
-    let backup_path_str = backup_path.to_string_lossy().to_string();
+    let path = dir.join(backup_file_name(ts, "manual"));
+    let path_str = path.to_string_lossy().to_string();
 
-    conn.execute("VACUUM INTO ?", [backup_path_str.clone()])
-        .map_err(|e| format!("Failed to create auto backup: {}", e))?;
+    conn.execute("VACUUM INTO ?", [path_str.clone()])
+        .map_err(|e| format!("Failed to create backup: {}", e))?;
 
     let (version, table_count, record_count) = get_backup_metadata(&conn)?;
-    let metadata = fs::metadata(&backup_path)?;
+    let metadata = fs::metadata(&path)?;
     let created_at = current_timestamp();
 
+    let _ = crate::commands::rbac::log_audit(&conn, Some(user_id), None, "backup_create", "backups", None, None, Some(&path_str), None);
     Ok(BackupResult {
         success: true,
-        file_path: backup_path_str,
+        file_path: path_str,
         file_size: metadata.len() as i64,
         created_at,
         database_version: version,
@@ -366,29 +235,152 @@ pub fn backup_auto(state: State<'_, DbState>) -> Result<BackupResult, AppError> 
 }
 
 #[tauri::command]
-pub fn backup_export_csv(
+pub fn backup_list(state: State<'_, DbState>) -> Result<Vec<BackupEntry>, AppError> {
+    let conn = state.0.lock()?;
+    let dir = get_backup_dir(&conn)?;
+
+    let mut entries: Vec<BackupEntry> = Vec::new();
+    if let Ok(read_dir) = fs::read_dir(&dir) {
+        for entry in read_dir.flatten() {
+            let p = entry.path();
+            if p.is_file() && p.extension().map(|e| e == "db").unwrap_or(false) {
+                if let Some(e) = entry_from_path(&p) {
+                    entries.push(e);
+                }
+            }
+        }
+    }
+    entries.sort_by_key(|a| std::cmp::Reverse(a.id));
+    Ok(entries)
+}
+
+#[tauri::command]
+pub fn backup_restore(
     state: State<'_, DbState>,
-    table_name: String,
-    output_path: String,
+    backup_id: i64,
+    user_id: i64,
 ) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    crate::commands::rbac::require_role(&conn, user_id, &["admin"])?;
+
+    let dir = get_backup_dir(&conn)?;
+    // Resolve the backup strictly inside the backups directory (no path traversal).
+    let candidates = fs::read_dir(&dir)
+        .map_err(|e| AppError::business(format!("Failed to read backups directory: {}", e)))?
+        .flatten()
+        .filter_map(|e| entry_from_path(&e.path()))
+        .filter(|e| e.id == backup_id)
+        .collect::<Vec<_>>();
+
+    let entry = candidates
+        .first()
+        .ok_or_else(|| AppError::not_found("النسخة الاحتياطية غير موجودة"))?;
+    let backup_path = dir.join(&entry.file_name);
+
+    if !is_valid_sqlite(&backup_path) {
+        return Err(AppError::validation("ملف النسخة الاحتياطية غير صالح: ليست قاعدة بيانات SQLite"));
+    }
+
+    let _ = crate::commands::rbac::log_audit(&conn, Some(user_id), None, "backup_restore", "backups", None, None, Some(&entry.file_name), None);
+
+    let db_path = get_db_path(&conn)?;
+    drop(conn);
+
+    fs::copy(&backup_path, &db_path).map_err(|e| {
+        format!(
+            "Failed to restore backup to '{}': {}. The database file may be locked. \
+             Close all instances of the application and try again.",
+            db_path, e
+        )
+    })?;
+
+    // Drop stale WAL/SHM so the restored database starts from a clean journal.
+    for suffix in ["-wal", "-shm"] {
+        let stale = format!("{}{}", db_path, suffix);
+        let _ = fs::remove_file(&stale);
+    }
+
+    Ok("Backup restored successfully. Please restart the application for changes to take effect.".to_string())
+}
+
+#[tauri::command]
+pub fn backup_auto(state: State<'_, DbState>) -> Result<BackupResult, AppError> {
+    let conn = state.0.lock()?;
+
+    let dir = get_backup_dir(&conn)?;
+    let ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let path = dir.join(backup_file_name(ts, "auto"));
+    let path_str = path.to_string_lossy().to_string();
+
+    conn.execute("VACUUM INTO ?", [path_str.clone()])
+        .map_err(|e| format!("Failed to create auto backup: {}", e))?;
+
+    let (version, table_count, record_count) = get_backup_metadata(&conn)?;
+    let metadata = fs::metadata(&path)?;
+    let created_at = current_timestamp();
+
+    let _ = crate::commands::rbac::log_audit(&conn, None, None, "backup_auto", "backups", None, None, Some(&path_str), None);
+    Ok(BackupResult {
+        success: true,
+        file_path: path_str,
+        file_size: metadata.len() as i64,
+        created_at,
+        database_version: version,
+        table_count,
+        record_count,
+    })
+}
+
+fn export_table_name(export_type: &str) -> Option<&'static str> {
+    match export_type {
+        "العملاء" => Some("customers"),
+        "المنتجات" => Some("products"),
+        "الفواتير" => Some("sales_invoices"),
+        "القيود اليومية" => Some("journal_entries"),
+        "الموردون" => Some("suppliers"),
+        "الموظفون" => Some("employees"),
+        "المخزون" => Some("inventory_items"),
+        _ => None,
+    }
+}
+
+#[tauri::command]
+pub fn backup_export_csv(
+    state: State<'_, DbState>,
+    export_type: String,
+    user_id: i64,
+) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
+    crate::commands::rbac::require_role(&conn, user_id, &["admin"])?;
+
+    let table_name = export_table_name(&export_type)
+        .ok_or_else(|| AppError::validation(format!("نوع التصدير غير معروف: {}", export_type)))?;
 
     let tables = get_table_names(&conn)?;
-    if !tables.contains(&table_name) {
-        return Err(AppError::validation(format!(
-            "Invalid table name '{}'. Available tables: {}",
-            table_name,
-            tables.join(", ")
-        )));
+    if !tables.iter().any(|t| t == table_name) {
+        return Err(AppError::validation(format!("Table '{}' not found in database", table_name)));
     }
 
-    let out = Path::new(&output_path);
-    if let Some(parent) = out.parent() {
-        fs::create_dir_all(parent)?;
-    }
+    let db_path = get_db_path(&conn)?;
+    let db_file = Path::new(&db_path);
+    let export_dir = db_file
+        .parent()
+        .ok_or_else(|| AppError::business("تعذر تحديد المجلد الأب لقاعدة البيانات"))?
 
-    let safe_name = table_name.replace(']', "]]");
-    let col_query = format!("PRAGMA table_info([{}])", safe_name);
+
+        .join("exports");
+    fs::create_dir_all(&export_dir)?;
+
+    let ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let out_path = export_dir.join(format!("{}_{}.csv", table_name, ts));
+
+    let col_query = format!("PRAGMA table_info([{}])", table_name.replace(']', "]]"));
     let mut col_stmt = conn.prepare(&col_query)?;
     let columns: Vec<String> = col_stmt
         .query_map([], |row| row.get::<_, String>(1))
@@ -396,11 +388,11 @@ pub fn backup_export_csv(
         .filter_map(|r| r.ok())
         .collect();
 
-    let data_query = format!("SELECT * FROM [{}]", safe_name);
+    let data_query = format!("SELECT * FROM [{}]", table_name.replace(']', "]]"));
     let mut data_stmt = conn.prepare(&data_query)?;
     let col_count = data_stmt.column_count() as usize;
 
-    let mut file = fs::File::create(out)?;
+    let mut file = fs::File::create(&out_path)?;
 
     let header: Vec<String> = columns.iter().map(|c| csv_escape_field(c)).collect();
     writeln!(file, "{}", header.join(","))?;
@@ -425,7 +417,9 @@ pub fn backup_export_csv(
     }
 
     Ok(format!(
-        "Exported {} rows from table '{}' to '{}'",
-        row_count, table_name, output_path
+        "Exported {} rows from '{}' to '{}'",
+        row_count,
+        table_name,
+        out_path.to_string_lossy()
     ))
 }

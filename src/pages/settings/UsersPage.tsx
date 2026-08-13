@@ -4,7 +4,7 @@ import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import { formatDate } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import { Plus, Trash2, Shield, Edit } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 import { User } from "@/types";

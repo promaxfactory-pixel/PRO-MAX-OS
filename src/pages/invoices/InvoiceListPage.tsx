@@ -5,7 +5,7 @@ import { StatusBadge } from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { formatOMR, formatDate } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import { Plus } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 import { SalesInvoice } from "@/types";

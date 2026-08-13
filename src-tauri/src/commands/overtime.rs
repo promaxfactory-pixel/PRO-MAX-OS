@@ -32,11 +32,6 @@ pub struct CreateOvertimeInput {
     pub notes: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct ApproveOvertimeInput {
-    pub approved_by: String,
-}
-
 #[tauri::command]
 pub fn list_overtime_records(
     state: State<'_, DbState>,
@@ -93,28 +88,31 @@ pub fn create_overtime_record(
 #[tauri::command]
 pub fn approve_overtime(
     state: State<'_, DbState>,
+    user_id: i64,
     id: i64,
-    input: ApproveOvertimeInput,
 ) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "hr", "manager"])?;
     conn.execute(
         "UPDATE overtime_records SET approved=1, approved_by=?, approved_at=datetime('now'), status='Approved' WHERE id=?",
-        rusqlite::params![input.approved_by, id],
+        rusqlite::params![user_id, id],
     )?;
-    let _ = rbac::log_audit(&conn, None, None, "approve_overtime", "overtime_records", Some(id), None, Some("Approved"), None);
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "approve_overtime", "overtime_records", Some(id), None, Some("Approved"), None);
     Ok("Approved".to_string())
 }
 
 #[tauri::command]
 pub fn reject_overtime(
     state: State<'_, DbState>,
+    user_id: i64,
     id: i64,
 ) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "hr", "manager"])?;
     conn.execute(
         "UPDATE overtime_records SET approved=0, status='Rejected' WHERE id=?",
         [id],
     )?;
-    let _ = rbac::log_audit(&conn, None, None, "reject_overtime", "overtime_records", Some(id), None, Some("Rejected"), None);
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "reject_overtime", "overtime_records", Some(id), None, Some("Rejected"), None);
     Ok("Rejected".to_string())
 }

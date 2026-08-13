@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import Card from "@/components/ui/Card";
 import Tabs from "@/components/ui/Tabs";
 import { formatOMR } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import { TrendingUp, BarChart3 } from "lucide-react";
 import { useUIStore } from "../../stores/uiStore";
 

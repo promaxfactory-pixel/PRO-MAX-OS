@@ -228,7 +228,7 @@ fn read_sheet(
     let mut rows_iter = range.rows();
     let headers = match rows_iter.next() {
         Some(row) => row.iter().map(cell_to_string).collect(),
-        None => return Err(AppError::validation("Sheet is empty")),
+        None => return Err(AppError::validation("ورقة العمل فارغة")),
     };
     let data: Vec<Vec<Data>> = rows_iter.map(|r| r.to_vec()).collect();
     Ok((headers, data))
@@ -249,7 +249,7 @@ fn read_all_rows(
     let mut rows_iter = range.rows();
     let headers = match rows_iter.next() {
         Some(row) => row.iter().map(cell_to_string).collect(),
-        None => return Err(AppError::validation("Sheet is empty")),
+        None => return Err(AppError::validation("ورقة العمل فارغة")),
     };
     let data: Vec<Vec<Data>> = rows_iter.map(|r| r.to_vec()).collect();
     Ok((headers, data))
@@ -265,7 +265,7 @@ fn first_sheet(file_path: &str) -> Result<String, AppError> {
     names
         .first()
         .cloned()
-        .ok_or_else(|| AppError::validation("Workbook has no sheets"))
+        .ok_or_else(|| AppError::validation("الملف لا يحتوي على أوراق عمل"))
 }
 
 /// Count non-empty cells in a row
@@ -443,8 +443,12 @@ pub fn excel_list_sheets(file_path: String) -> Result<Vec<String>, AppError> {
 #[tauri::command]
 pub fn excel_import_journal(
     state: State<'_, DbState>,
+    user_id: i64,
     input: ExcelImportInput,
 ) -> Result<ExcelImportResult, AppError> {
+    let conn = state.0.lock()?;
+    crate::commands::rbac::require_role(&conn, user_id, &["admin", "manager", "accountant"])?;
+    drop(conn);
     let (headers, data) = read_all_rows(&input.file_path, &input.sheet_name)?;
     let start_idx = if input.skip_first_row { 1 } else { 0 };
     let data_rows = &data[start_idx..];
@@ -652,6 +656,7 @@ pub fn excel_import_journal(
         skipped,
         status,
     )?;
+    let _ = crate::commands::rbac::log_audit(&conn, Some(user_id), None, "excel_import_journal", "import_history", Some(history_id), None, Some(&file_name), None);
     drop(conn);
 
     let summary = format!(
@@ -681,8 +686,12 @@ pub fn excel_import_journal(
 #[tauri::command]
 pub fn excel_import_customers(
     state: State<'_, DbState>,
+    user_id: i64,
     input: ExcelImportInput,
 ) -> Result<ExcelImportResult, AppError> {
+    let conn = state.0.lock()?;
+    crate::commands::rbac::require_role(&conn, user_id, &["admin", "manager", "accountant"])?;
+    drop(conn);
     let (headers, data) = read_all_rows(&input.file_path, &input.sheet_name)?;
     let data_rows = if input.skip_first_row { &data[0..] } else { &data[..] };
     let mut hmap = header_index_map(&headers);
@@ -798,6 +807,7 @@ pub fn excel_import_customers(
 
     let status = if errors.is_empty() { "completed" } else { "completed_with_errors" };
     let history_id = insert_import_history(&conn, "customers", &file_name, data_rows.len(), imported, skipped, status)?;
+    let _ = crate::commands::rbac::log_audit(&conn, Some(user_id), None, "excel_import_customers", "import_history", Some(history_id), None, Some(&file_name), None);
     drop(conn);
 
     Ok(ExcelImportResult {
@@ -819,8 +829,12 @@ pub fn excel_import_customers(
 #[tauri::command]
 pub fn excel_import_products(
     state: State<'_, DbState>,
+    user_id: i64,
     input: ExcelImportInput,
 ) -> Result<ExcelImportResult, AppError> {
+    let conn = state.0.lock()?;
+    crate::commands::rbac::require_role(&conn, user_id, &["admin", "manager", "accountant"])?;
+    drop(conn);
     let (headers, data) = read_all_rows(&input.file_path, &input.sheet_name)?;
     let data_rows = if input.skip_first_row { &data[0..] } else { &data[..] };
     let mut hmap = header_index_map(&headers);
@@ -949,6 +963,7 @@ pub fn excel_import_products(
 
     let status = if errors.is_empty() { "completed" } else { "completed_with_errors" };
     let history_id = insert_import_history(&conn, "products", &file_name, data_rows.len(), imported, skipped, status)?;
+    let _ = crate::commands::rbac::log_audit(&conn, Some(user_id), None, "excel_import_products", "import_history", Some(history_id), None, Some(&file_name), None);
     drop(conn);
 
     Ok(ExcelImportResult {
@@ -970,8 +985,12 @@ pub fn excel_import_products(
 #[tauri::command]
 pub fn excel_import_inventory(
     state: State<'_, DbState>,
+    user_id: i64,
     input: ExcelImportInput,
 ) -> Result<ExcelImportResult, AppError> {
+    let conn = state.0.lock()?;
+    crate::commands::rbac::require_role(&conn, user_id, &["admin", "manager", "accountant"])?;
+    drop(conn);
     let (headers, data) = read_all_rows(&input.file_path, &input.sheet_name)?;
     let data_rows = if input.skip_first_row { &data[0..] } else { &data[..] };
     let mut hmap = header_index_map(&headers);
@@ -1108,6 +1127,7 @@ pub fn excel_import_inventory(
 
     let status = if errors.is_empty() { "completed" } else { "completed_with_errors" };
     let history_id = insert_import_history(&conn, "inventory", &file_name, data_rows.len(), imported, skipped, status)?;
+    let _ = crate::commands::rbac::log_audit(&conn, Some(user_id), None, "excel_import_inventory", "import_history", Some(history_id), None, Some(&file_name), None);
     drop(conn);
 
     Ok(ExcelImportResult {

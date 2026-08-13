@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { formatOMR } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import { ArrowRight, CreditCard } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 import { Supplier } from "@/types";
@@ -25,7 +25,7 @@ export default function SupplierPaymentPage() {
   useEffect(() => {
     invoke("get_supplier", { id: Number(id) })
       .then((d) => setSupplier(d as Supplier))
-      .catch((e: unknown) => addNotification({ title: "ط®ط·ط£", message: String(e), type: "error" }))
+      .catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" }))
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -44,10 +44,10 @@ export default function SupplierPaymentPage() {
           notes: notes || null,
         },
       });
-      addNotification({ id: crypto.randomUUID(), type: "success", title: "طھظ… ط¨ظ†ط¬ط§ط­", message: "طھظ… طھط³ط¬ظٹظ„ ط§ظ„ط¯ظپط¹ط© ط¨ظ†ط¬ط§ط­" });
+      addNotification({ id: crypto.randomUUID(), type: "success", title: "تم بنجاح", message: "تم تسجيل الدفعة بنجاح" });
       navigate(`/suppliers/${id}`);
     } catch (err) {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "ط®ط·ط£", message: "ظپط´ظ„ ظپظٹ طھط³ط¬ظٹظ„ ط§ظ„ط¯ظپط¹ط©" });
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "فشل في تسجيل الدفعة" });
     } finally {
       setSubmitting(false);
     }
@@ -67,7 +67,7 @@ export default function SupplierPaymentPage() {
         <div className="flex items-center gap-3">
           <button onClick={() => navigate(`/suppliers/${id}`)} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
           <div>
-            <h1 className="page-title">طھط³ط¬ظٹظ„ ط¯ظپط¹ط©</h1>
+            <h1 className="page-title">تسجيل دفعة</h1>
             <p className="page-subtitle">{supplier.name}</p>
           </div>
         </div>
@@ -78,53 +78,53 @@ export default function SupplierPaymentPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm text-surface-400 mb-1">ط§ظ„طھط§ط±ظٹط®</label>
-                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full input-field" required aria-label="ط§ظ„طھط§ط±ظٹط®" />
+                <label className="block text-sm text-surface-400 mb-1">التاريخ</label>
+                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full input-field" required aria-label="التاريخ" />
               </div>
               <div>
-                <label className="block text-sm text-surface-400 mb-1">ط§ظ„ظ…ط¨ظ„ط؛ (ط¨ط§ظ„ظ…ظٹظ„ظٹ)</label>
-                <input type="number" value={amountMilli} onChange={(e) => setAmountMilli(e.target.value)} className="w-full input-field" placeholder="0" min="1" required aria-label="ط§ظ„ظ…ط¨ظ„ط؛ ط¨ط§ظ„ظ…ظٹظ„ظٹ" />
+                <label className="block text-sm text-surface-400 mb-1">المبلغ (بالميلي)</label>
+                <input type="number" value={amountMilli} onChange={(e) => setAmountMilli(e.target.value)} className="w-full input-field" placeholder="0" min="1" required aria-label="المبلغ بالميلي" />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm text-surface-400 mb-1">ط·ط±ظٹظ‚ط© ط§ظ„ط¯ظپط¹</label>
-                <select value={method} onChange={(e) => setMethod(e.target.value)} className="w-full input-field" aria-label="ط·ط±ظٹظ‚ط© ط§ظ„ط¯ظپط¹">
-                  <option value="cash">ظ†ظ‚ط¯ظٹ</option>
-                  <option value="bank_transfer">طھط­ظˆظٹظ„ ط¨ظ†ظƒظٹ</option>
-                  <option value="cheque">ط´ظٹظƒ</option>
+                <label className="block text-sm text-surface-400 mb-1">طريقة الدفع</label>
+                <select value={method} onChange={(e) => setMethod(e.target.value)} className="w-full input-field" aria-label="طريقة الدفع">
+                  <option value="cash">نقدي</option>
+                  <option value="bank_transfer">تحويل بنكي</option>
+                  <option value="cheque">شيك</option>
                 </select>
               </div>
               <div>
-                <label className="block text-sm text-surface-400 mb-1">ط§ظ„ظ…ط±ط¬ط¹ (ط§ط®طھظٹط§ط±ظٹ)</label>
-                <input type="text" value={reference} onChange={(e) => setReference(e.target.value)} className="w-full input-field" placeholder="â€”" aria-label="ط§ظ„ظ…ط±ط¬ط¹" />
+                <label className="block text-sm text-surface-400 mb-1">المرجع (اختياري)</label>
+                <input type="text" value={reference} onChange={(e) => setReference(e.target.value)} className="w-full input-field" placeholder="—" aria-label="المرجع" />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm text-surface-400 mb-1">ظ…ظ„ط§ط­ط¸ط§طھ (ط§ط®طھظٹط§ط±ظٹ)</label>
-              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full input-field" rows={3} placeholder="â€”" aria-label="ظ…ظ„ط§ط­ط¸ط§طھ" />
+              <label className="block text-sm text-surface-400 mb-1">ملاحظات (اختياري)</label>
+              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full input-field" rows={3} placeholder="—" aria-label="ملاحظات" />
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => navigate(`/suppliers/${id}`)}>ط¥ظ„ط؛ط§ط،</Button>
-              <Button type="submit" loading={submitting} icon={<CreditCard className="w-4 h-4" />}>طھط³ط¬ظٹظ„ ط§ظ„ط¯ظپط¹ط©</Button>
+              <Button type="button" variant="outline" onClick={() => navigate(`/suppliers/${id}`)}>إلغاء</Button>
+              <Button type="submit" loading={submitting} icon={<CreditCard className="w-4 h-4" />}>تسجيل الدفعة</Button>
             </div>
           </form>
         </Card>
 
         <Card>
-          <h4 className="text-sm text-surface-400 mb-3">ظ…ط¹ظ„ظˆظ…ط§طھ ط§ظ„ظ…ظˆط±ط¯</h4>
+          <h4 className="text-sm text-surface-400 mb-3">معلومات المورد</h4>
           <div className="space-y-4">
             <div className="text-center py-4">
               <p className="text-3xl font-bold gradient-text">{formatOMR(supplier.balance_milli)}</p>
-              <p className="text-xs text-surface-400 mt-1">ط§ظ„ط±طµظٹط¯ ط§ظ„ط­ط§ظ„ظٹ</p>
+              <p className="text-xs text-surface-400 mt-1">الرصيد الحالي</p>
             </div>
             <div className="space-y-2">
-              <div className="flex justify-between text-sm"><span className="text-surface-400">ط§ظ„ط§ط³ظ…</span><span className="font-medium">{supplier.name}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-surface-400">ط§ظ„ظƒظˆط¯</span><span className="font-mono text-xs">{supplier.code || "â€”"}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-surface-400">ط§ظ„ظ‡ط§طھظپ</span><span>{supplier.phone || "â€”"}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-surface-400">الاسم</span><span className="font-medium">{supplier.name}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-surface-400">الكود</span><span className="font-mono text-xs">{supplier.code || "—"}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-surface-400">الهاتف</span><span>{supplier.phone || "—"}</span></div>
             </div>
           </div>
         </Card>

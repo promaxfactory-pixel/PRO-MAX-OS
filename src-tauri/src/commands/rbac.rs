@@ -25,7 +25,7 @@ pub fn require_role(conn: &rusqlite::Connection, user_id: i64, allowed_roles: &[
             [user_id],
             |row| row.get(0),
         )
-        .map_err(|_| AppError::not_found("User not found"))?;
+        .map_err(|_| AppError::not_found("المستخدم غير موجود"))?;
     if role == "admin" || allowed_roles.iter().any(|r| *r == role) {
         Ok(())
     } else {

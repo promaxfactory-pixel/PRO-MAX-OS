@@ -104,7 +104,6 @@ pub struct CreateAdvanceInput {
 pub struct DisburseAdvanceInput {
     pub advance_id: i64,
     pub source_account_code: String,
-    pub disbursed_by: i64,
     pub notes: Option<String>,
 }
 
@@ -121,7 +120,6 @@ pub struct RecordSpendInput {
     pub description: Option<String>,
     pub notes: Option<String>,
     pub attachment_ids: Option<String>,
-    pub created_by: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -148,7 +146,6 @@ pub struct ReturnAdvanceInput {
     pub amount_milli: i64,
     pub source_account_code: String,
     pub notes: Option<String>,
-    pub created_by: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -156,13 +153,11 @@ pub struct ReconcileAdvanceInput {
     pub advance_id: i64,
     pub physical_amount_milli: i64,
     pub notes: Option<String>,
-    pub created_by: String,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct ApproveAdvanceInput {
     pub advance_id: i64,
-    pub approved_by: i64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -304,9 +299,11 @@ pub fn create_operating_advance(
 #[tauri::command]
 pub fn approve_advance(
     state: State<'_, DbState>,
+    user_id: i64,
     input: ApproveAdvanceInput,
 ) -> Result<OperatingAdvance, AppError> {
     let mut conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     let tx = conn.transaction()?;
     let current: String = tx.query_row(
         "SELECT status FROM operating_advances WHERE id = ?1",
@@ -314,16 +311,16 @@ pub fn approve_advance(
         |r| r.get(0),
     )?;
     if current != "draft" {
-        return Err(AppError::validation("Only draft advances can be approved"));
+        return Err(AppError::validation("لا يمكن اعتماد السلف غير المسودة"));
     }
     tx.execute(
         "UPDATE operating_advances SET approval_status = 'approved', approved_by = ?1,
          approved_at = datetime('now'), status = 'approved', updated_at = datetime('now')
          WHERE id = ?2",
-        params![input.approved_by, input.advance_id],
+        params![user_id, input.advance_id],
     )?;
     tx.commit()?;
-    let _ = rbac::log_audit(&conn, None, None, "approve_advance", "operating_advances", Some(input.advance_id), None, None, None);
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "approve_advance", "operating_advances", Some(input.advance_id), None, None, None);
     drop(conn);
     get_operating_advance(state, input.advance_id)
 }
@@ -331,9 +328,11 @@ pub fn approve_advance(
 #[tauri::command]
 pub fn reject_advance(
     state: State<'_, DbState>,
+    user_id: i64,
     input: RejectAdvanceInput,
 ) -> Result<OperatingAdvance, AppError> {
     let mut conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     let tx = conn.transaction()?;
     tx.execute(
         "UPDATE operating_advances SET approval_status = 'rejected', status = 'cancelled',
@@ -341,7 +340,7 @@ pub fn reject_advance(
         params![input.reason, input.advance_id],
     )?;
     tx.commit()?;
-    let _ = rbac::log_audit(&conn, None, None, "reject_advance", "operating_advances", Some(input.advance_id), None, Some(&input.reason), None);
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "reject_advance", "operating_advances", Some(input.advance_id), None, Some(&input.reason), None);
     drop(conn);
     get_operating_advance(state, input.advance_id)
 }
@@ -349,9 +348,11 @@ pub fn reject_advance(
 #[tauri::command]
 pub fn disburse_advance(
     state: State<'_, DbState>,
+    user_id: i64,
     input: DisburseAdvanceInput,
 ) -> Result<OperatingAdvance, AppError> {
     let mut conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     let tx = conn.transaction()?;
     let (a_amount, a_gl): (i64, String) = tx.query_row(
         "SELECT amount_milli, advance_gl_account_code FROM operating_advances WHERE id = ?1 AND status = 'approved'",
@@ -364,27 +365,29 @@ pub fn disburse_advance(
     tx.execute(
         "INSERT INTO journal_entries (entry_no, date, memo, ref_type, ref_id, created_by)
          VALUES (?1,date('now'),?2,'advance_disburse',?3,?4)",
-        params![je_no, format!("Disbursement advance {}", input.advance_id), input.advance_id, input.disbursed_by],
+        params![je_no, format!("Disbursement advance {}", input.advance_id), input.advance_id, user_id],
     )?;
     let je_id = tx.last_insert_rowid();
+    // Disbursing cash to an employee creates an advance receivable:
+    // Debit the advance (asset) account, credit the funding account.
     tx.execute("INSERT INTO journal_entry_lines (entry_id,account_code,debit_milli,credit_milli,memo) VALUES (?1,?2,?3,0,?4)",
-        params![je_id, source_code, amount_milli, format!("Disbursement of advance {}", input.advance_id)])?;
+        params![je_id, a_gl, amount_milli, format!("Advance to employee {}", input.advance_id)])?;
     tx.execute("INSERT INTO journal_entry_lines (entry_id,account_code,debit_milli,credit_milli,memo) VALUES (?1,?2,0,?3,?4)",
-        params![je_id, a_gl, amount_milli, format!("Advance liability {}", input.advance_id)])?;
+        params![je_id, source_code, amount_milli, format!("Funded from {}", source_code)])?;
     let adv_no = format!("ADV-{}", input.advance_id);
     tx.execute(
         "UPDATE operating_advances SET status = 'disbursed', disbursed_by = ?1, disbursed_at = datetime('now'),
          source_account_code = ?2, balance_milli = amount_milli, total_spent_milli = 0, total_returned_milli = 0,
          updated_at = datetime('now') WHERE id = ?3",
-        params![input.disbursed_by, source_code, input.advance_id],
+        params![user_id, source_code, input.advance_id],
     )?;
     tx.execute(
         "INSERT INTO advance_transactions (advance_id,ts,ttype,amount_milli,balance_after_milli,account_code,reference,notes,journal_id,created_by)
          VALUES (?1,datetime('now'),'disburse',?2,?2,?3,?4,?5,?6,?7)",
-        params![input.advance_id, amount_milli, source_code, &adv_no, input.notes, je_id, input.disbursed_by],
+        params![input.advance_id, amount_milli, source_code, &adv_no, input.notes, je_id, user_id],
     )?;
     tx.commit()?;
-    let _ = rbac::log_audit(&conn, None, None, "disburse_advance", "operating_advances", Some(input.advance_id), None, None, None);
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "disburse_advance", "operating_advances", Some(input.advance_id), None, None, None);
     drop(conn);
     get_operating_advance(state, input.advance_id)
 }
@@ -392,9 +395,11 @@ pub fn disburse_advance(
 #[tauri::command]
 pub fn record_advance_spend(
     state: State<'_, DbState>,
+    user_id: i64,
     input: RecordSpendInput,
 ) -> Result<AdvanceTransaction, AppError> {
     let mut conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     let tx = conn.transaction()?;
     let (a_balance, a_status, a_gl): (i64, String, String) = tx.query_row(
         "SELECT balance_milli, status, advance_gl_account_code FROM operating_advances WHERE id = ?1",
@@ -402,10 +407,10 @@ pub fn record_advance_spend(
         |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
     )?;
     if a_status != "disbursed" && a_status != "partially_spent" {
-        return Err(AppError::validation("Advance must be disbursed before spending"));
+        return Err(AppError::validation("يجب صرف السلفة قبل الصرف منها"));
     }
     if a_balance < input.amount_milli {
-        return Err(AppError::validation("Insufficient advance balance"));
+        return Err(AppError::validation("رصيد السلفة غير كافٍ"));
     }
     let new_balance = a_balance - input.amount_milli;
     let acct_code = input.account_code.clone().unwrap_or_else(|| a_gl.clone());
@@ -415,7 +420,7 @@ pub fn record_advance_spend(
          VALUES (?1,datetime('now'),'spend',?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
         params![input.advance_id, input.amount_milli, new_balance, acct_code,
                 input.category, input.vendor_name, input.invoice_no, input.invoice_date,
-                input.reference, input.notes, input.created_by],
+                input.reference, input.notes, user_id.to_string()],
     )?;
     let txn_id = tx.last_insert_rowid();
     tx.execute(
@@ -423,7 +428,7 @@ pub fn record_advance_spend(
          VALUES (?1,?2,?3,datetime('now'),?4,?5,0,?6,?7,?8,?9,?10,'submitted',?11,datetime('now'))",
         params![input.advance_id, txn_id, receipt_no, input.vendor_name,
                 input.amount_milli, input.amount_milli, input.category, acct_code,
-                input.description, input.attachment_ids, input.created_by],
+                input.description, input.attachment_ids, user_id.to_string()],
     )?;
     tx.execute(
         "UPDATE operating_advances SET total_spent_milli = total_spent_milli + ?1,
@@ -432,7 +437,7 @@ pub fn record_advance_spend(
         params![input.amount_milli, new_balance, input.advance_id],
     )?;
     tx.commit()?;
-    let _ = rbac::log_audit(&conn, None, None, "advance_spend", "advance_transactions", Some(txn_id), None, None, None);
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "advance_spend", "advance_transactions", Some(txn_id), None, None, None);
     Ok(AdvanceTransaction {
         id: txn_id, advance_id: input.advance_id,
         ts: chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string(),
@@ -442,7 +447,7 @@ pub fn record_advance_spend(
         invoice_no: input.invoice_no, invoice_date: input.invoice_date,
         reference: input.reference, notes: input.notes,
         attachment_ids: input.attachment_ids, journal_id: None,
-        created_by: input.created_by,
+        created_by: user_id.to_string(),
     })
 }
 
@@ -483,30 +488,31 @@ pub fn submit_receipt(
 #[tauri::command]
 pub fn approve_receipt(
     state: State<'_, DbState>,
+    user_id: i64,
     receipt_id: i64,
-    approved_by: i64,
 ) -> Result<AdvanceReceipt, AppError> {
     let mut conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     let tx = conn.transaction()?;
     let (r_advance_id, r_net): (i64, i64) = tx.query_row(
         "SELECT advance_id, net_milli FROM advance_receipts WHERE id = ?1 AND status = 'submitted'",
         params![receipt_id], |r| Ok((r.get(0)?, r.get(1)?)),
     )?;
-    let expense_code: String = tx.query_row(
-        "SELECT COALESCE(ar.account_code, oa.default_expense_account_code) FROM advance_receipts ar
+    let (expense_code, a_gl): (String, String) = tx.query_row(
+        "SELECT COALESCE(ar.account_code, oa.default_expense_account_code), oa.advance_gl_account_code FROM advance_receipts ar
          JOIN operating_advances oa ON oa.id = ar.advance_id WHERE ar.id = ?1",
-        params![receipt_id], |r| r.get(0),
+        params![receipt_id], |r| Ok((r.get(0)?, r.get(1)?)),
     )?;
     let je_no = generate_journal_no(&tx)?;
     tx.execute("INSERT INTO journal_entries (entry_no,date,memo,ref_type,ref_id,created_by) VALUES (?1,date('now'),?2,'advance_receipt',?3,?4)",
-        params![je_no, format!("Receipt {} approved", receipt_id), receipt_id, approved_by])?;
+        params![je_no, format!("Receipt {} approved", receipt_id), receipt_id, user_id])?;
     let je_id = tx.last_insert_rowid();
     tx.execute("INSERT INTO journal_entry_lines (entry_id,account_code,debit_milli,credit_milli,memo) VALUES (?1,?2,?3,0,?4)",
         params![je_id, expense_code, r_net, format!("Expense receipt {} approved", receipt_id)])?;
-    tx.execute("INSERT INTO journal_entry_lines (entry_id,account_code,debit_milli,credit_milli,memo) VALUES (?1,'2000',0,?2,?3)",
-        params![je_id, r_net, format!("Advance liability reduced for receipt {}", receipt_id)])?;
+    tx.execute("INSERT INTO journal_entry_lines (entry_id,account_code,debit_milli,credit_milli,memo) VALUES (?1,?2,0,?3,?4)",
+        params![je_id, a_gl, r_net, format!("Advance account reduced for receipt {}", receipt_id)])?;
     tx.execute("UPDATE advance_receipts SET status = 'approved', approved_by = ?1, approved_at = datetime('now'), journal_id = ?2 WHERE id = ?3",
-        params![approved_by, je_id, receipt_id])?;
+        params![user_id, je_id, receipt_id])?;
     tx.execute("UPDATE operating_advances SET total_spent_milli = total_spent_milli + ?1, balance_milli = balance_milli - ?1, updated_at = datetime('now') WHERE id = ?2",
         params![r_net, r_advance_id])?;
     tx.execute("UPDATE operating_advances SET status = CASE WHEN balance_milli = 0 THEN 'reconciled' ELSE 'partially_spent' END WHERE id = ?1",
@@ -536,16 +542,18 @@ pub fn approve_receipt(
 #[tauri::command]
 pub fn return_advance(
     state: State<'_, DbState>,
+    user_id: i64,
     input: ReturnAdvanceInput,
 ) -> Result<AdvanceTransaction, AppError> {
     let mut conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     let tx = conn.transaction()?;
     let advance_balance: i64 = tx.query_row(
         "SELECT balance_milli FROM operating_advances WHERE id = ?1",
         params![input.advance_id], |r| r.get(0),
     )?;
     if advance_balance < input.amount_milli {
-        return Err(AppError::validation("Return amount exceeds advance balance"));
+        return Err(AppError::validation("قيمة الرد تتجاوز رصيد السلفة"));
     }
     let a_gl: String = tx.query_row(
         "SELECT advance_gl_account_code FROM operating_advances WHERE id = ?1",
@@ -553,12 +561,12 @@ pub fn return_advance(
     )?;
     let je_no = generate_journal_no(&tx)?;
     tx.execute("INSERT INTO journal_entries (entry_no,date,memo,ref_type,ref_id,created_by) VALUES (?1,date('now'),?2,'advance_return',?3,?4)",
-        params![je_no, format!("Employee returned advance {}", input.advance_id), input.advance_id, input.created_by])?;
+        params![je_no, format!("Employee returned advance {}", input.advance_id), input.advance_id, user_id.to_string()])?;
     let je_id = tx.last_insert_rowid();
     tx.execute("INSERT INTO journal_entry_lines (entry_id,account_code,debit_milli,credit_milli,memo) VALUES (?1,?2,?3,0,?4)",
         params![je_id, input.source_account_code, input.amount_milli, format!("Cash received back {}", input.advance_id)])?;
     tx.execute("INSERT INTO journal_entry_lines (entry_id,account_code,debit_milli,credit_milli,memo) VALUES (?1,?2,0,?3,?4)",
-        params![je_id, a_gl, input.amount_milli, format!("Advance liability reduced {}", input.advance_id)])?;
+        params![je_id, a_gl, input.amount_milli, format!("Advance account reduced {}", input.advance_id)])?;
     let new_balance = advance_balance - input.amount_milli;
     tx.execute(
         "UPDATE operating_advances SET total_returned_milli = total_returned_milli + ?1, balance_milli = ?2,
@@ -571,11 +579,11 @@ pub fn return_advance(
         "INSERT INTO advance_transactions (advance_id,ts,ttype,amount_milli,balance_after_milli,account_code,reference,notes,journal_id,created_by)
          VALUES (?1,datetime('now'),'return',?2,?3,?4,?5,?6,?7,?8)",
         params![input.advance_id, input.amount_milli, new_balance, input.source_account_code,
-                &format!("Return {}", input.advance_id), input.notes, je_id, input.created_by],
+                &format!("Return {}", input.advance_id), input.notes, je_id, user_id.to_string()],
     )?;
     let txn_id = tx.last_insert_rowid();
     tx.commit()?;
-    let _ = rbac::log_audit(&conn, None, None, "return_advance", "advance_transactions", Some(txn_id), None, None, None);
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "return_advance", "advance_transactions", Some(txn_id), None, None, None);
     drop(conn);
     conn = state.0.lock()?;
     conn.query_row(
@@ -596,9 +604,11 @@ pub fn return_advance(
 #[tauri::command]
 pub fn reconcile_advance(
     state: State<'_, DbState>,
+    user_id: i64,
     input: ReconcileAdvanceInput,
 ) -> Result<OperatingAdvance, AppError> {
     let mut conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     let tx = conn.transaction()?;
     let (_a_balance, a_spent): (i64, i64) = tx.query_row(
         "SELECT balance_milli, total_spent_milli FROM operating_advances WHERE id = ?1",
@@ -608,7 +618,7 @@ pub fn reconcile_advance(
     if variance != 0 {
         let je_no = generate_journal_no(&tx)?;
         tx.execute("INSERT INTO journal_entries (entry_no,date,memo,ref_type,ref_id,created_by) VALUES (?1,date('now'),?2,'advance_reconciliation',?3,?4)",
-            params![je_no, format!("Reconciliation variance {} OMR", variance as f64 / 1000.0), input.advance_id, input.created_by])?;
+            params![je_no, format!("Reconciliation variance {} OMR", variance as f64 / 1000.0), input.advance_id, user_id.to_string()])?;
         let je_id = tx.last_insert_rowid();
         if variance > 0 {
             tx.execute("INSERT INTO journal_entry_lines (entry_id,account_code,debit_milli,credit_milli,memo) VALUES (?1,'2000',?2,0,?3)",
@@ -628,7 +638,7 @@ pub fn reconcile_advance(
         params![input.notes, input.advance_id],
     )?;
     tx.commit()?;
-    let _ = rbac::log_audit(&conn, None, None, "reconcile_advance", "operating_advances", Some(input.advance_id), None, None, None);
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "reconcile_advance", "operating_advances", Some(input.advance_id), None, None, None);
     drop(conn);
     conn = state.0.lock()?;
     conn.query_row(
@@ -646,17 +656,18 @@ pub fn reconcile_advance(
 #[tauri::command]
 pub fn cancel_advance(
     state: State<'_, DbState>,
+    user_id: i64,
     advance_id: i64,
-    _cancelled_by: String,
 ) -> Result<OperatingAdvance, AppError> {
     let mut conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     let tx = conn.transaction()?;
     let current_status: String = tx.query_row(
         "SELECT status FROM operating_advances WHERE id = ?1",
         params![advance_id], |r| r.get(0),
     )?;
     if current_status != "draft" && current_status != "approved" && current_status != "disbursed" {
-        return Err(AppError::validation("Cannot cancel advance in current status"));
+        return Err(AppError::validation("لا يمكن إلغاء السلفة في الحالة الحالية"));
     }
     if current_status == "disbursed" {
         let balance: i64 = tx.query_row(
@@ -664,7 +675,7 @@ pub fn cancel_advance(
             params![advance_id], |r| r.get(0),
         )?;
         if balance > 0 {
-            return Err(AppError::validation("Cannot cancel advance with outstanding balance; return excess first"));
+            return Err(AppError::validation("لا يمكن إلغاء السلفة مع وجود رصيد مستحق؛ أعد الفائض أولاً"));
         }
     }
     tx.execute(
@@ -672,7 +683,7 @@ pub fn cancel_advance(
         params![advance_id],
     )?;
     tx.commit()?;
-    let _ = rbac::log_audit(&conn, None, None, "cancel_advance", "operating_advances", Some(advance_id), None, None, None);
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "cancel_advance", "operating_advances", Some(advance_id), None, None, None);
     drop(conn);
     conn = state.0.lock()?;
     conn.query_row(

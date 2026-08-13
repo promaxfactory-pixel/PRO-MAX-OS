@@ -42,55 +42,39 @@ pub fn init_secrets(db_path: &Path) -> AppSecrets {
         return s.clone();
     }
 
-    // Try env vars first (override)
-    let secrets = AppSecrets {
-        jwt_secret: std::env::var("PROMAX_JWT_SECRET").unwrap_or_else(|_| {
-            std::env::var("PROMAX_SECRET_KEY").unwrap_or_else(|_| {
-                // Auto-generate a secret from machine-specific data
-                generate_machine_secret()
-            })
-        }),
-        licensing_secret: std::env::var("PROMAX_LICENSE_SECRET").unwrap_or_else(|_| {
-            std::env::var("PROMAX_SECRET_KEY").unwrap_or_else(|_| {
-                generate_machine_secret()
-            })
-        }),
-        developer_pin_hash: std::env::var("PROMAX_DEV_PIN_HASH").unwrap_or_else(|_| {
-            let mut pin_bytes = [0u8; 4];
-            OsRng.fill_bytes(&mut pin_bytes);
-            let pin: String = pin_bytes.iter().map(|b| format!("{}", b % 10)).collect();
-            hash_developer_pin(&pin)
-        }),
-        encryption_key: std::env::var("PROMAX_ENC_KEY").unwrap_or_else(|_| {
-            generate_machine_secret()
-        }),
-    };
+    // Environment variables always override file-based secrets.
+    let env_jwt = std::env::var("PROMAX_JWT_SECRET").ok().or_else(|| std::env::var("PROMAX_SECRET_KEY").ok());
+    let env_license = std::env::var("PROMAX_LICENSE_SECRET").ok().or_else(|| std::env::var("PROMAX_SECRET_KEY").ok());
+    let env_pin = std::env::var("PROMAX_DEV_PIN_HASH").ok();
+    let env_enc = std::env::var("PROMAX_ENC_KEY").ok();
 
-    // Try to load from config file next to DB
+    // Look for a shipped secrets file: prefer the one placed next to the
+    // executable (lets a vendor distribute a matching license key), then the
+    // one next to the database.
+    let exe_dir = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.to_path_buf()));
+    let candidates = [
+        exe_dir.as_ref().map(|d| d.join("promax.secrets.json")),
+        exe_dir.as_ref().map(|d| d.join("resources").join("promax.secrets.json")),
+        db_path.parent().map(|d| d.join("promax.secrets.json")),
+    ];
+    for candidate in candidates.iter().flatten() {
+        if let Some(file_secrets) = try_read_secrets(candidate) {
+            let merged = AppSecrets {
+                jwt_secret: env_jwt.clone().unwrap_or(file_secrets.jwt_secret),
+                licensing_secret: env_license.clone().unwrap_or(file_secrets.licensing_secret),
+                developer_pin_hash: env_pin.clone().unwrap_or(file_secrets.developer_pin_hash),
+                encryption_key: env_enc.clone().unwrap_or(file_secrets.encryption_key),
+            };
+            SECRETS.set(merged.clone()).ok();
+            return merged;
+        }
+    }
+
+    // No secrets file found: auto-generate one next to the database.
     if let Some(parent) = db_path.parent() {
         let config_path = parent.join("promax.secrets.json");
-        if config_path.exists() {
-            if let Ok(content) = std::fs::read_to_string(&config_path) {
-                if let Ok(file_secrets) = serde_json::from_str::<AppSecrets>(&content) {
-                    let merged = AppSecrets {
-                        jwt_secret: if secrets.jwt_secret == AppSecrets::default().jwt_secret
-                            || std::env::var("PROMAX_JWT_SECRET").is_ok() { secrets.jwt_secret } else { file_secrets.jwt_secret },
-                        licensing_secret: if secrets.licensing_secret == AppSecrets::default().licensing_secret
-                            || std::env::var("PROMAX_LICENSE_SECRET").is_ok() { secrets.licensing_secret } else { file_secrets.licensing_secret },
-                        developer_pin_hash: if secrets.developer_pin_hash == AppSecrets::default().developer_pin_hash
-                            || std::env::var("PROMAX_DEV_PIN_HASH").is_ok() { secrets.developer_pin_hash } else { file_secrets.developer_pin_hash },
-                        encryption_key: if secrets.encryption_key == AppSecrets::default().encryption_key
-                            || std::env::var("PROMAX_ENC_KEY").is_ok() { secrets.encryption_key } else { file_secrets.encryption_key },
-                    };
-                    SECRETS.set(merged.clone()).ok();
-                    return merged;
-                }
-            }
-        }
-
-        // Auto-generate secrets file if it doesn't exist
         if !config_path.exists() {
-            let mut pin_bytes = [0u8; 4];
+            let mut pin_bytes = [0u8; 6];
             OsRng.fill_bytes(&mut pin_bytes);
             let auto_pin: String = pin_bytes.iter().map(|b| format!("{}", b % 10)).collect();
             let auto_secrets = AppSecrets {
@@ -111,8 +95,23 @@ pub fn init_secrets(db_path: &Path) -> AppSecrets {
         }
     }
 
-    SECRETS.set(secrets.clone()).ok();
-    secrets
+    // Fallback (no file, no env): machine-derived secrets.
+    let fallback = AppSecrets {
+        jwt_secret: env_jwt.unwrap_or_else(generate_machine_secret),
+        licensing_secret: env_license.unwrap_or_else(generate_machine_secret),
+        developer_pin_hash: env_pin.unwrap_or_else(|| hash_developer_pin("000000")),
+        encryption_key: env_enc.unwrap_or_else(generate_machine_secret),
+    };
+    SECRETS.set(fallback.clone()).ok();
+    fallback
+}
+
+fn try_read_secrets(path: &Path) -> Option<AppSecrets> {
+    if !path.exists() {
+        return None;
+    }
+    let content = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str::<AppSecrets>(&content).ok()
 }
 
 pub fn get_secrets() -> AppSecrets {

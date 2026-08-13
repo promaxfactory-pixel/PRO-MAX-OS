@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import Card from "@/components/ui/Card";
 import { formatOMR } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import { ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useUIStore } from "@/stores/uiStore";

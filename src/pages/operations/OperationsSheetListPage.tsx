@@ -4,7 +4,7 @@ import DataTable, { Column, type BadgeVariant } from "@/components/ui/DataTable"
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import { formatDate } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import { Plus } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 import { OperationsSheet } from "@/types";

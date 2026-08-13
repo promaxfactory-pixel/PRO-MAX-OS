@@ -174,12 +174,13 @@ pub fn get_product(state: State<'_, DbState>, id: i64) -> Result<Product, AppErr
                 weight_kg: row.get(28)?,
             })
         },
-    ).map_err(|_| AppError::not_found("Product not found"))
+    ).map_err(|_| AppError::not_found("المنتج غير موجود"))
 }
 
 #[tauri::command]
-pub fn create_product(state: State<'_, DbState>, input: CreateProductInput) -> Result<i64, AppError> {
+pub fn create_product(state: State<'_, DbState>, user_id: i64, input: CreateProductInput) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager"])?;
     conn.execute(
         "INSERT INTO products(code, name_ar, name_en, size, cup_type, cups_per_carton, default_price_milli, default_cost_milli, barcode, notes, brand_name, cup_size_ml, cup_diameter_mm, paper_weight_gsm, lid_type, print_colors, carton_length_cm, carton_width_cm, carton_height_cm, color, material_type, product_type, family_id, min_stock, weight_kg) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         rusqlite::params![
@@ -216,8 +217,9 @@ pub fn create_product(state: State<'_, DbState>, input: CreateProductInput) -> R
 }
 
 #[tauri::command]
-pub fn update_product(state: State<'_, DbState>, id: i64, input: CreateProductInput) -> Result<String, AppError> {
+pub fn update_product(state: State<'_, DbState>, user_id: i64, id: i64, input: CreateProductInput) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager"])?;
     conn.execute(
         "UPDATE products SET code=?, name_ar=?, name_en=?, size=?, cup_type=?, cups_per_carton=?, default_price_milli=?, default_cost_milli=?, barcode=?, notes=?, brand_name=?, cup_size_ml=?, cup_diameter_mm=?, paper_weight_gsm=?, lid_type=?, print_colors=?, carton_length_cm=?, carton_width_cm=?, carton_height_cm=?, color=?, material_type=?, product_type=?, family_id=?, min_stock=?, weight_kg=? WHERE id=?",
         rusqlite::params![
@@ -254,8 +256,9 @@ pub fn update_product(state: State<'_, DbState>, id: i64, input: CreateProductIn
 }
 
 #[tauri::command]
-pub fn delete_product(state: State<'_, DbState>, id: i64) -> Result<String, AppError> {
+pub fn delete_product(state: State<'_, DbState>, user_id: i64, id: i64) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager"])?;
     conn.execute("UPDATE products SET active=0 WHERE id=?", [id])?;
     let _ = rbac::log_audit(&conn, None, None, "delete_product", "products", Some(id), None, None, None);
     Ok("تم الحذف".to_string())

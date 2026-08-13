@@ -46,6 +46,7 @@ pub fn run() {
             commands::customers::update_customer,
             commands::customers::delete_customer,
             commands::customers::get_customer_statement,
+            commands::customers::create_customer_payment,
             // Invoices
             commands::invoices::list_invoices,
             commands::invoices::get_invoice,
@@ -128,6 +129,8 @@ pub fn run() {
             commands::purchases::get_purchase,
             commands::purchases::create_purchase,
             commands::purchases::get_purchase_lines,
+            commands::purchases::post_purchase,
+            commands::purchases::void_purchase,
             commands::purchases::list_suppliers_for_select,
             commands::purchases::create_supplier_payment,
             // Expenses
@@ -166,6 +169,7 @@ pub fn run() {
             // Stock Transfers
             commands::stock_transfers::list_stock_transfers,
             commands::stock_transfers::create_stock_transfer,
+            commands::stock_transfers::list_warehouses,
             // Payroll
             commands::payroll::list_payroll_runs,
             commands::payroll::create_payroll_run,
@@ -261,7 +265,6 @@ pub fn run() {
             commands::backup::backup_create,
             commands::backup::backup_restore,
             commands::backup::backup_list,
-            commands::backup::backup_get_info,
             commands::backup::backup_auto,
             commands::backup::backup_export_csv,
             // AI Assistant
@@ -292,6 +295,13 @@ pub fn run() {
             commands::historical_import::preview_import,
             commands::historical_import::execute_import,
             commands::historical_import::get_import_templates,
+            commands::historical_import::import_get_history,
+            // Integrations
+            commands::integrations::integrations_get_settings,
+            commands::integrations::integrations_save_settings,
+            commands::integrations::integrations_test_whatsapp,
+            commands::integrations::integrations_test_email,
+            commands::integrations::integrations_test_printer,
             // File Reader
             commands::file_reader::file_read_text,
             commands::file_reader::file_read_spreadsheet,
@@ -338,6 +348,7 @@ pub fn run() {
             commands::barter_exchange::get_barter_balance,
             // Installment Payments
             commands::installment_payments::list_installment_payments,
+            commands::installment_payments::list_installments,
             commands::installment_payments::create_installment_payment,
             commands::installment_payments::mark_installment_paid,
             commands::installment_payments::get_installment_summary,

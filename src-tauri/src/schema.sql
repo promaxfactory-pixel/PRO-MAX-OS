@@ -114,6 +114,7 @@ CREATE TABLE IF NOT EXISTS customers (
     contact TEXT, phone TEXT, email TEXT, address TEXT, vat_number TEXT,
     credit_limit_milli    INTEGER NOT NULL DEFAULT 0,
     payment_terms         TEXT,
+    payment_terms_days    INTEGER NOT NULL DEFAULT 30,
     opening_balance_milli INTEGER NOT NULL DEFAULT 0,
     balance_milli         INTEGER NOT NULL DEFAULT 0,
     notes TEXT, active INTEGER NOT NULL DEFAULT 1
@@ -1033,3 +1034,59 @@ CREATE INDEX IF NOT EXISTS idx_st_created ON stock_transfers(created_at);
 CREATE INDEX IF NOT EXISTS idx_df_entity ON docflow_documents(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_qi_date ON quality_inspections(date);
 CREATE INDEX IF NOT EXISTS idx_dc_date ON daily_closings(date);
+
+-- Missing FK-column indexes (added during DB review)
+CREATE INDEX IF NOT EXISTS idx_at_account ON advance_transactions(account_code);
+CREATE INDEX IF NOT EXISTS idx_at_journal ON advance_transactions(journal_id);
+CREATE INDEX IF NOT EXISTS idx_brs_account ON bank_reconciliation_sessions(account_id);
+CREATE INDEX IF NOT EXISTS idx_bsl_account ON bank_statement_lines(account_id);
+CREATE INDEX IF NOT EXISTS idx_bl_account ON budget_lines(account_code);
+CREATE INDEX IF NOT EXISTS idx_cbt_journal ON cashbank_transactions(journal_id);
+CREATE INDEX IF NOT EXISTS idx_cbt_user ON cashbank_transactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_cn_invoice ON credit_notes(invoice_id);
+CREATE INDEX IF NOT EXISTS idx_cn_journal ON credit_notes(journal_id);
+CREATE INDEX IF NOT EXISTS idx_ca_customer ON customer_aliases(customer_id);
+CREATE INDEX IF NOT EXISTS idx_cp_cashbank ON customer_payments(cashbank_id);
+CREATE INDEX IF NOT EXISTS idx_cp_journal ON customer_payments(journal_id);
+CREATE INDEX IF NOT EXISTS idx_cpl_customer ON customer_price_lists(customer_id);
+CREATE INDEX IF NOT EXISTS idx_cpl_product ON customer_price_lists(product_id);
+CREATE INDEX IF NOT EXISTS idx_dsh_user ON document_status_history(user_id);
+CREATE INDEX IF NOT EXISTS idx_dv_journal ON document_voids(reversal_journal_id);
+CREATE INDEX IF NOT EXISTS idx_dv_user ON document_voids(user_id);
+CREATE INDEX IF NOT EXISTS idx_ea_journal ON employee_advances(journal_id);
+CREATE INDEX IF NOT EXISTS idx_exp_cashbank ON expenses(cashbank_id);
+CREATE INDEX IF NOT EXISTS idx_exp_journal ON expenses(journal_id);
+CREATE INDEX IF NOT EXISTS idx_ia_journal ON inventory_adjustments(journal_id);
+CREATE INDEX IF NOT EXISTS idx_im_user ON inventory_movements(user_id);
+CREATE INDEX IF NOT EXISTS idx_ppay_run ON payroll_payments(run_id);
+CREATE INDEX IF NOT EXISTS idx_ppay_journal ON payroll_payments(journal_id);
+CREATE INDEX IF NOT EXISTS idx_ppay_reversal ON payroll_payments(reversal_journal_id);
+CREATE INDEX IF NOT EXISTS idx_pr_accrual ON payroll_runs(accrual_journal_id);
+CREATE INDEX IF NOT EXISTS idx_pr_journal ON payroll_runs(journal_id);
+CREATE INDEX IF NOT EXISTS idx_pca_employee ON petty_cash_accounts(employee_id);
+CREATE INDEX IF NOT EXISTS idx_pct_account ON petty_cash_transactions(account_code);
+CREATE INDEX IF NOT EXISTS idx_pct_cashbank ON petty_cash_transactions(cashbank_id);
+CREATE INDEX IF NOT EXISTS idx_pct_counter ON petty_cash_transactions(counter_petty_id);
+CREATE INDEX IF NOT EXISTS idx_pct_expense ON petty_cash_transactions(expense_id);
+CREATE INDEX IF NOT EXISTS idx_pct_journal ON petty_cash_transactions(journal_id);
+CREATE INDEX IF NOT EXISTS idx_pct_user ON petty_cash_transactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_pph_product ON product_price_history(product_id);
+CREATE INDEX IF NOT EXISTS idx_pp_customer ON product_prices(customer_id);
+CREATE INDEX IF NOT EXISTS idx_pl_customer ON production_lines(customer_id);
+CREATE INDEX IF NOT EXISTS idx_po_machine ON production_orders(machine_id);
+CREATE INDEX IF NOT EXISTS idx_po_journal ON production_orders(journal_id);
+CREATE INDEX IF NOT EXISTS idx_pur_journal ON purchases(journal_id);
+CREATE INDEX IF NOT EXISTS idx_si_cashbank ON sales_invoices(cashbank_id);
+CREATE INDEX IF NOT EXISTS idx_si_journal ON sales_invoices(journal_id);
+CREATE INDEX IF NOT EXISTS idx_st_item ON stock_transfers(item_id);
+CREATE INDEX IF NOT EXISTS idx_sp_cashbank ON supplier_payments(cashbank_id);
+CREATE INDEX IF NOT EXISTS idx_sp_journal ON supplier_payments(journal_id);
+CREATE INDEX IF NOT EXISTS idx_sph_item ON supplier_price_history(item_id);
+CREATE INDEX IF NOT EXISTS idx_sph_supplier ON supplier_price_history(supplier_id);
+CREATE INDEX IF NOT EXISTS idx_ws_template ON worker_sheets(template_id);
+
+-- Indexes for tables that had none
+CREATE INDEX IF NOT EXISTS idx_att_entity ON attachments(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_mw_code ON multi_warehouse(code);
+CREATE INDEX IF NOT EXISTS idx_pf_code ON product_families(code);
+CREATE INDEX IF NOT EXISTS idx_wst_name ON worker_sheet_templates(name);

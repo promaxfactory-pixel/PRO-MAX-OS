@@ -1,5 +1,5 @@
 use crate::commands::rbac;
-use crate::db::DbState;
+use crate::db::{next_sequence, DbState};
 use crate::error::AppError;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
@@ -43,7 +43,7 @@ pub struct CreateBarterInput {
     pub notes: Option<String>,
 }
 
-const BARTER_COLUMNS: &str = "e.id, e.exchange_no, e.date, e.local_supplier_id, sp.name AS supplier_name, e.product_id, p.name AS product_name, e.cartons_given, e.carton_value_milli, e.received_item_id, ii.name AS received_item_name, e.bags_received, e.bag_value_milli, e.net_value_milli, e.balance_milli, e.settlement_status, e.reference, e.notes, e.status, e.created_by, e.created_at";
+const BARTER_COLUMNS: &str = "e.id, e.exchange_no, e.date, e.local_supplier_id, sp.name AS supplier_name, e.product_id, COALESCE(p.name_ar, p.name_en, '') AS product_name, e.cartons_given, e.carton_value_milli, e.received_item_id, COALESCE(ii.name_ar, ii.name_en, '') AS received_item_name, e.bags_received, e.bag_value_milli, e.net_value_milli, e.balance_milli, e.settlement_status, e.reference, e.notes, e.status, e.created_by, e.created_at";
 
 #[tauri::command]
 pub fn list_barter_exchanges(state: State<'_, DbState>) -> Result<Vec<BarterExchange>, AppError> {
@@ -89,22 +89,14 @@ pub fn list_barter_exchanges(state: State<'_, DbState>) -> Result<Vec<BarterExch
 #[tauri::command]
 pub fn create_barter_exchange(
     state: State<'_, DbState>,
+    user_id: i64,
     input: CreateBarterInput,
 ) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "accountant"])?;
     let year = chrono::Utc::now().format("%Y").to_string();
 
-    let seq: i64 = conn
-        .query_row(
-            "SELECT COALESCE(last_number,0)+1 FROM doc_sequences WHERE doc_type='BTY' AND year=?",
-            [&year],
-            |r| r.get(0),
-        )
-        .unwrap_or(1);
-    conn.execute(
-        "INSERT INTO doc_sequences(doc_type, year, last_number) VALUES('BTY',?,?) ON CONFLICT(doc_type, year) DO UPDATE SET last_number=excluded.last_number",
-        rusqlite::params![year, seq],
-    ).map_err(|e| format!("Failed to increment barter exchange sequence: {}", e))?;
+    let seq = next_sequence(&conn, "BTY", &year)?;
     let exchange_no = format!("BTY-{}-{:04}", year, seq);
 
     let cartons = input.cartons_given.unwrap_or(0.0);

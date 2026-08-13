@@ -165,6 +165,15 @@ fn require_role(state: &web::Data<AppState>, req: &HttpRequest, role: &str) -> R
     Ok(ctx)
 }
 
+/// Like `require_role` but accepts any role in the list (admin always passes).
+fn require_role_any(state: &web::Data<AppState>, req: &HttpRequest, roles: &[&str]) -> Result<AuthContext, HttpResponse> {
+    let ctx = require_auth(state, req)?;
+    if ctx.role != "admin" && !roles.contains(&ctx.role.as_str()) {
+        return Err(HttpResponse::Forbidden().json(serde_json::json!({"error": "Insufficient permissions"})));
+    }
+    Ok(ctx)
+}
+
 fn err_500(msg: &str) -> HttpResponse {
     HttpResponse::InternalServerError().json(serde_json::json!({"error": msg.to_string()}))
 }
@@ -402,10 +411,10 @@ async fn api_dashboard(state: web::Data<AppState>, req: HttpRequest) -> HttpResp
     let products: i64 = conn.query_row("SELECT COUNT(*) FROM products WHERE active = 1", [], |r| r.get(0)).unwrap_or(0);
     let employees: i64 = conn.query_row("SELECT COUNT(*) FROM employees WHERE active = 1", [], |r| r.get(0)).unwrap_or(0);
     let revenue_milli: i64 = conn.query_row(
-        "SELECT COALESCE(SUM(total_milli), 0) FROM sales_invoices WHERE status NOT IN ('void','cancelled')", [], |r| r.get(0)
+        "SELECT COALESCE(SUM(total_milli), 0) FROM sales_invoices WHERE LOWER(status) NOT IN ('void','cancelled')", [], |r| r.get(0)
     ).unwrap_or(0);
     let unpaid: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM sales_invoices WHERE status NOT IN ('paid','void','cancelled')", [], |r| r.get(0)
+        "SELECT COUNT(*) FROM sales_invoices WHERE LOWER(status) NOT IN ('paid','void','cancelled')", [], |r| r.get(0)
     ).unwrap_or(0);
     let low_stock: i64 = conn.query_row(
         "SELECT COUNT(*) FROM inventory_items WHERE qty_on_hand <= reorder_level AND reorder_level > 0 AND active = 1", [], |r| r.get(0)
@@ -439,10 +448,10 @@ async fn api_kpis(state: web::Data<AppState>, req: HttpRequest) -> HttpResponse 
     let conn = match state.db.lock() { Ok(c) => c, Err(_) => return err_500("Database lock error") };
 
     let today_sales: i64 = conn.query_row(
-        "SELECT COALESCE(SUM(total_milli), 0) FROM sales_invoices WHERE date(date) = date('now') AND status NOT IN ('void','cancelled')", [], |r| r.get(0)
+        "SELECT COALESCE(SUM(total_milli), 0) FROM sales_invoices WHERE date(date) = date('now') AND LOWER(status) NOT IN ('void','cancelled')", [], |r| r.get(0)
     ).unwrap_or(0);
     let month_sales: i64 = conn.query_row(
-        "SELECT COALESCE(SUM(total_milli), 0) FROM sales_invoices WHERE date(date) >= date('now','start of month') AND status NOT IN ('void','cancelled')", [], |r| r.get(0)
+        "SELECT COALESCE(SUM(total_milli), 0) FROM sales_invoices WHERE date(date) >= date('now','start of month') AND LOWER(status) NOT IN ('void','cancelled')", [], |r| r.get(0)
     ).unwrap_or(0);
     let month_purchases: i64 = conn.query_row(
         "SELECT COALESCE(SUM(total_milli), 0) FROM purchases WHERE date(date) >= date('now','start of month')", [], |r| r.get(0)
@@ -451,13 +460,13 @@ async fn api_kpis(state: web::Data<AppState>, req: HttpRequest) -> HttpResponse 
         "SELECT COALESCE(SUM(amount_milli), 0) FROM expenses WHERE date(date) >= date('now','start of month')", [], |r| r.get(0)
     ).unwrap_or(0);
     let receivables: i64 = conn.query_row(
-        "SELECT COALESCE(SUM(total_milli - paid_milli), 0) FROM sales_invoices WHERE status NOT IN ('paid','void','cancelled')", [], |r| r.get(0)
+        "SELECT COALESCE(SUM(total_milli - paid_milli), 0) FROM sales_invoices WHERE LOWER(status) NOT IN ('paid','void','cancelled')", [], |r| r.get(0)
     ).unwrap_or(0);
     let payables: i64 = conn.query_row(
-        "SELECT COALESCE(SUM(total_milli - paid_milli), 0) FROM purchases WHERE status NOT IN ('void','cancelled')", [], |r| r.get(0)
+        "SELECT COALESCE(SUM(total_milli - paid_milli), 0) FROM purchases WHERE LOWER(status) NOT IN ('void','cancelled')", [], |r| r.get(0)
     ).unwrap_or(0);
     let unpaid_invoices: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM sales_invoices WHERE status NOT IN ('paid','void','cancelled')", [], |r| r.get(0)
+        "SELECT COUNT(*) FROM sales_invoices WHERE LOWER(status) NOT IN ('paid','void','cancelled')", [], |r| r.get(0)
     ).unwrap_or(0);
     let low_stock: i64 = conn.query_row(
         "SELECT COUNT(*) FROM inventory_items WHERE qty_on_hand <= reorder_level AND reorder_level > 0 AND active = 1", [], |r| r.get(0)
@@ -755,7 +764,7 @@ struct CreateExpenseRequest {
 }
 
 async fn api_create_expense(state: web::Data<AppState>, req: HttpRequest, body: web::Json<CreateExpenseRequest>) -> HttpResponse {
-    let ctx = match require_auth(&state, &req) { Ok(c) => c, Err(e) => return e };
+    let ctx = match require_role_any(&state, &req, &["accountant", "manager"]) { Ok(c) => c, Err(e) => return e };
     let amount = body.amount_omr;
     if !amount.is_finite() || amount <= 0.0 || amount > 1_000_000_000_000.0 {
         return err_bad("Amount must be a positive number");
@@ -991,16 +1000,20 @@ async fn api_list_notifications(state: web::Data<AppState>, req: HttpRequest, qu
 }
 
 async fn api_mark_notification_read(state: web::Data<AppState>, req: HttpRequest, path: web::Path<i64>) -> HttpResponse {
-    let _ctx = match require_auth(&state, &req) { Ok(c) => c, Err(e) => return e };
+    let ctx = match require_auth(&state, &req) { Ok(c) => c, Err(e) => return e };
     let conn = match state.db.lock() { Ok(c) => c, Err(_) => return err_500("Database lock error") };
     let id = path.into_inner();
     let affected = conn.execute(
-        "UPDATE notifications SET read_status = 'read', read_at = datetime('now') WHERE id = ?1 AND read_status = 'unread'",
-        [id],
+        "UPDATE notifications SET read_status = 'read', read_at = datetime('now') WHERE id = ?1 AND read_status = 'unread' AND (user_id = ?2 OR user_id IS NULL)",
+        rusqlite::params![id, ctx.user_id],
     ).unwrap_or(0);
     if affected == 0 {
-        return err_not_found("Notification not found or already read");
+        return err_not_found("Notification not found, already read, or not assigned to you");
     }
+    let _ = conn.execute(
+        "INSERT INTO audit_logs (ts, user_id, username, action, entity, entity_id) VALUES (datetime('now'), ?1, ?2, 'mark_notification_read', 'notifications', ?3)",
+        rusqlite::params![ctx.user_id, ctx.username, id],
+    );
     HttpResponse::Ok().json(serde_json::json!({"ok": true}))
 }
 
@@ -1044,7 +1057,7 @@ async fn api_alerts(state: web::Data<AppState>, req: HttpRequest) -> HttpRespons
     let overdue_invoices: Vec<serde_json::Value> = conn.prepare(
         "SELECT si.id, si.inv_no, COALESCE(c.name,''), (si.total_milli - si.paid_milli), si.date
          FROM sales_invoices si LEFT JOIN customers c ON si.customer_id = c.id
-         WHERE si.status NOT IN ('paid','void','cancelled') AND (si.total_milli - si.paid_milli) > 0
+         WHERE si.LOWER(status) NOT IN ('paid','void','cancelled') AND (si.total_milli - si.paid_milli) > 0
          ORDER BY si.date ASC LIMIT 50"
     ).ok().and_then(|mut stmt| {
         stmt.query_map([], |row| {

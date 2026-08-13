@@ -116,7 +116,7 @@ pub fn get_asset(state: State<'_, DbState>, id: i64) -> Result<Asset, AppError> 
             next_maintenance: row.get(19)?, condition_status: row.get(20)?, status: row.get(21)?,
             notes: row.get(22)?, active: row.get(23)?, created_at: row.get(24)?,
         }),
-    ).map_err(|_| AppError::not_found("Asset not found"))
+    ).map_err(|_| AppError::not_found("الأصل غير موجود"))
 }
 
 #[tauri::command]
@@ -133,7 +133,9 @@ pub fn create_asset(state: State<'_, DbState>, user_id: i64, input: CreateAssetI
         "INSERT INTO fixed_assets (asset_no, name, category, description, serial_number, purchase_date, purchase_cost_milli, current_value_milli, depreciation_method, depreciation_rate_pct, useful_life_months, accumulated_depreciation_milli, location, department, assigned_to, supplier, warranty_expiry, condition_status, status, notes, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, 'good', 'active', ?, 1, datetime('now'))",
         rusqlite::params![asset_no, input.name, input.category, input.description, input.serial_number, input.purchase_date, input.purchase_cost_milli, input.purchase_cost_milli, dep_method, dep_rate, useful_life, input.location, input.department, input.assigned_to, input.supplier, input.warranty_expiry, input.notes],
     )?;
-    Ok(conn.last_insert_rowid())
+    let id = conn.last_insert_rowid();
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "create_asset", "fixed_assets", Some(id), None, Some(&input.name), None);
+    Ok(id)
 }
 
 #[tauri::command]
@@ -164,7 +166,9 @@ pub fn create_asset_maintenance(state: State<'_, DbState>, user_id: i64, input: 
     if let Some(ref next) = input.next_due {
         conn.execute("UPDATE fixed_assets SET next_maintenance = ? WHERE id = ?", rusqlite::params![next, input.asset_id]).ok();
     }
-    Ok(conn.last_insert_rowid())
+    let id = conn.last_insert_rowid();
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "create_asset_maintenance", "asset_maintenance_logs", Some(id), None, None, None);
+    Ok(id)
 }
 
 #[tauri::command]

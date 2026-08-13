@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import { motion, AnimatePresence } from "framer-motion";
 import { Thermometer, AlertTriangle, Activity } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";

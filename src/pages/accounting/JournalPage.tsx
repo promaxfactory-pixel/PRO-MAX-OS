@@ -1,9 +1,19 @@
 import { useState, useEffect, useMemo } from "react";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import { formatDate } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import { useUIStore } from "../../stores/uiStore";
 import { JournalEntry } from "@/types";
+
+const REF_LABELS: Record<string, string> = {
+  invoice: "فاتورة مبيعات",
+  invoice_reversal: "إلغاء فاتورة",
+  purchase: "فاتورة مشتريات",
+  customer_payment: "سند قبض",
+  supplier_payment: "سند صرف",
+  expense: "مصروف",
+  journal: "قيد يدوي",
+};
 
 export default function JournalPage() {
   const { addNotification } = useUIStore();
@@ -16,7 +26,7 @@ export default function JournalPage() {
     { key: "entry_no", header: "الرقم", sortable: true, render: (r) => <span className="font-mono text-brand-400">{r.entry_no || "—"}</span> },
     { key: "date", header: "التاريخ", sortable: true, render: (r) => formatDate(r.date) },
     { key: "memo", header: "البيان", sortable: true },
-    { key: "ref_type", header: "المرجع", render: (r) => r.ref_type ? `${r.ref_type}#${r.ref_id}` : "—" },
+    { key: "ref_type", header: "المرجع", render: (r) => r.ref_type ? `${REF_LABELS[r.ref_type] || r.ref_type}#${r.ref_id}` : "—" },
     { key: "created_by", header: "أنشأه" },
   ], []);
 

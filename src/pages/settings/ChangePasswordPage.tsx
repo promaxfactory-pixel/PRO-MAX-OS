@@ -35,7 +35,7 @@ export default function ChangePasswordPage() {
 
     setLoading(true);
     try {
-      const { invoke } = await import("@tauri-apps/api/core");
+      const { invoke } = await import("@/lib/tauri");
       await invoke("change_password", {
         userId: user?.id,
         oldPassword,

@@ -1,3 +1,4 @@
+use crate::commands::rbac;
 use crate::db::DbState;
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
@@ -33,23 +34,20 @@ pub struct CreateNotificationInput {
 
 #[derive(Debug, Deserialize)]
 pub struct NotificationFilter {
-    pub user_id: Option<i64>,
     pub read: Option<bool>,
     pub notification_type: Option<String>,
     pub limit: Option<i64>,
 }
 
 #[tauri::command]
-pub fn list_notifications(state: State<'_, DbState>, filter: Option<NotificationFilter>) -> Result<Vec<Notification>, AppError> {
+pub fn list_notifications(state: State<'_, DbState>, user_id: i64, filter: Option<NotificationFilter>) -> Result<Vec<Notification>, AppError> {
     let conn = state.0.lock()?;
     let mut sql = String::from("SELECT id, user_id, notification_type, title, message, entity_type, entity_id, severity, read_status, action_url, created_at, read_at FROM notifications WHERE 1=1");
     let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+    sql.push_str(" AND (user_id = ? OR user_id IS NULL)");
+    params.push(Box::new(user_id));
 
     if let Some(f) = filter {
-        if let Some(uid) = f.user_id {
-            sql.push_str(" AND (user_id = ? OR user_id IS NULL)");
-            params.push(Box::new(uid));
-        }
         if let Some(read) = f.read {
             if read { sql.push_str(" AND read_status = 'read'"); }
             else { sql.push_str(" AND read_status = 'unread'"); }
@@ -81,47 +79,41 @@ pub fn list_notifications(state: State<'_, DbState>, filter: Option<Notification
 }
 
 #[tauri::command]
-pub fn create_notification(state: State<'_, DbState>, input: CreateNotificationInput) -> Result<i64, AppError> {
+pub fn create_notification(state: State<'_, DbState>, user_id: i64, input: CreateNotificationInput) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "hr", "operator", "accountant"])?;
     let severity = input.severity.unwrap_or_else(|| "info".to_string());
     conn.execute(
         "INSERT INTO notifications (user_id, notification_type, title, message, entity_type, entity_id, severity, read_status, action_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'unread', ?, datetime('now'))",
         rusqlite::params![input.user_id, input.notification_type, input.title, input.message, input.entity_type, input.entity_id, severity, input.action_url],
     )?;
-    Ok(conn.last_insert_rowid())
+    let id = conn.last_insert_rowid();
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "create_notification", "notifications", Some(id), None, Some(&input.notification_type), None);
+    Ok(id)
 }
 
 #[tauri::command]
-pub fn mark_notification_read(state: State<'_, DbState>, id: i64) -> Result<String, AppError> {
+pub fn mark_notification_read(state: State<'_, DbState>, user_id: i64, id: i64) -> Result<String, AppError> {
     let conn = state.0.lock()?;
-    conn.execute("UPDATE notifications SET read_status = 'read', read_at = datetime('now') WHERE id = ? AND read_status = 'unread'", [id])?;
+    let rows = conn.execute("UPDATE notifications SET read_status = 'read', read_at = datetime('now') WHERE id = ? AND (user_id = ? OR user_id IS NULL) AND read_status = 'unread'", rusqlite::params![id, user_id])?;
+    if rows == 0 { return Err(AppError::not_found("الإشعار غير موجود أو لا يخص المستخدم")); }
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "mark_notification_read", "notifications", Some(id), None, None, None);
     Ok("Notification marked as read".to_string())
 }
 
 #[tauri::command]
-pub fn mark_all_notifications_read(state: State<'_, DbState>, user_id: Option<i64>) -> Result<String, AppError> {
+pub fn mark_all_notifications_read(state: State<'_, DbState>, user_id: i64) -> Result<String, AppError> {
     let conn = state.0.lock()?;
-    if let Some(uid) = user_id {
-        conn.execute("UPDATE notifications SET read_status = 'read', read_at = datetime('now') WHERE (user_id = ? OR user_id IS NULL) AND read_status = 'unread'", [uid])?;
-    } else {
-        conn.execute("UPDATE notifications SET read_status = 'read', read_at = datetime('now') WHERE read_status = 'unread'", [])?;
-    }
+    let rows = conn.execute("UPDATE notifications SET read_status = 'read', read_at = datetime('now') WHERE (user_id = ? OR user_id IS NULL) AND read_status = 'unread'", [user_id])?;
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "mark_all_notifications_read", "notifications", None, None, Some(&format!("marked={}", rows)), None);
     Ok("All notifications marked as read".to_string())
 }
 
 #[tauri::command]
-pub fn get_notification_count(state: State<'_, DbState>, user_id: Option<i64>) -> Result<serde_json::Value, AppError> {
+pub fn get_notification_count(state: State<'_, DbState>, user_id: i64) -> Result<serde_json::Value, AppError> {
     let conn = state.0.lock()?;
-    let total: i64 = if let Some(uid) = user_id {
-        conn.query_row("SELECT COUNT(*) FROM notifications WHERE (user_id = ? OR user_id IS NULL) AND read_status = 'unread'", [uid], |r| r.get(0)).unwrap_or(0)
-    } else {
-        conn.query_row("SELECT COUNT(*) FROM notifications WHERE read_status = 'unread'", [], |r| r.get(0)).unwrap_or(0)
-    };
-    let critical: i64 = if let Some(uid) = user_id {
-        conn.query_row("SELECT COUNT(*) FROM notifications WHERE (user_id = ? OR user_id IS NULL) AND read_status = 'unread' AND severity = 'critical'", [uid], |r| r.get(0)).unwrap_or(0)
-    } else {
-        conn.query_row("SELECT COUNT(*) FROM notifications WHERE read_status = 'unread' AND severity = 'critical'", [], |r| r.get(0)).unwrap_or(0)
-    };
+    let total: i64 = conn.query_row("SELECT COUNT(*) FROM notifications WHERE (user_id = ? OR user_id IS NULL) AND read_status = 'unread'", [user_id], |r| r.get(0)).unwrap_or(0);
+    let critical: i64 = conn.query_row("SELECT COUNT(*) FROM notifications WHERE (user_id = ? OR user_id IS NULL) AND read_status = 'unread' AND severity = 'critical'", [user_id], |r| r.get(0)).unwrap_or(0);
     Ok(serde_json::json!({
         "unread_count": total,
         "critical_count": critical,

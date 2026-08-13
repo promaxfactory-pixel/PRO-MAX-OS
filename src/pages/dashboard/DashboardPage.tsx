@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Card, { StatCard } from "@/components/ui/Card";
 import { formatOMR } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import {
   Users, Package, FileText, TrendingUp, TrendingDown,
   Factory, AlertTriangle, Banknote, Warehouse, RefreshCw,

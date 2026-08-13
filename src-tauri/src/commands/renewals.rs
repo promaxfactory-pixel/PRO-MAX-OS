@@ -1,3 +1,4 @@
+use crate::commands::rbac;
 use crate::db::DbState;
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
@@ -60,9 +61,11 @@ pub fn list_renewals(state: State<'_, DbState>) -> Result<Vec<Renewal>, AppError
 #[tauri::command]
 pub fn create_renewal(
     state: State<'_, DbState>,
+    user_id: i64,
     input: CreateRenewalInput,
 ) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager"])?;
 
     conn.execute(
         "INSERT INTO renewals(name, category, authority, issue_date, expiry_date, cost_milli, responsible, alert_days, status, notes) VALUES(?,?,?,?,?,?,?,?,'Active',?)",
@@ -78,5 +81,7 @@ pub fn create_renewal(
             input.notes,
         ],
     )?;
-    Ok(conn.last_insert_rowid())
+    let id = conn.last_insert_rowid();
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "create_renewal", "renewals", Some(id), None, Some(&input.name), None);
+    Ok(id)
 }

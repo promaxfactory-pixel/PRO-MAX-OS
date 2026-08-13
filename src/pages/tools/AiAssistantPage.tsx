@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Button from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import {
   Send, Bot, User, Settings, MessageSquare, Plus, Trash2,
   Eye, EyeOff, Loader2, X, Sparkles,

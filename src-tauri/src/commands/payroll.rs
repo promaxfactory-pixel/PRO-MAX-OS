@@ -1,5 +1,5 @@
 use crate::commands::rbac;
-use crate::db::DbState;
+use crate::db::{next_sequence, DbState};
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -81,17 +81,7 @@ pub fn create_payroll_run(
     let tx = conn.transaction()?;
     let year = chrono::Utc::now().format("%Y").to_string();
 
-    let seq: i64 = tx
-        .query_row(
-            "SELECT COALESCE(last_number,0)+1 FROM doc_sequences WHERE doc_type='PR' AND year=?",
-            [&year],
-            |r| r.get(0),
-        )
-        .unwrap_or(1);
-    tx.execute(
-        "INSERT INTO doc_sequences(doc_type, year, last_number) VALUES('PR',?,?) ON CONFLICT(doc_type, year) DO UPDATE SET last_number=excluded.last_number",
-        rusqlite::params![year, seq],
-    ).map_err(|e| format!("Failed to increment payroll sequence: {}", e))?;
+    let seq = next_sequence(&tx, "PR", &year)?;
     let run_no = format!("PR-{}-{:04}", year, seq);
 
     tx.execute(

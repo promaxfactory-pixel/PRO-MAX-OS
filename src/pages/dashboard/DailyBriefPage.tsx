@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import { formatOMR } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import {
   AlertTriangle, Package, Users, FileText, Shield, RefreshCw
 } from "lucide-react";

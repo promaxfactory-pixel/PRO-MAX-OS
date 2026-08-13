@@ -1,5 +1,5 @@
 use crate::commands::rbac;
-use crate::db::DbState;
+use crate::db::{next_sequence, DbState};
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -140,23 +140,14 @@ pub fn get_production_order(
 #[tauri::command]
 pub fn create_production_order(
     state: State<'_, DbState>,
+    user_id: i64,
     input: CreateOrderInput,
 ) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "operator"])?;
     let year = chrono::Utc::now().format("%Y").to_string();
 
-    let seq: i64 = conn
-        .query_row(
-            "SELECT COALESCE(last_number,0)+1 FROM doc_sequences WHERE doc_type='PROD' AND year=?",
-            [&year],
-            |r| r.get(0),
-        )
-        .unwrap_or(1);
-    conn.execute(
-        "INSERT INTO doc_sequences(doc_type, year, last_number) VALUES('PROD',?,?) ON CONFLICT(doc_type, year) DO UPDATE SET last_number=excluded.last_number",
-        rusqlite::params![year, seq],
-    )
-    .map_err(|e| format!("Failed to increment production order sequence: {}", e))?;
+    let seq = next_sequence(&conn, "PROD", &year)?;
     let prod_no = format!("PROD-{}-{:04}", year, seq);
 
     conn.execute(
@@ -181,10 +172,12 @@ pub fn create_production_order(
 #[tauri::command]
 pub fn update_production_order(
     state: State<'_, DbState>,
+    user_id: i64,
     id: i64,
     input: UpdateOrderInput,
 ) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "operator"])?;
     let mut sets = Vec::new();
     let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
@@ -226,7 +219,7 @@ pub fn update_production_order(
     }
 
     if sets.is_empty() {
-        return Err(AppError::validation("No changes provided"));
+        return Err(AppError::validation("لا توجد تعديلات"));
     }
 
     params.push(Box::new(id));
@@ -243,10 +236,12 @@ pub fn update_production_order(
 #[tauri::command]
 pub fn approve_production_order(
     state: State<'_, DbState>,
+    user_id: i64,
     id: i64,
     approved_by: String,
 ) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager"])?;
     let now = chrono::Utc::now()
         .format("%Y-%m-%d %H:%M:%S")
         .to_string();
@@ -255,7 +250,7 @@ pub fn approve_production_order(
         rusqlite::params![approved_by, now, id],
     )
     ?;
-    let _ = rbac::log_audit(&conn, None, None, "approve_production_order", "production_orders", Some(id), None, None, None);
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "approve_production_order", "production_orders", Some(id), None, None, None);
     Ok("Approved".to_string())
 }
 
@@ -296,9 +291,11 @@ pub fn get_production_lines(
 #[tauri::command]
 pub fn add_production_line(
     state: State<'_, DbState>,
+    user_id: i64,
     input: AddLineInput,
 ) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "operator"])?;
     conn.execute(
         "INSERT INTO production_lines(order_id, product_id, cups_per_carton, cartons_good, cartons_waste, worker, brand_type, customer_id, batch_no) VALUES(?,?,?,?,?,?,?,?,?)",
         rusqlite::params![

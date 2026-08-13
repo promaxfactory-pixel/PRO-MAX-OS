@@ -1,3 +1,4 @@
+use crate::commands::rbac;
 use crate::db::DbState;
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
@@ -33,7 +34,7 @@ pub fn list_stock_transfers(
     let conn = state.0.lock()?;
     let mut stmt = conn
         .prepare(
-            "SELECT st.id, st.transfer_no, mw_from.name AS from_name, mw_to.name AS to_name, ii.name AS item_name, st.qty, st.status, st.notes, st.created_at
+            "SELECT st.id, st.transfer_no, mw_from.name AS from_name, mw_to.name AS to_name, COALESCE(ii.name_ar, ii.name_en, '') AS item_name, st.qty, st.status, st.notes, st.created_at
              FROM stock_transfers st
              LEFT JOIN multi_warehouse mw_from ON mw_from.id = st.from_warehouse_id
              LEFT JOIN multi_warehouse mw_to ON mw_to.id = st.to_warehouse_id
@@ -59,12 +60,43 @@ pub fn list_stock_transfers(
     Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Warehouse {
+    pub id: i64,
+    pub code: Option<String>,
+    pub name: String,
+    pub location: Option<String>,
+    pub manager: Option<String>,
+    pub active: i64,
+}
+
+#[tauri::command]
+pub fn list_warehouses(state: State<'_, DbState>) -> Result<Vec<Warehouse>, AppError> {
+    let conn = state.0.lock()?;
+    let mut stmt = conn.prepare(
+        "SELECT id, code, name, location, manager, active FROM multi_warehouse WHERE active=1 ORDER BY name"
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(Warehouse {
+            id: row.get(0)?,
+            code: row.get(1)?,
+            name: row.get(2)?,
+            location: row.get(3)?,
+            manager: row.get(4)?,
+            active: row.get(5)?,
+        })
+    })?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
+
 #[tauri::command]
 pub fn create_stock_transfer(
     state: State<'_, DbState>,
+    user_id: i64,
     input: CreateStockTransferInput,
 ) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "operator"])?;
 
     let seq: i64 = conn
         .query_row(
@@ -86,5 +118,7 @@ pub fn create_stock_transfer(
             input.notes,
         ],
     )?;
-    Ok(conn.last_insert_rowid())
+    let id = conn.last_insert_rowid();
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "create_stock_transfer", "stock_transfers", Some(id), None, None, None);
+    Ok(id)
 }

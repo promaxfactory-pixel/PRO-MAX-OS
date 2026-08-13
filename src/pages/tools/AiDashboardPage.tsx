@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { formatOMR, cn } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import { useUIStore } from "@/stores/uiStore";
 import {
   Brain, AlertTriangle, AlertCircle, Info, TrendingUp,

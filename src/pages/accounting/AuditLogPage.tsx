@@ -3,7 +3,7 @@ import DataTable, { Column, type BadgeVariant } from "@/components/ui/DataTable"
 import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import { formatDate } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import { Search, ChevronDown, ChevronUp } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 

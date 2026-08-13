@@ -120,8 +120,9 @@ pub fn get_supplier(state: State<'_, DbState>, id: i64) -> Result<Supplier, AppE
 }
 
 #[tauri::command]
-pub fn create_supplier(state: State<'_, DbState>, input: CreateSupplierInput) -> Result<i64, AppError> {
+pub fn create_supplier(state: State<'_, DbState>, user_id: i64, input: CreateSupplierInput) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager"])?;
     conn.execute(
         "INSERT INTO suppliers(code, name, contact, phone, email, address, vat_number, currency, payment_terms, notes) VALUES(?,?,?,?,?,?,?,?,?,?)",
         rusqlite::params![
@@ -136,8 +137,9 @@ pub fn create_supplier(state: State<'_, DbState>, input: CreateSupplierInput) ->
 }
 
 #[tauri::command]
-pub fn update_supplier(state: State<'_, DbState>, id: i64, input: UpdateSupplierInput) -> Result<String, AppError> {
+pub fn update_supplier(state: State<'_, DbState>, user_id: i64, id: i64, input: UpdateSupplierInput) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager"])?;
     let mut sets = Vec::new();
     let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
@@ -163,8 +165,9 @@ pub fn update_supplier(state: State<'_, DbState>, id: i64, input: UpdateSupplier
 }
 
 #[tauri::command]
-pub fn delete_supplier(state: State<'_, DbState>, id: i64) -> Result<String, AppError> {
+pub fn delete_supplier(state: State<'_, DbState>, user_id: i64, id: i64) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager"])?;
     conn.execute("UPDATE suppliers SET active=0 WHERE id=?", [id])?;
     let _ = rbac::log_audit(&conn, None, None, "delete_supplier", "suppliers", Some(id), None, None, None);
     Ok("تم الحذف بنجاح".to_string())
@@ -187,7 +190,7 @@ pub fn get_supplier_statement(
     // Purchases
     {
         let mut stmt = conn.prepare(
-            "SELECT p.date, p.purchase_no, p.total_milli, p.notes FROM purchases p WHERE p.supplier_id=? AND p.date BETWEEN ? AND ? AND p.status != 'Void' ORDER BY p.date ASC"
+            "SELECT p.date, p.pur_no, p.total_milli, p.notes FROM purchases p WHERE p.supplier_id=? AND p.date BETWEEN ? AND ? AND LOWER(p.status) = 'posted' ORDER BY p.date ASC"
         )?;
         let rows = stmt.query_map(rusqlite::params![supplier_id, from, to], |row| {
             Ok((
@@ -214,7 +217,7 @@ pub fn get_supplier_statement(
     // Supplier payments
     {
         let mut stmt = conn.prepare(
-            "SELECT sp.date, sp.receipt_no, sp.amount_milli, sp.method, sp.notes FROM supplier_payments sp WHERE sp.supplier_id=? AND sp.date BETWEEN ? AND ? AND sp.status != 'Void' ORDER BY sp.date ASC"
+            "SELECT sp.date, sp.pay_no, sp.amount_milli, sp.method, sp.notes FROM supplier_payments sp WHERE sp.supplier_id=? AND sp.date BETWEEN ? AND ? ORDER BY sp.date ASC"
         )?;
         let rows = stmt.query_map(rusqlite::params![supplier_id, from, to], |row| {
             Ok((

@@ -41,7 +41,40 @@ pub struct InstallmentSummary {
     pub pending_payments: i64,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Installment {
+    pub id: i64,
+    pub name: Option<String>,
+    pub total_amount_milli: i64,
+    pub number_of_installments: i64,
+    pub supplier_name: Option<String>,
+    pub status: Option<String>,
+}
+
 const PAYMENT_COLUMNS: &str = "p.id, p.installment_id, i.name AS installment_name, p.installment_number, p.due_date, p.amount_milli, p.paid_milli, p.paid_date, p.penalty_milli, p.status, p.notes";
+
+#[tauri::command]
+pub fn list_installments(
+    state: State<'_, DbState>,
+) -> Result<Vec<Installment>, AppError> {
+    let conn = state.0.lock()?;
+    let mut stmt = conn.prepare(
+        "SELECT id, name, original_milli, num_installments, source, status
+         FROM installments
+         ORDER BY id DESC",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(Installment {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            total_amount_milli: row.get(2)?,
+            number_of_installments: row.get(3)?,
+            supplier_name: row.get(4)?,
+            status: row.get(5)?,
+        })
+    })?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
 
 #[tauri::command]
 pub fn list_installment_payments(
@@ -77,9 +110,11 @@ pub fn list_installment_payments(
 #[tauri::command]
 pub fn create_installment_payment(
     state: State<'_, DbState>,
+    user_id: i64,
     input: CreateInstallmentPaymentInput,
 ) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "accountant"])?;
 
     conn.execute(
         "INSERT INTO installment_payments(installment_id, installment_number, due_date, amount_milli, status, notes) VALUES(?,?,?,?, 'pending', ?)",
@@ -92,21 +127,23 @@ pub fn create_installment_payment(
         ],
     )?;
     let id = conn.last_insert_rowid();
-    let _ = rbac::log_audit(&conn, None, None, "create_installment_payment", "installment_payments", Some(id), None, None, None);
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "create_installment_payment", "installment_payments", Some(id), None, None, None);
     Ok(id)
 }
 
 #[tauri::command]
 pub fn mark_installment_paid(
     state: State<'_, DbState>,
+    user_id: i64,
     id: i64,
 ) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "accountant"])?;
     conn.execute(
         "UPDATE installment_payments SET paid_milli = amount_milli, paid_date = datetime('now'), status = 'paid' WHERE id = ?",
         [id],
     )?;
-    let _ = rbac::log_audit(&conn, None, None, "mark_installment_paid", "installment_payments", Some(id), None, None, None);
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "mark_installment_paid", "installment_payments", Some(id), None, None, None);
     Ok("Payment marked as paid".to_string())
 }
 

@@ -39,7 +39,10 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": []
+    "resources": [
+      ".promax_os_license",
+      "promax.secrets.json"
+    ]
   },
   "plugins": {
     "shell": {

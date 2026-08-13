@@ -3,6 +3,7 @@ use std::fs;
 use std::path::Path;
 use tauri::State;
 
+use crate::commands::rbac;
 use crate::db::DbState;
 use crate::error::AppError;
 
@@ -547,7 +548,7 @@ fn parse_into_extraction_result(data: &OcrInvoiceData) -> ExtractionResult {
 #[tauri::command]
 pub fn ocr_extract_from_file(path: String) -> Result<OcrResult, AppError> {
     crate::commands::licensing::require_feature(crate::commands::licensing::FEAT_OCR)?;
-    if path.trim().is_empty() { return Err(AppError::validation("File path cannot be empty")); }
+    if path.trim().is_empty() { return Err(AppError::validation("مسار الملف لا يمكن أن يكون فارغاً")); }
     let path_obj = Path::new(&path);
     if !path_obj.exists() { return Err(AppError::not_found(format!("File does not exist: {}", path))); }
     if !path_obj.is_file() { return Err(AppError::validation(format!("Path is not a file: {}", path))); }
@@ -581,7 +582,7 @@ pub fn ocr_parse_invoice(path: String) -> Result<ExtractionResult, AppError> {
         extract_text_from_image(&path).0
     };
     if raw_text.trim().is_empty() {
-        return Err(AppError::business("No text could be extracted"));
+        return Err(AppError::business("تعذر استخراج أي نص"));
     }
     let data = parse_invoice_data_from_text(&raw_text);
     Ok(parse_into_extraction_result(&data))
@@ -639,7 +640,7 @@ pub fn ocr_enhance_with_ai(
 fn prompt_ai_for_enhancement(prompt: &str) -> Result<String, AppError> {
     let api_key = std::env::var("OPENAI_API_KEY").or_else(|_| std::env::var("ANTHROPIC_API_KEY"));
     let provider = if std::env::var("OPENAI_API_KEY").is_ok() { "openai" } else { "anthropic" };
-    let key = api_key.map_err(|_| AppError::validation("No AI API key configured"))?;
+    let key = api_key.map_err(|_| AppError::validation("لا يوجد مفتاح API للذكاء الاصطناعي"))?;
 
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
@@ -755,9 +756,11 @@ pub fn ocr_get_suggestions(
 #[tauri::command]
 pub fn ocr_create_invoice(
     state: State<'_, DbState>,
+    user_id: i64,
     data: serde_json::Value,
 ) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     let vendor = data["vendor_name"].as_str().unwrap_or("Unknown");
     let inv_no = data["invoice_number"].as_str().unwrap_or("");
     let date = data["date"].as_str().unwrap_or("");
@@ -779,35 +782,42 @@ pub fn ocr_create_invoice(
 
     let inv_id: i64 = conn.query_row(
         "INSERT INTO purchases (pur_no, date, supplier_id, vat_enabled, net_milli, vat_milli, total_milli, status, notes, created_by)
-         VALUES (?1, ?2, ?3, 1, ?4, ?5, ?6, 'Posted', 'OCR Import', 'system')
+         VALUES (?1, ?2, ?3, 1, ?4, ?5, ?6, 'draft', 'OCR Import', 'system')
          RETURNING id",
         rusqlite::params![inv_no, date, supplier_id, net_baisa, vat_baisa, total_baisa],
         |row| row.get(0),
     ).map_err(|e| format!("Failed to create invoice: {}", e))?;
 
-    Ok(format!("Purchase {} created (id: {})", inv_no, inv_id))
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "ocr_create_invoice", "purchases", Some(inv_id), None, Some(inv_no), None);
+    Ok(format!("Purchase {} created as draft (id: {}). Post it to book the ledger, stock and supplier balance.", inv_no, inv_id))
 }
 
 #[tauri::command]
 pub fn ocr_add_supplier(
     state: State<'_, DbState>,
+    user_id: i64,
     data: serde_json::Value,
 ) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "accountant"])?;
     let name = data["name"].as_str().unwrap_or("OCR Import");
     conn.execute(
         "INSERT INTO suppliers (name) VALUES (?1)",
         [name],
     )?;
+    let id = conn.last_insert_rowid();
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "ocr_add_supplier", "suppliers", Some(id), None, Some(name), None);
     Ok(format!("Supplier '{}' created", name))
 }
 
 #[tauri::command]
 pub fn ocr_register_expense(
     state: State<'_, DbState>,
+    user_id: i64,
     data: serde_json::Value,
 ) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     let total = data["total"].as_f64().unwrap_or(0.0);
     let desc = data["description"].as_str().unwrap_or("OCR Expense");
     let category = data["category"].as_str().unwrap_or("general");
@@ -825,15 +835,19 @@ pub fn ocr_register_expense(
         "INSERT INTO expenses (exp_no, date, category, description, amount_milli, method, notes) VALUES (?1, ?2, ?3, ?4, ?5, 'OCR', 'OCR Scanned')",
         rusqlite::params![exp_no, use_date, category, desc, amount_milli],
     )?;
+    let id = conn.last_insert_rowid();
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "ocr_register_expense", "expenses", Some(id), None, Some(&exp_no), None);
     Ok(format!("Expense {} for {:.3} OMR registered", exp_no, total))
 }
 
 #[tauri::command]
 pub fn ocr_update_prices(
     state: State<'_, DbState>,
+    user_id: i64,
     data: serde_json::Value,
 ) -> Result<String, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "operator"])?;
     let items = data["items"].as_array().ok_or_else(|| AppError::validation("items must be an array"))?;
     let mut count = 0u32;
     for item in items {
@@ -845,6 +859,7 @@ pub fn ocr_update_prices(
             count += 1;
         }
     }
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "ocr_update_prices", "products", None, None, Some(&format!("items={}", count)), None);
     Ok(format!("{} prices updated via OCR", count))
 }
 
@@ -863,8 +878,9 @@ pub fn ocr_get_history(state: State<'_, DbState>) -> Result<Vec<OcrScan>, AppErr
 }
 
 #[tauri::command]
-pub fn ocr_save_scan(state: State<'_, DbState>, input: serde_json::Value) -> Result<i64, AppError> {
+pub fn ocr_save_scan(state: State<'_, DbState>, user_id: i64, input: serde_json::Value) -> Result<i64, AppError> {
     let db = state.0.lock()?;
+    rbac::require_role(&db, user_id, &["admin", "manager", "operator", "accountant"])?;
     let file_path = input["file_path"].as_str().unwrap_or("");
     let raw_text = input["raw_text"].as_str().unwrap_or("");
     let parsed_data = input["parsed_data"].as_str().unwrap_or("");
@@ -874,7 +890,9 @@ pub fn ocr_save_scan(state: State<'_, DbState>, input: serde_json::Value) -> Res
         "INSERT INTO ocr_scans (file_name, file_path, extracted_text, parsed_data, confidence, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         rusqlite::params![file_name, file_path, raw_text, parsed_data, confidence, if confidence > 50.0 { "completed" } else { "pending" }],
     )?;
-    Ok(db.last_insert_rowid())
+    let id = db.last_insert_rowid();
+    let _ = rbac::log_audit(&db, Some(user_id), None, "ocr_save_scan", "ocr_scans", Some(id), None, Some(&file_name), None);
+    Ok(id)
 }
 
 #[tauri::command]

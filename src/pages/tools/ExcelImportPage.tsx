@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/tauri";
 import {
   FileSpreadsheet, Upload, CheckCircle2, XCircle, ArrowRight,
   RotateCcw, Download, AlertTriangle
