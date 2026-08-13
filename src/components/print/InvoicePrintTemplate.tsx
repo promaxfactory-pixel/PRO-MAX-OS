@@ -181,6 +181,24 @@ export default function InvoicePrintTemplate({ data }: Props) {
         )}
       </div>
 
+      {data.qr_data_url && (
+        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16, position: "relative", zIndex: 1 }}>
+          <img
+            src={data.qr_data_url}
+            width={96}
+            height={96}
+            alt="QR"
+            style={{ border: "1px solid #e2e8f0", borderRadius: 10, padding: 6, background: "#ffffff", boxSizing: "border-box" }}
+          />
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 800, color: "#334155" }}>رمز التحقق الضريبي</div>
+            <div style={{ fontSize: 9.5, color: "#94a3b8", marginTop: 2, lineHeight: 1.6 }}>
+              امسح الرمز بالهاتف للتحقق من بيانات<br />الفاتورة والضريبة (توافق ZATCA)
+            </div>
+          </div>
+        </div>
+      )}
+
       {invoice.notes && (
         <div style={S.nt}><strong>ملاحظات: </strong>{htmlEscape(invoice.notes)}</div>
       )}

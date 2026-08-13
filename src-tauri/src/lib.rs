@@ -4,6 +4,7 @@ pub mod mcp;
 pub mod crypto;
 pub mod error;
 pub mod validation;
+mod zatca;
 
 use tauri::Manager;
 

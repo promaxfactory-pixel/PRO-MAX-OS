@@ -997,6 +997,7 @@ mod tests {
         assert_eq!(rec_no, "RCP-2026-0001");
         assert_eq!(amount, 125000);
         assert_eq!(method, "cash");
+        assert_eq!(reference.as_deref(), Some("REF-1"));
 
         // Customer info used by the print payload.
         let (cname, _addr, _vat, _phone): (String, Option<String>, Option<String>, Option<String>) = conn.query_row(

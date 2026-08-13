@@ -570,6 +570,7 @@ pub struct InvoicePrintData {
     pub customer: CustomerPrintInfo,
     pub lines: Vec<InvoiceLine>,
     pub company: CompanyPrintInfo,
+    pub qr_data_url: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -668,23 +669,53 @@ fn get_customer_info(conn: &rusqlite::Connection, customer_id: i64) -> Result<Cu
     ).map_err(|e| AppError::business(format!("Customer not found: {}", e)))
 }
 
+fn build_invoice_qr(company: &CompanyPrintInfo, invoice: &SalesInvoice) -> Option<String> {
+    if invoice.total_milli <= 0 {
+        return None;
+    }
+    let seller = company
+        .name
+        .as_deref()
+        .or(company.factory_name.as_deref())
+        .unwrap_or("PRO MAX OS");
+    let vat_number = company.vat_number.as_deref().unwrap_or("");
+    let timestamp = crate::zatca::to_iso8601(&invoice.date, &invoice.created_at);
+    let payload = crate::zatca::build_zatca_payload(&crate::zatca::ZatcaQrFields {
+        seller_name: seller,
+        vat_number,
+        timestamp: &timestamp,
+        total_units: invoice.total_milli as f64 / 1000.0,
+        vat_units: invoice.vat_milli as f64 / 1000.0,
+    });
+    crate::zatca::qr_png_data_url(&payload).ok()
+}
+
 #[tauri::command]
 pub fn get_invoice_for_print(state: State<'_, DbState>, invoice_id: i64) -> Result<InvoicePrintData, AppError> {
     let conn = state.0.lock()?;
-    let invoice = get_invoice_by_conn(&conn, invoice_id)?;
-    let customer = get_customer_info(&conn, invoice.customer_id)?;
-    let lines = get_invoice_lines_internal(&conn, invoice_id)?;
-    let company = get_company_info(&conn)?;
-    Ok(InvoicePrintData { invoice, customer, lines, company })
+    get_invoice_for_print_inner(&conn, invoice_id)
+}
+
+fn get_invoice_for_print_inner(conn: &rusqlite::Connection, invoice_id: i64) -> Result<InvoicePrintData, AppError> {
+    let invoice = get_invoice_by_conn(conn, invoice_id)?;
+    let customer = get_customer_info(conn, invoice.customer_id)?;
+    let lines = get_invoice_lines_internal(conn, invoice_id)?;
+    let company = get_company_info(conn)?;
+    let qr_data_url = build_invoice_qr(&company, &invoice);
+    Ok(InvoicePrintData { invoice, customer, lines, company, qr_data_url })
 }
 
 #[tauri::command]
 pub fn get_invoice_for_print_customs(state: State<'_, DbState>, invoice_id: i64) -> Result<InvoicePrintData, AppError> {
     let conn = state.0.lock()?;
-    let invoice = get_invoice_by_conn(&conn, invoice_id)?;
-    let customer = get_customer_info(&conn, invoice.customer_id)?;
-    let mut lines = get_invoice_lines_internal(&conn, invoice_id)?;
-    let company = get_company_info(&conn)?;
+    get_invoice_for_print_customs_inner(&conn, invoice_id)
+}
+
+fn get_invoice_for_print_customs_inner(conn: &rusqlite::Connection, invoice_id: i64) -> Result<InvoicePrintData, AppError> {
+    let invoice = get_invoice_by_conn(conn, invoice_id)?;
+    let customer = get_customer_info(conn, invoice.customer_id)?;
+    let mut lines = get_invoice_lines_internal(conn, invoice_id)?;
+    let company = get_company_info(conn)?;
 
     // Swap real prices with customs prices for customs clearance printing
     let mut new_net: i64 = 0;
@@ -711,7 +742,8 @@ pub fn get_invoice_for_print_customs(state: State<'_, DbState>, invoice_id: i64)
     inv.vat_milli = new_vat;
     inv.total_milli = new_net + new_vat;
 
-    Ok(InvoicePrintData { invoice: inv, customer, lines, company })
+    let qr_data_url = build_invoice_qr(&company, &inv);
+    Ok(InvoicePrintData { invoice: inv, customer, lines, company, qr_data_url })
 }
 
 #[tauri::command]
@@ -828,4 +860,77 @@ fn get_invoice_lines_internal(conn: &rusqlite::Connection, invoice_id: i64) -> R
         })
     })?;
     Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use base64::Engine;
+    use crate::db::init_database;
+
+    fn build_test_data() -> (std::path::PathBuf, rusqlite::Connection, i64) {
+        let db_path = std::env::temp_dir().join(format!("promax_qr_{}.db", uuid::Uuid::new_v4()));
+        let conn = init_database(&db_path).expect("fresh db");
+        conn.execute(
+            "INSERT INTO company_settings(name, factory_name, address, phone, email, vat_number, default_vat_pct) VALUES('شركة التجربة','مصنع التجربة','الكويت','12345678','x@y.com','300012345600003',5.0)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO customers(code, name, ctype, contact, phone, email, address, vat_number, credit_limit_milli, payment_terms, payment_terms_days, notes) VALUES('C1','عميل تجربة','credit',NULL,'99001122',NULL,NULL,NULL,0,'net',30,NULL)",
+            [],
+        )
+        .unwrap();
+        let cid = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO sales_invoices(inv_no, date, customer_id, payment_type, net_milli, vat_milli, total_milli, status, notes) VALUES('INV-2026-0001','2026-08-13',?1,'credit',100000,5000,105000,'Posted','note')",
+            [cid],
+        )
+        .unwrap();
+        let iid = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO products(code, name_ar, name_en, cups_per_carton, default_price_milli, vat_pct) VALUES('P1','كوب تجربة','Test Cup',5,10000,5.0)",
+            [],
+        )
+        .unwrap();
+        let pid = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO sales_invoice_lines(invoice_id, product_id, cartons, cups_per_carton, qty_cups, unit_price_milli, customs_price_milli, line_net_milli, vat_pct, vat_milli) VALUES(?1,?2,10,5,50,10000,20000,100000,5.0,5000)",
+            rusqlite::params![iid, pid],
+        )
+        .unwrap();
+        (db_path, conn, iid)
+    }
+
+    fn cleanup(db_path: &std::path::Path) {
+        let _ = std::fs::remove_file(db_path);
+        let _ = std::fs::remove_file(db_path.with_extension("db-shm"));
+        let _ = std::fs::remove_file(db_path.with_extension("db-wal"));
+    }
+
+    #[test]
+    fn invoice_print_includes_zatca_qr() {
+        let (db_path, conn, iid) = build_test_data();
+        let data = get_invoice_for_print_inner(&conn, iid).expect("print data");
+        let qr = data.qr_data_url.expect("QR must be generated");
+        assert!(qr.starts_with("data:image/png;base64,"));
+        let b64 = &qr["data:image/png;base64,".len()..];
+        let png = base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .expect("png base64 decodes");
+        assert_eq!(&png[0..4], b"\x89PNG");
+        cleanup(&db_path);
+    }
+
+    #[test]
+    fn invoice_print_customs_uses_customs_totals_in_qr() {
+        let (db_path, conn, iid) = build_test_data();
+        let data = get_invoice_for_print_customs_inner(&conn, iid).expect("customs print data");
+        // 10 cartons * 20000 (customs price) = 200000 net + 5% VAT = 10000 -> 210000 total.
+        assert_eq!(data.invoice.net_milli, 200000);
+        assert_eq!(data.invoice.vat_milli, 10000);
+        assert_eq!(data.invoice.total_milli, 210000);
+        assert!(data.qr_data_url.is_some());
+        cleanup(&db_path);
+    }
 }
