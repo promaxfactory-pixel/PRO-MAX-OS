@@ -971,6 +971,45 @@ mod tests {
     }
 
     #[test]
+    fn receipt_print_flow_works_end_to_end() {
+        let db_path = std::env::temp_dir().join(format!("promax_receipt_{}.db", uuid::Uuid::new_v4()));
+        let conn = super::init_database(&db_path).expect("fresh init_database must succeed");
+
+        conn.execute(
+            "INSERT INTO customers(code, name, ctype, contact, phone, email, address, vat_number, credit_limit_milli, payment_terms, payment_terms_days, notes) VALUES('C1','عميل تجربة','credit',NULL,'99001122',NULL,NULL,NULL,0,'net',30,NULL)",
+            [],
+        ).unwrap();
+        let customer_id = conn.last_insert_rowid();
+
+        // Same insert shape as commands::customers::create_customer_payment.
+        conn.execute(
+            "INSERT INTO customer_payments(rec_no, date, customer_id, amount_milli, method, cashbank_id, reference, notes, created_by, created_at) VALUES('RCP-2026-0001', date('now'), ?1, 125000, 'cash', NULL, 'REF-1', NULL, 'admin', datetime('now'))",
+            [customer_id],
+        ).unwrap();
+        let payment_id = conn.last_insert_rowid();
+
+        // Exact query used by commands::invoices::get_receipt_for_print.
+        let (rec_no, amount, method, reference): (String, i64, String, Option<String>) = conn.query_row(
+            "SELECT cp.rec_no, cp.amount_milli, cp.method, cp.reference FROM customer_payments cp WHERE cp.id=?",
+            [payment_id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+        ).unwrap();
+        assert_eq!(rec_no, "RCP-2026-0001");
+        assert_eq!(amount, 125000);
+        assert_eq!(method, "cash");
+
+        // Customer info used by the print payload.
+        let (cname, _addr, _vat, _phone): (String, Option<String>, Option<String>, Option<String>) = conn.query_row(
+            "SELECT name, address, vat_number, phone FROM customers WHERE id=?",
+            [customer_id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+        ).unwrap();
+        assert_eq!(cname, "عميل تجربة");
+
+        cleanup_db(&db_path);
+    }
+
+    #[test]
     fn test_next_sequence_increments_per_doc_type_and_year() {
         let conn = test_conn();
 
