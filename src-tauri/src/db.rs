@@ -72,7 +72,7 @@ fn ensure_admin_user(conn: &Connection) -> Result<()> {
 mod migrations {
     use rusqlite::{Connection, Result};
     
-    pub(crate) const SCHEMA_VERSION: i32 = 31;
+    pub(crate) const SCHEMA_VERSION: i32 = 33;
     
     pub fn run(conn: &Connection) -> Result<()> {
         let current: i32 = conn
@@ -831,6 +831,52 @@ mod migrations {
                     })?;
                 }
             }
+            32 => {
+                let has_col: bool = conn
+                    .prepare("SELECT COUNT(*) FROM pragma_table_info('suppliers') WHERE name='vat_number'")
+                    .and_then(|mut stmt| stmt.query_row([], |r| r.get::<_, i64>(0)))
+                    .map(|c| c > 0)
+                    .unwrap_or(false);
+                if !has_col {
+                    conn.execute_batch(
+                        "-- Supplier VAT number for tax reporting (queried by suppliers module)
+                        ALTER TABLE suppliers ADD COLUMN vat_number TEXT;"
+                    ).map_err(|e| {
+                        eprintln!("Migration 32 failed: {}", e);
+                        e
+                    })?;
+                }
+            }
+            33 => {
+                let has_ts: bool = conn
+                    .prepare("SELECT COUNT(*) FROM pragma_table_info('shift_inventory_snapshots') WHERE name='ts'")
+                    .and_then(|mut stmt| stmt.query_row([], |r| r.get::<_, i64>(0)))
+                    .map(|c| c > 0)
+                    .unwrap_or(false);
+                if !has_ts {
+                    conn.execute_batch(
+                        "-- Shift inventory snapshots timestamp (queried by production_shift module)
+                        ALTER TABLE shift_inventory_snapshots ADD COLUMN ts TEXT;"
+                    ).map_err(|e| {
+                        eprintln!("Migration 33a failed: {}", e);
+                        e
+                    })?;
+                }
+                let has_notes: bool = conn
+                    .prepare("SELECT COUNT(*) FROM pragma_table_info('credit_notes') WHERE name='notes'")
+                    .and_then(|mut stmt| stmt.query_row([], |r| r.get::<_, i64>(0)))
+                    .map(|c| c > 0)
+                    .unwrap_or(false);
+                if !has_notes {
+                    conn.execute_batch(
+                        "-- Credit note free-text notes (queried by credit note print)
+                        ALTER TABLE credit_notes ADD COLUMN notes TEXT;"
+                    ).map_err(|e| {
+                        eprintln!("Migration 33b failed: {}", e);
+                        e
+                    })?;
+                }
+            }
             _ => {}
         }
         Ok(())
@@ -891,6 +937,36 @@ mod tests {
             "freshly installed admin must accept the documented default password"
         );
 
+        cleanup_db(&db_path);
+    }
+
+    #[test]
+    fn fresh_db_suppliers_module_columns_work() {
+        let db_path = std::env::temp_dir().join(format!("promax_suppliers_{}.db", uuid::Uuid::new_v4()));
+        let conn = super::init_database(&db_path).expect("fresh init_database must succeed");
+        let sql = "SELECT id, code, name, contact, phone, email, address, vat_number, currency, payment_terms, opening_balance_milli, balance_milli, notes, active FROM suppliers WHERE active=1 ORDER BY name";
+        conn.prepare(sql).expect("suppliers list query must run on a fresh DB");
+        cleanup_db(&db_path);
+    }
+
+    #[test]
+    fn fresh_db_all_known_schema_mismatch_queries_run() {
+        let db_path = std::env::temp_dir().join(format!("promax_schema_{}.db", uuid::Uuid::new_v4()));
+        let conn = super::init_database(&db_path).expect("fresh init_database must succeed");
+
+        let queries: Vec<(&str, &str)> = vec![
+            // suppliers.vat_number (migration 32)
+            ("suppliers", "SELECT id, code, name, vat_number, currency FROM suppliers WHERE active=1"),
+            // shift_inventory_snapshots.ts (migration 33)
+            ("shift_snapshot_ts", "SELECT id, date, shift, item_id, ts FROM shift_inventory_snapshots"),
+            // credit_notes.notes (migration 33)
+            ("credit_note_notes", "SELECT id, cn_no, reason, notes FROM credit_notes"),
+            // ocr expense insert shape (uses notes column)
+            ("ocr_expense", "INSERT INTO expenses (exp_no, date, category, amount_milli, method, notes) VALUES ('EXP-2026-0001', '2026-01-01', 'general', 1000, 'OCR', 'OCR Expense')"),
+        ];
+        for (name, sql) in &queries {
+            conn.execute_batch(sql).unwrap_or_else(|e| panic!("{name} query failed on fresh DB: {e}"));
+        }
         cleanup_db(&db_path);
     }
 

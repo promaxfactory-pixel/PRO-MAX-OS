@@ -832,8 +832,8 @@ pub fn ocr_register_expense(
     let use_date = if date.is_empty() { chrono::Utc::now().format("%Y-%m-%d").to_string() } else { date.to_string() };
 
     conn.execute(
-        "INSERT INTO expenses (exp_no, date, category, description, amount_milli, method, notes) VALUES (?1, ?2, ?3, ?4, ?5, 'OCR', 'OCR Scanned')",
-        rusqlite::params![exp_no, use_date, category, desc, amount_milli],
+        "INSERT INTO expenses (exp_no, date, category, amount_milli, method, notes) VALUES (?1, ?2, ?3, ?4, 'OCR', ?5)",
+        rusqlite::params![exp_no, use_date, category, amount_milli, desc],
     )?;
     let id = conn.last_insert_rowid();
     let _ = rbac::log_audit(&conn, Some(user_id), None, "ocr_register_expense", "expenses", Some(id), None, Some(&exp_no), None);
