@@ -68,11 +68,16 @@ jobs:
       - name: ESLint
         run: npx eslint src/ --ext .ts,.tsx
 
+  # Release binaries are built LOCALLY and published manually:
+  # tauri.conf.json bundles src-tauri/promax.secrets.json, whose real key
+  # material exists only on the maintainer's machine (the tracked file is a
+  # placeholder template). CI builds would silently produce installers that
+  # cannot decrypt real data, so full bundles are never auto-published.
   build-windows:
-    name: Build Windows
+    name: Build Windows (manual)
     runs-on: windows-latest
     needs: [rust-check, typescript-check]
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'workflow_dispatch'
     defaults:
       run:
         working-directory: src-tauri
@@ -106,6 +111,14 @@ jobs:
         run: npm run build
         working-directory: .
 
+      - name: Guard against placeholder secrets
+        run: |
+          $c = Get-Content promax.secrets.json -Raw
+          if ($c -match 'REPLACE_WITH') {
+            Write-Error "Refusing to bundle placeholder secrets. Supply the real src-tauri/promax.secrets.json."
+            exit 1
+          }
+
       - name: Install Tauri CLI
         run: cargo install tauri-cli --version "^2" --locked
 
@@ -124,29 +137,3 @@ jobs:
             src-tauri/target/release/bundle/**/*.msi
             src-tauri/target/release/bundle/**/*.exe
           retention-days: 30
-
-  build-release:
-    name: Release
-    runs-on: windows-latest
-    needs: build-windows
-    if: startsWith(github.ref, 'refs/tags/v')
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: pro-max-os-installer
-          path: release
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: release/**/*
-          generate_release_notes: true
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
