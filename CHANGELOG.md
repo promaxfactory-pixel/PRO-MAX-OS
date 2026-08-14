@@ -4,6 +4,36 @@ All notable changes to PRO MAX OS are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-08-14
+
+### Added
+- **ZATCA Phase 2 (Saudi e-invoicing)** — `zatca2` engine + command set:
+  - UBL 2.1 invoice builder with BR-KSA schema validation (VAT, QR, hashing).
+  - ECDSA secp256k1 signing (via `k256`) with encrypted key storage.
+  - Phase-2 compliant 9-tag base64 QR (seller name, VAT, timestamp, total,
+    VAT amount, hash, signature, certificate, QR encoding schema).
+  - Automatic CSID onboarding (compliance → production) against Fatoora,
+    plus manual CSR generation; environment split sandbox/production/simplified.
+  - Invoice clearance (standard) and reporting (simplified) endpoints with
+    UUID capture and rejection tracking (`zatca_settings` table, migration 34).
+  - New `zatca2_*` commands and dedicated `/tools/zatca2` UI page.
+- **Qayd XBRL filing (Kuwait)** — `qayd` engine + command set:
+  - IFRS-Full annual financial statement XBRL instance generation in KWD
+    from the general ledger (closing balances, P&L, retained earnings, SOCE).
+  - Taxonomy-aligned reporting with reconciliation and validation report.
+  - `qayd_*` commands and `/tools/qayd` UI page with XML preview and totals.
+- **Multi-branch + offline sync** — `branches` module:
+  - Branch CRUD with head-office protection and active toggling.
+  - `offline_sync_queue` for mutations captured while disconnected, with
+    enqueue/list/mark-synced/retry/stats commands.
+  - `/settings/branches` UI page (queue filter, payload inspection, retry).
+- Frontend: 3 new pages, sidebar entries and routes for the above.
+
+### Changed
+- Schema version 33 → 34 (`branches`, `offline_sync_queue`, `zatca_settings`,
+  `qayd_filings`, Phase-2 columns on `e_invoices`).
+- Version bumped to 2.3.0 (installers and portable build regenerated).
+
 ## [2.2.0] - 2026-08-09
 
 Unified release: the v2.0 AI/mobile line integrated onto the v2.1.1 line

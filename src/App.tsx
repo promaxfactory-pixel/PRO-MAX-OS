@@ -80,6 +80,9 @@ const AiFileImportPage = lazy(() => import("./pages/tools/AiFileImportPage"));
 const EnhancedOcrPage = lazy(() => import("./pages/tools/EnhancedOcrPage"));
 const ExcelImportPage = lazy(() => import("./pages/tools/ExcelImportPage"));
 const EInvoicePage = lazy(() => import("./pages/tools/EInvoicePage"));
+const Zatca2Page = lazy(() => import("./pages/tools/Zatca2Page"));
+const QaydFilingsPage = lazy(() => import("./pages/tools/QaydFilingsPage"));
+const BranchesPage = lazy(() => import("./pages/settings/BranchesPage"));
 const BackupPage = lazy(() => import("./pages/tools/BackupPage"));
 const NotFoundPage = lazy(() => import("./pages/errors/NotFoundPage"));
 const ForbiddenPage = lazy(() => import("./pages/errors/ForbiddenPage"));
@@ -223,6 +226,7 @@ export default function App() {
             {/* Settings */}
             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
             <Route path="/settings/users" element={<ProtectedRoute><UsersPage /></ProtectedRoute>} />
+            <Route path="/settings/branches" element={<ProtectedRoute><BranchesPage /></ProtectedRoute>} />
             <Route path="/settings/change-password" element={<ProtectedRoute><ChangePasswordPage /></ProtectedRoute>} />
             <Route path="/renewals" element={<ProtectedRoute><RenewalsPage /></ProtectedRoute>} />
 
@@ -239,6 +243,8 @@ export default function App() {
             <Route path="/tools/historical-import" element={<ProtectedRoute><HistoricalImportPage /></ProtectedRoute>} />
             <Route path="/tools/excel-import" element={<ProtectedRoute><ExcelImportPage /></ProtectedRoute>} />
             <Route path="/tools/einvoice" element={<ProtectedRoute><EInvoicePage /></ProtectedRoute>} />
+            <Route path="/tools/zatca2" element={<ProtectedRoute><Zatca2Page /></ProtectedRoute>} />
+            <Route path="/tools/qayd" element={<ProtectedRoute><QaydFilingsPage /></ProtectedRoute>} />
             <Route path="/tools/backup" element={<ProtectedRoute><BackupPage /></ProtectedRoute>} />
             <Route path="/tools/integrations" element={<ProtectedRoute><IntegrationsPage /></ProtectedRoute>} />
 
