@@ -691,6 +691,77 @@ CREATE TABLE IF NOT EXISTS e_invoices (
     acknowledged_at TEXT,
     rejection_reason TEXT,
     created_by TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    icv INTEGER,
+    pih TEXT,
+    invoice_hash TEXT,
+    qr_content TEXT,
+    signed_xml TEXT,
+    signature_value TEXT,
+    zatca_stage TEXT,
+    zatca_environment TEXT,
+    zatca_submitted_at TEXT,
+    zatca_rejection_code TEXT
+);
+
+-- ============================================================
+-- MULTI-BRANCH + OFFLINE SYNC
+-- ============================================================
+CREATE TABLE IF NOT EXISTS branches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    code TEXT,
+    address TEXT,
+    is_head_office INTEGER NOT NULL DEFAULT 0,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+INSERT OR IGNORE INTO branches(id, name, code, is_head_office, is_active) VALUES (1, 'الفرع الرئيسي', 'HQ', 1, 1);
+
+CREATE TABLE IF NOT EXISTS offline_sync_queue (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    branch_id INTEGER,
+    operation TEXT NOT NULL,
+    entity TEXT NOT NULL,
+    entity_id INTEGER,
+    payload TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT DEFAULT (datetime('now')),
+    synced_at TEXT
+);
+
+-- ============================================================
+-- ZATCA PHASE 2 SETTINGS
+-- ============================================================
+CREATE TABLE IF NOT EXISTS zatca_settings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER NOT NULL DEFAULT 1,
+    environment TEXT NOT NULL DEFAULT 'sandbox',
+    vat_number TEXT,
+    organization_name TEXT,
+    csid_stage TEXT NOT NULL DEFAULT 'none',
+    certificate_der TEXT,
+    signing_key TEXT,
+    onboarding_request_id TEXT,
+    icv_counter INTEGER NOT NULL DEFAULT 0,
+    last_invoice_hash TEXT,
+    updated_at TEXT
+);
+
+-- ============================================================
+-- QAYD XBRL FILINGS (Kuwait)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS qayd_filings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER NOT NULL DEFAULT 1,
+    fiscal_year INTEGER NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'KWD',
+    cr_number TEXT,
+    status TEXT NOT NULL DEFAULT 'draft',
+    instance_xml TEXT NOT NULL,
+    validation_report TEXT,
+    submitted_at TEXT,
+    created_by INTEGER,
     created_at TEXT DEFAULT (datetime('now'))
 );
 

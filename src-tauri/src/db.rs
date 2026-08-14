@@ -72,7 +72,7 @@ fn ensure_admin_user(conn: &Connection) -> Result<()> {
 mod migrations {
     use rusqlite::{Connection, Result};
     
-    pub(crate) const SCHEMA_VERSION: i32 = 33;
+    pub(crate) const SCHEMA_VERSION: i32 = 34;
     
     pub fn run(conn: &Connection) -> Result<()> {
         let current: i32 = conn
@@ -876,6 +876,116 @@ mod migrations {
                         e
                     })?;
                 }
+            }
+            34 => {
+                // Multi-branch operation
+                conn.execute_batch(
+                    "-- Multi-branch operation
+                    CREATE TABLE IF NOT EXISTS branches (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL,
+                        code TEXT,
+                        address TEXT,
+                        is_head_office INTEGER NOT NULL DEFAULT 0,
+                        is_active INTEGER NOT NULL DEFAULT 1,
+                        created_at TEXT DEFAULT (datetime('now'))
+                    );"
+                ).map_err(|e| {
+                    eprintln!("Migration 34a failed: {}", e);
+                    e
+                })?;
+                // Offline-first sync queue (branch disconnected mode)
+                conn.execute_batch(
+                    "-- Offline-first sync queue
+                    CREATE TABLE IF NOT EXISTS offline_sync_queue (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        branch_id INTEGER,
+                        operation TEXT NOT NULL,
+                        entity TEXT NOT NULL,
+                        entity_id INTEGER,
+                        payload TEXT NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'pending',
+                        created_at TEXT DEFAULT (datetime('now')),
+                        synced_at TEXT
+                    );"
+                ).map_err(|e| {
+                    eprintln!("Migration 34b failed: {}", e);
+                    e
+                })?;
+                // ZATCA Phase 2 settings
+                conn.execute_batch(
+                    "-- ZATCA (Phase 2) onboarding settings
+                    CREATE TABLE IF NOT EXISTS zatca_settings (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        company_id INTEGER NOT NULL DEFAULT 1,
+                        environment TEXT NOT NULL DEFAULT 'sandbox',
+                        vat_number TEXT,
+                        organization_name TEXT,
+                        csid_stage TEXT NOT NULL DEFAULT 'none',
+                        certificate_der TEXT,
+                        signing_key TEXT,
+                        onboarding_request_id TEXT,
+                        icv_counter INTEGER NOT NULL DEFAULT 0,
+                        last_invoice_hash TEXT,
+                        updated_at TEXT
+                    );"
+                ).map_err(|e| {
+                    eprintln!("Migration 34c failed: {}", e);
+                    e
+                })?;
+                // Qayd XBRL filings
+                conn.execute_batch(
+                    "-- Qayd XBRL annual filings
+                    CREATE TABLE IF NOT EXISTS qayd_filings (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        company_id INTEGER NOT NULL DEFAULT 1,
+                        fiscal_year INTEGER NOT NULL,
+                        currency TEXT NOT NULL DEFAULT 'KWD',
+                        cr_number TEXT,
+                        status TEXT NOT NULL DEFAULT 'draft',
+                        instance_xml TEXT NOT NULL,
+                        validation_report TEXT,
+                        submitted_at TEXT,
+                        created_by INTEGER,
+                        created_at TEXT DEFAULT (datetime('now'))
+                    );"
+                ).map_err(|e| {
+                    eprintln!("Migration 34d failed: {}", e);
+                    e
+                })?;
+                // e_invoices Phase-2 metadata columns (idempotent)
+                for (col, ddl) in [
+                    ("icv", "ALTER TABLE e_invoices ADD COLUMN icv INTEGER;"),
+                    ("pih", "ALTER TABLE e_invoices ADD COLUMN pih TEXT;"),
+                    ("invoice_hash", "ALTER TABLE e_invoices ADD COLUMN invoice_hash TEXT;"),
+                    ("qr_content", "ALTER TABLE e_invoices ADD COLUMN qr_content TEXT;"),
+                    ("signed_xml", "ALTER TABLE e_invoices ADD COLUMN signed_xml TEXT;"),
+                    ("signature_value", "ALTER TABLE e_invoices ADD COLUMN signature_value TEXT;"),
+                    ("zatca_stage", "ALTER TABLE e_invoices ADD COLUMN zatca_stage TEXT;"),
+                    ("zatca_environment", "ALTER TABLE e_invoices ADD COLUMN zatca_environment TEXT;"),
+                    ("zatca_submitted_at", "ALTER TABLE e_invoices ADD COLUMN zatca_submitted_at TEXT;"),
+                    ("zatca_rejection_code", "ALTER TABLE e_invoices ADD COLUMN zatca_rejection_code TEXT;"),
+                ] {
+                    let has_col: bool = conn
+                        .prepare("SELECT COUNT(*) FROM pragma_table_info('e_invoices') WHERE name=?1")
+                        .and_then(|mut stmt| stmt.query_row([col], |r| r.get::<_, i64>(0)))
+                        .map(|c| c > 0)
+                        .unwrap_or(false);
+                    if !has_col {
+                        conn.execute_batch(ddl).map_err(|e| {
+                            eprintln!("Migration 34e failed for {}: {}", col, e);
+                            e
+                        })?;
+                    }
+                }
+                // Seed head-office branch
+                conn.execute(
+                    "INSERT OR IGNORE INTO branches(id, name, code, is_head_office, is_active) VALUES(1, 'الفرع الرئيسي', 'HQ', 1, 1)",
+                    [],
+                ).map_err(|e| {
+                    eprintln!("Migration 34f failed: {}", e);
+                    e
+                })?;
             }
             _ => {}
         }

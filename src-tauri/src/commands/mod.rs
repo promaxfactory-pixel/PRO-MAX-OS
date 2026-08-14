@@ -50,3 +50,6 @@ pub mod assets;
 pub mod notifications;
 pub mod operating_advance;
 pub mod integrations;
+pub mod zatca2;
+pub mod qayd;
+pub mod branches;

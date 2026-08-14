@@ -5,6 +5,8 @@ pub mod crypto;
 pub mod error;
 pub mod validation;
 mod zatca;
+pub mod zatca2;
+pub mod qayd;
 
 use tauri::Manager;
 
@@ -397,6 +399,32 @@ pub fn run() {
             commands::operating_advance::get_advance_receipts,
             commands::operating_advance::get_advance_summary,
             commands::operating_advance::list_pending_receipts,
+            // ZATCA Phase 2
+            commands::zatca2::zatca2_get_settings,
+            commands::zatca2::zatca2_save_settings,
+            commands::zatca2::zatca2_build_csr,
+            commands::zatca2::zatca2_onboard,
+            commands::zatca2::zatca2_generate,
+            commands::zatca2::zatca2_validate,
+            commands::zatca2::zatca2_submit,
+            commands::zatca2::zatca2_list,
+            // Qayd XBRL
+            commands::qayd::qayd_generate_filing,
+            commands::qayd::qayd_list_filings,
+            commands::qayd::qayd_get_filing,
+            commands::qayd::qayd_validate_filing,
+            commands::qayd::qayd_delete_filing,
+            commands::qayd::qayd_filing_totals,
+            // Branches & offline sync
+            commands::branches::branches_list,
+            commands::branches::branches_create,
+            commands::branches::branches_update,
+            commands::branches::branches_delete,
+            commands::branches::offline_queue_enqueue,
+            commands::branches::offline_queue_list,
+            commands::branches::offline_queue_mark_synced,
+            commands::branches::offline_queue_retry,
+            commands::branches::offline_queue_stats,
         ])
         .run(tauri::generate_context!())
         .expect("error while running ProMax ERP");

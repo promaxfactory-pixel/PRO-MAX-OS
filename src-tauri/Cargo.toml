@@ -52,3 +52,4 @@ qrcode = "0.14"
 actix-web = "4"
 actix-cors = "0.7"
 actix-rt = "2"
+k256 = { version = "0.13", default-features = false, features = ["ecdsa", "sha2", "pkcs8", "std"] }
