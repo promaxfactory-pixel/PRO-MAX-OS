@@ -25,8 +25,8 @@ export default function SettingsPage() {
   const { isLicensed, license } = useLicenseStore();
 
   const [form, setForm] = useState({
-    company_name_ar: "",
-    company_name_en: "",
+    name: "",
+    factory_name: "",
     vat_number: "",
     cr_number: "",
     address: "",
@@ -34,7 +34,7 @@ export default function SettingsPage() {
     email: "",
     currency: "OMR",
     fiscal_year_start: "01-01",
-    vat_rate: 5,
+    default_vat_pct: 5,
     logo_path: "",
     bank_name: "",
     bank_account_no: "",
@@ -56,7 +56,14 @@ export default function SettingsPage() {
   const handleSubmit = async () => {
     setSaving(true);
     try {
-      await invoke("update_company_settings", { input: form });
+      const bankDetails = [form.bank_name, form.bank_account_no ? `رقم الحساب: ${form.bank_account_no}` : "", form.bank_iban ? `IBAN: ${form.bank_iban}` : "", form.bank_swift ? `SWIFT: ${form.bank_swift}` : ""].filter(Boolean).join(" | ");
+      await invoke("update_company_settings", {
+        input: {
+          ...form,
+          bank_details: bankDetails || null,
+          default_vat_pct: Number(form.default_vat_pct),
+        },
+      });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
@@ -87,11 +94,11 @@ export default function SettingsPage() {
           <div className="space-y-4">
             <div>
               <label className="form-label">اسم الشركة (عربي)</label>
-              <input type="text" value={form.company_name_ar} onChange={(e) => handleChange("company_name_ar", e.target.value)} className="input-field" aria-label="اسم الشركة (عربي)" />
+              <input type="text" value={form.name} onChange={(e) => handleChange("name", e.target.value)} className="input-field" aria-label="اسم الشركة (عربي)" />
             </div>
             <div>
               <label className="form-label">اسم الشركة (إنجليزي)</label>
-              <input type="text" value={form.company_name_en} onChange={(e) => handleChange("company_name_en", e.target.value)} className="input-field" dir="ltr" aria-label="اسم الشركة (إنجليزي)" />
+              <input type="text" value={form.factory_name} onChange={(e) => handleChange("factory_name", e.target.value)} className="input-field" dir="ltr" aria-label="اسم الشركة (إنجليزي)" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -136,7 +143,7 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <label className="form-label">نسبة الضريبة (%)</label>
-                  <input type="number" value={form.vat_rate} onChange={(e) => handleChange("vat_rate", Number(e.target.value))} className="input-field" min="0" max="100" aria-label="نسبة الضريبة" />
+                  <input type="number" value={form.default_vat_pct} onChange={(e) => handleChange("default_vat_pct", Number(e.target.value))} className="input-field" min="0" max="100" aria-label="نسبة الضريبة" />
                 </div>
               </div>
               <div>
@@ -221,7 +228,7 @@ export default function SettingsPage() {
               )}
               <p className="text-xs text-gray-600 mt-2">
                 <button onClick={() => { const c = clickCount + 1; setClickCount(c); if (c >= 5) { setShowDevMode(true); setClickCount(0); } }} className="hover:text-gray-400 transition-colors">
-                  PRO MAX OS v2.0.0
+                  PRO MAX OS v2.4.0
                 </button>
               </p>
             </div>

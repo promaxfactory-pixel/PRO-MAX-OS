@@ -4,6 +4,33 @@ All notable changes to PRO MAX OS are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-08-14
+
+### Fixed
+- **Company settings now actually persist.** The settings form sent keys the backend
+  could not store (`company_name_ar`, `vat_rate`, bank fields...), so serde silently
+  dropped them: company name, VAT rate, currency and bank details were never saved,
+  and printed documents always showed the fallback header with a hardcoded 5% VAT.
+  Schema migration 35 adds `cr_number`, `currency`, `fiscal_year_start`, `bank_name`,
+  `bank_account_no`, `bank_iban`, `bank_swift` to `company_settings`; `CompanySettings`
+  / `UpdateSettingsInput` / `CompanyPrintInfo` were aligned; the settings page now
+  binds to the real fields and composes `bank_details` for printed invoices.
+- **Receipt printing shipped.** `CustomerPaymentPage` now shows a "طباعة الإيصال"
+  button after a successful payment, printing the receipt via the existing
+  `get_receipt_for_print` command and `ReceiptPrintTemplate` (previously wired
+  nowhere in the UI).
+- **Payment amounts entered in OMR, not milli.** Customer and supplier payment pages
+  label the field "المبلغ (بالريال)", accept `step=0.001`, convert ×1000 before
+  saving and show the milli equivalent live. Entering 1.5 now records 1,500 milli.
+- **Invoice creation honours the chosen date** (was silently always "today") and the
+  VAT preview uses the company default rate instead of a hardcoded 5%.
+- **Invoice detail print types** corrected (`InvoicePrintData` / `DeliveryNoteData`
+  instead of `SalesInvoice`); stale version strings updated to 2.4.0 across the app.
+
+### Changed
+- Schema version 34 → 35 (company profile columns).
+- Version bumped to 2.4.0 (installers and portable build regenerated).
+
 ## [2.3.0] - 2026-08-14
 
 ### Added

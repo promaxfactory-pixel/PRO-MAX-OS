@@ -27,10 +27,13 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS company_settings (
     id             INTEGER PRIMARY KEY CHECK (id = 1),
     name           TEXT, factory_name TEXT, address TEXT, phone TEXT,
-    email TEXT, vat_number TEXT,
+    email TEXT, vat_number TEXT, cr_number TEXT,
     logo_path TEXT, stamp_path TEXT, signature_path TEXT,
     footer_notes TEXT, bank_details TEXT,
-    default_vat_pct REAL DEFAULT 5.0
+    default_vat_pct REAL DEFAULT 5.0,
+    currency TEXT NOT NULL DEFAULT 'OMR',
+    fiscal_year_start TEXT NOT NULL DEFAULT '01-01',
+    bank_name TEXT, bank_account_no TEXT, bank_iban TEXT, bank_swift TEXT
 );
 
 CREATE TABLE IF NOT EXISTS accounts (

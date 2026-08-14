@@ -1,5 +1,5 @@
 {
-  "app": { "name": "PRO MAX OS", "tagline": "انٹرپرائز ریسورس پلاننگ سسٹم", "version": "ورژن 2.0.0" },
+  "app": { "name": "PRO MAX OS", "tagline": "انٹرپرائز ریسورس پلاننگ سسٹم",     "version": "ورژن 2.4.0" },
   "nav": {
     "dashboard": "ڈیش بورڈ", "sales": "سیلز", "customers": "صارفین",
     "invoices": "انوائسز", "inventory": "انوینٹری", "products": "مصنوعات",

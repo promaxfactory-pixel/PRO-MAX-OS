@@ -168,7 +168,7 @@ export default function InvoicePrintTemplate({ data }: Props) {
 
       <div style={S.tb}>
         <div style={S.tr}><span>المجموع الفرعي</span><span>{formatOMR(invoice.net_milli)}</span></div>
-        <div style={S.tr}><span>الضريبة (5%)</span><span style={{ color: "#dc2626" }}>{formatOMR(invoice.vat_milli)}</span></div>
+        <div style={S.tr}><span>الضريبة ({company?.default_vat_pct != null ? company.default_vat_pct : 5}%)</span><span style={{ color: "#dc2626" }}>{formatOMR(invoice.vat_milli)}</span></div>
         {invoice.discount_milli > 0 && (
           <div style={S.tr}><span>الخصم {invoice.discount_reason ? `(${htmlEscape(invoice.discount_reason)})` : ""}</span><span style={{ color: "#059669" }}>- {formatOMR(invoice.discount_milli)}</span></div>
         )}

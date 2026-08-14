@@ -2,11 +2,13 @@
 import { useParams, useNavigate } from "react-router-dom";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
-import { formatOMR } from "@/lib/utils";
+import { formatOMR, omrToMilli } from "@/lib/utils";
 import { invoke } from "@/lib/tauri";
-import { ArrowRight, CreditCard } from "lucide-react";
+import { ArrowRight, CreditCard, Printer } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
-import { Customer } from "@/types";
+import { Customer, ReceiptPrintData } from "@/types";
+import ReceiptPrintTemplate from "@/components/print/ReceiptPrintTemplate";
+import { printComponent } from "@/utils/printUtils";
 
 export default function CustomerPaymentPage() {
   const { id } = useParams();
@@ -17,11 +19,14 @@ export default function CustomerPaymentPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const [amountMilli, setAmountMilli] = useState("");
+  const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("cash");
   const [cashbankId, setCashbankId] = useState("");
   const [reference, setReference] = useState("");
   const [notes, setNotes] = useState("");
+
+  const [savedPaymentId, setSavedPaymentId] = useState<number | null>(null);
+  const [printData, setPrintData] = useState<ReceiptPrintData | null>(null);
 
   useEffect(() => {
     invoke("get_customer", { id: Number(id) })
@@ -30,16 +35,18 @@ export default function CustomerPaymentPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
+  const amountMilli = omrToMilli(Number(amount) || 0);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!amountMilli || Number(amountMilli) <= 0) return;
+    if (!amount || Number(amount) <= 0) return;
     setSubmitting(true);
     try {
-      await invoke("create_customer_payment", {
+      const paymentId = await invoke<number>("create_customer_payment", {
         customerId: Number(id),
         input: {
           date,
-          amount_milli: Number(amountMilli),
+          amount_milli: amountMilli,
           method,
           cashbank_id: cashbankId ? Number(cashbankId) : null,
           reference: reference || null,
@@ -47,11 +54,25 @@ export default function CustomerPaymentPage() {
         },
       });
       addNotification({ id: crypto.randomUUID(), type: "success", title: "تم بنجاح", message: "تم تسجيل الدفعة بنجاح" });
-      navigate(`/customers/${id}`);
+      setSavedPaymentId(paymentId);
     } catch (err) {
       addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "فشل في تسجيل الدفعة" });
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handlePrintReceipt = async () => {
+    if (savedPaymentId == null) return;
+    try {
+      const result = await invoke<ReceiptPrintData>("get_receipt_for_print", { paymentId: savedPaymentId });
+      setPrintData(result);
+      setTimeout(() => {
+        printComponent("print-area");
+        setPrintData(null);
+      }, 200);
+    } catch (err: unknown) {
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(err) });
     }
   };
 
@@ -75,70 +96,96 @@ export default function CustomerPaymentPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
-        <Card className="col-span-2">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm text-surface-400 mb-1">التاريخ</label>
-                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full input-field" required aria-label="التاريخ" />
-              </div>
-              <div>
-                <label className="block text-sm text-surface-400 mb-1">المبلغ (بالميلي)</label>
-                <input type="number" value={amountMilli} onChange={(e) => setAmountMilli(e.target.value)} className="w-full input-field" placeholder="0" min="1" required aria-label="المبلغ بالميلي" />
-              </div>
+      {savedPaymentId != null && (
+        <Card className="border-emerald-700/40">
+          <div className="flex flex-col items-center gap-4 py-6 text-center">
+            <div className="w-14 h-14 rounded-full bg-emerald-500/10 flex items-center justify-center">
+              <svg className="w-7 h-7 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
             </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm text-surface-400 mb-1">طريقة الدفع</label>
-                <select value={method} onChange={(e) => setMethod(e.target.value)} className="w-full input-field" aria-label="طريقة الدفع">
-                  <option value="cash">نقدي</option>
-                  <option value="bank_transfer">تحويل بنكي</option>
-                  <option value="cheque">شيك</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm text-surface-400 mb-1">رقم الحساب (اختياري)</label>
-                <input type="number" value={cashbankId} onChange={(e) => setCashbankId(e.target.value)} className="w-full input-field" placeholder="—" aria-label="رقم الحساب" />
-              </div>
-            </div>
-
             <div>
-              <label className="block text-sm text-surface-400 mb-1">المرجع (اختياري)</label>
-              <input type="text" value={reference} onChange={(e) => setReference(e.target.value)} className="w-full input-field" placeholder="—" aria-label="المرجع" />
+              <p className="text-lg font-bold">تم تسجيل الدفعة بنجاح</p>
+              <p className="text-sm text-surface-400 mt-1">المبلغ: <span className="text-emerald-400 font-semibold">{formatOMR(amountMilli)}</span></p>
             </div>
-
-            <div>
-              <label className="block text-sm text-surface-400 mb-1">ملاحظات (اختياري)</label>
-              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full input-field" rows={3} placeholder="—" aria-label="ملاحظات" />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => navigate(`/customers/${id}`)}>إلغاء</Button>
-              <Button type="submit" loading={submitting} icon={<CreditCard className="w-4 h-4" />}>تسجيل الدفعة</Button>
-            </div>
-          </form>
-        </Card>
-
-        <Card>
-          <h4 className="text-sm text-surface-400 mb-3">معلومات العميل</h4>
-          <div className="space-y-4">
-            <div className="text-center py-4">
-              <p className="text-3xl font-bold gradient-text">{formatOMR(customer.balance_milli)}</p>
-              <p className="text-xs text-surface-400 mt-1">الرصيد الحالي</p>
-            </div>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm"><span className="text-surface-400">الاسم</span><span className="font-medium">{customer.name}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-surface-400">الكود</span><span className="font-mono text-xs">{customer.code || "—"}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-surface-400">الهاتف</span><span>{customer.phone || "—"}</span></div>
+            <div className="flex gap-3">
+              <Button variant="gold" icon={<Printer className="w-4 h-4" />} onClick={handlePrintReceipt}>طباعة الإيصال</Button>
+              <Button variant="outline" onClick={() => navigate(`/customers/${id}`)}>العودة إلى العميل</Button>
             </div>
           </div>
         </Card>
-      </div>
+      )}
+
+      {savedPaymentId == null && (
+        <div className="grid grid-cols-3 gap-6">
+          <Card className="col-span-2">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-surface-400 mb-1">التاريخ</label>
+                  <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full input-field" required aria-label="التاريخ" />
+                </div>
+                <div>
+                  <label className="block text-sm text-surface-400 mb-1">المبلغ (بالريال)</label>
+                  <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full input-field" placeholder="مثال: 125.500" min="0.001" step="0.001" required aria-label="المبلغ بالريال" />
+                  {Number(amount) > 0 && <p className="text-xs text-surface-500 mt-1">= {amountMilli.toLocaleString("en-US")} بيسة/ملي</p>}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-surface-400 mb-1">طريقة الدفع</label>
+                  <select value={method} onChange={(e) => setMethod(e.target.value)} className="w-full input-field" aria-label="طريقة الدفع">
+                    <option value="cash">نقدي</option>
+                    <option value="bank_transfer">تحويل بنكي</option>
+                    <option value="cheque">شيك</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm text-surface-400 mb-1">رقم الحساب (اختياري)</label>
+                  <input type="number" value={cashbankId} onChange={(e) => setCashbankId(e.target.value)} className="w-full input-field" placeholder="—" aria-label="رقم الحساب" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm text-surface-400 mb-1">المرجع (اختياري)</label>
+                <input type="text" value={reference} onChange={(e) => setReference(e.target.value)} className="w-full input-field" placeholder="—" aria-label="المرجع" />
+              </div>
+
+              <div>
+                <label className="block text-sm text-surface-400 mb-1">ملاحظات (اختياري)</label>
+                <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full input-field" rows={3} placeholder="—" aria-label="ملاحظات" />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="outline" onClick={() => navigate(`/customers/${id}`)}>إلغاء</Button>
+                <Button type="submit" loading={submitting} icon={<CreditCard className="w-4 h-4" />}>تسجيل الدفعة</Button>
+              </div>
+            </form>
+          </Card>
+
+          <Card>
+            <h4 className="text-sm text-surface-400 mb-3">معلومات العميل</h4>
+            <div className="space-y-4">
+              <div className="text-center py-4">
+                <p className="text-3xl font-bold gradient-text">{formatOMR(customer.balance_milli)}</p>
+                <p className="text-xs text-surface-400 mt-1">الرصيد الحالي</p>
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm"><span className="text-surface-400">الاسم</span><span className="font-medium">{customer.name}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-surface-400">الكود</span><span className="font-mono text-xs">{customer.code || "—"}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-surface-400">الهاتف</span><span>{customer.phone || "—"}</span></div>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {printData && (
+        <div style={{ position: "absolute", left: "-9999px" }}>
+          <ReceiptPrintTemplate data={printData} />
+        </div>
+      )}
     </div>
   );
 }
-
-
-

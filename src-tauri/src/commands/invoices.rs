@@ -46,6 +46,7 @@ pub struct InvoiceLine {
 pub struct CreateInvoiceInput {
     pub customer_id: i64,
     pub payment_type: Option<String>,
+    pub date: Option<String>,
     pub notes: Option<String>,
     pub lines: Vec<CreateInvoiceLineInput>,
 }
@@ -145,6 +146,7 @@ pub fn create_invoice(state: State<'_, DbState>, user_id: i64, input: CreateInvo
     
     let seq = next_sequence(&tx, "INV", &year)?;
     let inv_no = format!("INV-{}-{:04}", year, seq);
+    let invoice_date = input.date.clone().unwrap_or_else(|| now.clone());
     
     let mut net: i64 = 0;
     let mut vat: i64 = 0;
@@ -173,7 +175,7 @@ pub fn create_invoice(state: State<'_, DbState>, user_id: i64, input: CreateInvo
     
     tx.execute(
         "INSERT INTO sales_invoices(inv_no, date, customer_id, payment_type, net_milli, vat_milli, total_milli, status, notes) VALUES(?,?,?,?,?,?,?,'Draft',?)",
-        rusqlite::params![inv_no, now, input.customer_id, input.payment_type.unwrap_or_else(|| "credit".into()), net, vat, total, input.notes],
+        rusqlite::params![inv_no, invoice_date, input.customer_id, input.payment_type.unwrap_or_else(|| "credit".into()), net, vat, total, input.notes],
     )?;
     let inv_id = tx.last_insert_rowid();
     
@@ -547,12 +549,18 @@ pub struct CompanyPrintInfo {
     pub phone: Option<String>,
     pub email: Option<String>,
     pub vat_number: Option<String>,
+    pub cr_number: Option<String>,
     pub logo_path: Option<String>,
     pub stamp_path: Option<String>,
     pub signature_path: Option<String>,
     pub footer_notes: Option<String>,
     pub bank_details: Option<String>,
     pub default_vat_pct: f64,
+    pub currency: String,
+    pub bank_name: Option<String>,
+    pub bank_account_no: Option<String>,
+    pub bank_iban: Option<String>,
+    pub bank_swift: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -636,7 +644,7 @@ pub struct CreditNotePrintData {
 
 fn get_company_info(conn: &rusqlite::Connection) -> Result<CompanyPrintInfo, AppError> {
     conn.query_row(
-        "SELECT name, factory_name, address, phone, email, vat_number, logo_path, stamp_path, signature_path, footer_notes, bank_details, default_vat_pct FROM company_settings LIMIT 1",
+        "SELECT name, factory_name, address, phone, email, vat_number, cr_number, logo_path, stamp_path, signature_path, footer_notes, bank_details, default_vat_pct, currency, bank_name, bank_account_no, bank_iban, bank_swift FROM company_settings LIMIT 1",
         [],
         |row| Ok(CompanyPrintInfo {
             name: row.get(0)?,
@@ -645,12 +653,18 @@ fn get_company_info(conn: &rusqlite::Connection) -> Result<CompanyPrintInfo, App
             phone: row.get(3)?,
             email: row.get(4)?,
             vat_number: row.get(5)?,
-            logo_path: row.get(6)?,
-            stamp_path: row.get(7)?,
-            signature_path: row.get(8)?,
-            footer_notes: row.get(9)?,
-            bank_details: row.get(10)?,
-            default_vat_pct: row.get(11)?,
+            cr_number: row.get(6)?,
+            logo_path: row.get(7)?,
+            stamp_path: row.get(8)?,
+            signature_path: row.get(9)?,
+            footer_notes: row.get(10)?,
+            bank_details: row.get(11)?,
+            default_vat_pct: row.get(12)?,
+            currency: row.get(13)?,
+            bank_name: row.get(14)?,
+            bank_account_no: row.get(15)?,
+            bank_iban: row.get(16)?,
+            bank_swift: row.get(17)?,
         }),
     ).map_err(|e| AppError::business(format!("Company settings not found: {}", e)))
 }

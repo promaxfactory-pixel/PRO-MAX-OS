@@ -27,10 +27,13 @@ export default function InvoiceCreatePage() {
   const [lines, setLines] = useState<InvoiceLineInput[]>([]);
   const [saving, setSaving] = useState(false);
   const [useCustoms, setUseCustoms] = useState(false);
+  const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split("T")[0]);
+  const [defaultVat, setDefaultVat] = useState(5);
 
   useEffect(() => {
     invoke("list_customers").then((d: unknown) => setCustomers(d as Customer[])).catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" }));
     invoke("list_products").then((d: unknown) => setProducts(d as Product[])).catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" }));
+    invoke("get_company_settings").then((d: any) => { if (d?.default_vat_pct != null) setDefaultVat(Number(d.default_vat_pct)); }).catch(() => {});
   }, []);
 
   const addLine = () => setLines([...lines, { product_id: products[0]?.id || 0, cartons: 1, unit_price: 0, customs_price: 0 }]);
@@ -42,7 +45,7 @@ export default function InvoiceCreatePage() {
   };
 
   const total = lines.reduce((s, l) => s + l.cartons * l.unit_price, 0);
-  const vat = total * 0.05;
+  const vat = total * (defaultVat / 100);
   const grandTotal = total + vat;
 
   const handleSave = async () => {
@@ -53,6 +56,7 @@ export default function InvoiceCreatePage() {
         input: {
           customer_id: selectedCustomer,
           payment_type: paymentType,
+          date: invoiceDate || null,
           notes,
           lines: lines.map(l => ({
             product_id: l.product_id,
@@ -90,7 +94,7 @@ export default function InvoiceCreatePage() {
                 options={customers.map(c => ({ value: c.id, label: c.name }))} placeholder="اختر العميل" />
               <Select label="نوع الدفع" value={paymentType} onChange={(e) => setPaymentType(e.target.value)}
                 options={[{ value: "cash", label: "نقدي" }, { value: "credit", label: "آجل" }, { value: "cheque", label: "شيك" }]} />
-              <Input label="التاريخ" type="date" defaultValue={new Date().toISOString().split("T")[0]} />
+              <Input label="التاريخ" type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
             </div>
           </Card>
 
@@ -139,7 +143,7 @@ export default function InvoiceCreatePage() {
             <h3 className="section-title">الملخص</h3>
             <div className="space-y-3">
               <div className="flex justify-between text-sm"><span className="text-surface-400">الإجمالي قبل الضريبة</span><span>{formatOMR(total * 1000)}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-surface-400">ضريبة القيمة المضافة (5%)</span><span>{formatOMR(vat * 1000)}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-surface-400">ضريبة القيمة المضافة ({defaultVat}%)</span><span>{formatOMR(vat * 1000)}</span></div>
               <hr className="border-surface-700" />
               <div className="flex justify-between text-lg font-bold"><span className="gold-accent">الإجمالي</span><span className="gradient-text">{formatOMR(grandTotal * 1000)}</span></div>
             </div>

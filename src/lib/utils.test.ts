@@ -1,5 +1,20 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { formatOMR, formatNumber, getStatusColor, getSeverityColor, debounce } from "./utils";
+import { formatOMR, omrToMilli, formatNumber, getStatusColor, getSeverityColor, debounce } from "./utils";
+
+describe("omrToMilli", () => {
+  it("converts OMR to milli with rounding", () => {
+    expect(omrToMilli(1)).toBe(1000);
+    expect(omrToMilli(1.5)).toBe(1500);
+    expect(omrToMilli(125.5)).toBe(125_500);
+    expect(omrToMilli(0.001)).toBe(1);
+  });
+
+  it("rounds to nearest baisa", () => {
+    expect(omrToMilli(1.0004)).toBe(1000);
+    expect(omrToMilli(1.0006)).toBe(1001);
+  });
+});
+
 
 describe("formatOMR", () => {
   it("converts milli to OMR with 3 decimals", () => {

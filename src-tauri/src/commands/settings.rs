@@ -13,12 +13,19 @@ pub struct CompanySettings {
     pub phone: Option<String>,
     pub email: Option<String>,
     pub vat_number: Option<String>,
+    pub cr_number: Option<String>,
     pub logo_path: Option<String>,
     pub stamp_path: Option<String>,
     pub signature_path: Option<String>,
     pub footer_notes: Option<String>,
     pub bank_details: Option<String>,
     pub default_vat_pct: f64,
+    pub currency: String,
+    pub fiscal_year_start: String,
+    pub bank_name: Option<String>,
+    pub bank_account_no: Option<String>,
+    pub bank_iban: Option<String>,
+    pub bank_swift: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -29,12 +36,19 @@ pub struct UpdateSettingsInput {
     pub phone: Option<String>,
     pub email: Option<String>,
     pub vat_number: Option<String>,
+    pub cr_number: Option<String>,
     pub logo_path: Option<String>,
     pub stamp_path: Option<String>,
     pub signature_path: Option<String>,
     pub footer_notes: Option<String>,
     pub bank_details: Option<String>,
     pub default_vat_pct: Option<f64>,
+    pub currency: Option<String>,
+    pub fiscal_year_start: Option<String>,
+    pub bank_name: Option<String>,
+    pub bank_account_no: Option<String>,
+    pub bank_iban: Option<String>,
+    pub bank_swift: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -72,13 +86,28 @@ fn row_to_settings(row: &rusqlite::Row) -> rusqlite::Result<CompanySettings> {
         phone: row.get(4)?,
         email: row.get(5)?,
         vat_number: row.get(6)?,
-        logo_path: row.get(7)?,
-        stamp_path: row.get(8)?,
-        signature_path: row.get(9)?,
-        footer_notes: row.get(10)?,
-        bank_details: row.get(11)?,
-        default_vat_pct: row.get(12)?,
+        cr_number: row.get(7)?,
+        logo_path: row.get(8)?,
+        stamp_path: row.get(9)?,
+        signature_path: row.get(10)?,
+        footer_notes: row.get(11)?,
+        bank_details: row.get(12)?,
+        default_vat_pct: row.get(13)?,
+        currency: row.get(14)?,
+        fiscal_year_start: row.get(15)?,
+        bank_name: row.get(16)?,
+        bank_account_no: row.get(17)?,
+        bank_iban: row.get(18)?,
+        bank_swift: row.get(19)?,
     })
+}
+
+fn settings_select_sql() -> &'static str {
+    "SELECT id, name, factory_name, address, phone, email, vat_number, cr_number, logo_path, stamp_path, signature_path, footer_notes, bank_details, default_vat_pct, currency, fiscal_year_start, bank_name, bank_account_no, bank_iban, bank_swift FROM company_settings"
+}
+
+fn settings_insert_sql() -> &'static str {
+    "INSERT INTO company_settings(id, name, factory_name, address, phone, email, vat_number, cr_number, logo_path, stamp_path, signature_path, footer_notes, bank_details, default_vat_pct, currency, fiscal_year_start, bank_name, bank_account_no, bank_iban, bank_swift) VALUES(1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 5.0, 'OMR', '01-01', NULL, NULL, NULL, NULL)"
 }
 
 fn row_to_user(row: &rusqlite::Row) -> rusqlite::Result<SettingsUser> {
@@ -97,7 +126,7 @@ pub fn get_company_settings(state: State<'_, DbState>) -> Result<CompanySettings
     let conn = state.0.lock()?;
 
     let result = conn.query_row(
-        "SELECT id, name, factory_name, address, phone, email, vat_number, logo_path, stamp_path, signature_path, footer_notes, bank_details, default_vat_pct FROM company_settings LIMIT 1",
+        settings_select_sql(),
         [],
         row_to_settings,
     );
@@ -105,13 +134,10 @@ pub fn get_company_settings(state: State<'_, DbState>) -> Result<CompanySettings
     match result {
         Ok(s) => Ok(s),
         Err(_) => {
-            conn.execute(
-                "INSERT INTO company_settings(id, name, factory_name, address, phone, email, vat_number, logo_path, stamp_path, signature_path, footer_notes, bank_details, default_vat_pct) VALUES(1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 5.0)",
-                [],
-            )?;
+            conn.execute(settings_insert_sql(), [])?;
 
             conn.query_row(
-                "SELECT id, name, factory_name, address, phone, email, vat_number, logo_path, stamp_path, signature_path, footer_notes, bank_details, default_vat_pct FROM company_settings WHERE id=1",
+                settings_select_sql(),
                 [],
                 row_to_settings,
             ).map_err(|e| AppError::not_found(format!("Settings not found after init: {}", e)))
@@ -141,12 +167,19 @@ pub fn update_company_settings(state: State<'_, DbState>, user_id: i64, input: U
             if let Some(v) = &input.phone { sets.push("phone=?"); params.push(Box::new(v.clone())); }
             if let Some(v) = &input.email { sets.push("email=?"); params.push(Box::new(v.clone())); }
             if let Some(v) = &input.vat_number { sets.push("vat_number=?"); params.push(Box::new(v.clone())); }
+            if let Some(v) = &input.cr_number { sets.push("cr_number=?"); params.push(Box::new(v.clone())); }
             if let Some(v) = &input.logo_path { sets.push("logo_path=?"); params.push(Box::new(v.clone())); }
             if let Some(v) = &input.stamp_path { sets.push("stamp_path=?"); params.push(Box::new(v.clone())); }
             if let Some(v) = &input.signature_path { sets.push("signature_path=?"); params.push(Box::new(v.clone())); }
             if let Some(v) = &input.footer_notes { sets.push("footer_notes=?"); params.push(Box::new(v.clone())); }
             if let Some(v) = &input.bank_details { sets.push("bank_details=?"); params.push(Box::new(v.clone())); }
             if let Some(v) = input.default_vat_pct { sets.push("default_vat_pct=?"); params.push(Box::new(v)); }
+            if let Some(v) = &input.currency { sets.push("currency=?"); params.push(Box::new(v.clone())); }
+            if let Some(v) = &input.fiscal_year_start { sets.push("fiscal_year_start=?"); params.push(Box::new(v.clone())); }
+            if let Some(v) = &input.bank_name { sets.push("bank_name=?"); params.push(Box::new(v.clone())); }
+            if let Some(v) = &input.bank_account_no { sets.push("bank_account_no=?"); params.push(Box::new(v.clone())); }
+            if let Some(v) = &input.bank_iban { sets.push("bank_iban=?"); params.push(Box::new(v.clone())); }
+            if let Some(v) = &input.bank_swift { sets.push("bank_swift=?"); params.push(Box::new(v.clone())); }
 
             if sets.is_empty() { return Err(AppError::validation("لا توجد تعديلات")); }
 
@@ -155,12 +188,15 @@ pub fn update_company_settings(state: State<'_, DbState>, user_id: i64, input: U
         }
         Err(_) => {
             conn.execute(
-                "INSERT INTO company_settings(id, name, factory_name, address, phone, email, vat_number, logo_path, stamp_path, signature_path, footer_notes, bank_details, default_vat_pct) VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO company_settings(id, name, factory_name, address, phone, email, vat_number, cr_number, logo_path, stamp_path, signature_path, footer_notes, bank_details, default_vat_pct, currency, fiscal_year_start, bank_name, bank_account_no, bank_iban, bank_swift) VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 rusqlite::params![
                     input.name, input.factory_name, input.address, input.phone, input.email,
-                    input.vat_number, input.logo_path, input.stamp_path, input.signature_path,
+                    input.vat_number, input.cr_number, input.logo_path, input.stamp_path, input.signature_path,
                     input.footer_notes, input.bank_details,
                     input.default_vat_pct.unwrap_or(5.0),
+                    input.currency.unwrap_or_else(|| "OMR".into()),
+                    input.fiscal_year_start.unwrap_or_else(|| "01-01".into()),
+                    input.bank_name, input.bank_account_no, input.bank_iban, input.bank_swift,
                 ],
             )?;
         }

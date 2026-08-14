@@ -72,7 +72,7 @@ fn ensure_admin_user(conn: &Connection) -> Result<()> {
 mod migrations {
     use rusqlite::{Connection, Result};
     
-    pub(crate) const SCHEMA_VERSION: i32 = 34;
+    pub(crate) const SCHEMA_VERSION: i32 = 35;
     
     pub fn run(conn: &Connection) -> Result<()> {
         let current: i32 = conn
@@ -982,10 +982,39 @@ mod migrations {
                 conn.execute(
                     "INSERT OR IGNORE INTO branches(id, name, code, is_head_office, is_active) VALUES(1, 'الفرع الرئيسي', 'HQ', 1, 1)",
                     [],
-                ).map_err(|e| {
+                )                .map_err(|e| {
                     eprintln!("Migration 34f failed: {}", e);
                     e
                 })?;
+            }
+            35 => {
+                // Complete company profile: the settings UI exposes CR number,
+                // currency, fiscal-year start and structured bank details, but the
+                // table never had storage for them. Backfill the schema so saved
+                // settings actually persist (previously serde silently dropped
+                // those fields -> printed docs had no company header/VAT).
+                let cols: &[(&str, &str)] = &[
+                    ("cr_number", "ALTER TABLE company_settings ADD COLUMN cr_number TEXT"),
+                    ("currency", "ALTER TABLE company_settings ADD COLUMN currency TEXT NOT NULL DEFAULT 'OMR'"),
+                    ("fiscal_year_start", "ALTER TABLE company_settings ADD COLUMN fiscal_year_start TEXT NOT NULL DEFAULT '01-01'"),
+                    ("bank_name", "ALTER TABLE company_settings ADD COLUMN bank_name TEXT"),
+                    ("bank_account_no", "ALTER TABLE company_settings ADD COLUMN bank_account_no TEXT"),
+                    ("bank_iban", "ALTER TABLE company_settings ADD COLUMN bank_iban TEXT"),
+                    ("bank_swift", "ALTER TABLE company_settings ADD COLUMN bank_swift TEXT"),
+                ];
+                for (col, ddl) in cols {
+                    let has_col: bool = conn
+                        .prepare("SELECT COUNT(*) FROM pragma_table_info('company_settings') WHERE name=?1")
+                        .and_then(|mut stmt| stmt.query_row([col], |r| r.get::<_, i64>(0)))
+                        .map(|c| c > 0)
+                        .unwrap_or(false);
+                    if !has_col {
+                        conn.execute_batch(ddl).map_err(|e| {
+                            eprintln!("Migration 35 failed for {}: {}", col, e);
+                            e
+                        })?;
+                    }
+                }
             }
             _ => {}
         }
@@ -1116,6 +1145,97 @@ mod tests {
             |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
         ).unwrap();
         assert_eq!(cname, "عميل تجربة");
+
+        cleanup_db(&db_path);
+    }
+
+    #[test]
+    fn test_migration_35_adds_company_profile_columns() {
+        // Simulate a v34 install: app_settings + company_settings WITHOUT the
+        // profile columns, then run the migration chain and verify they appear.
+        let db_path = std::env::temp_dir().join(format!("promax_m35_{}.db", uuid::Uuid::new_v4()));
+        let conn = Connection::open(&db_path).expect("open");
+        conn.execute_batch(
+            "CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT);
+             INSERT INTO app_settings(key, value) VALUES('schema_version', '34');
+             CREATE TABLE company_settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                name TEXT, factory_name TEXT, address TEXT, phone TEXT,
+                email TEXT, vat_number TEXT,
+                logo_path TEXT, stamp_path TEXT, signature_path TEXT,
+                footer_notes TEXT, bank_details TEXT,
+                default_vat_pct REAL DEFAULT 5.0
+             );
+             INSERT INTO company_settings(id) VALUES(1);",
+        ).unwrap();
+
+        super::migrations::run(&conn).expect("migrations must apply");
+
+        let cols: Vec<String> = conn
+            .prepare("SELECT name FROM pragma_table_info('company_settings')")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        for required in ["cr_number", "currency", "fiscal_year_start", "bank_name", "bank_account_no", "bank_iban", "bank_swift"] {
+            assert!(cols.iter().any(|c| c == required), "missing column {}", required);
+        }
+
+        // Defaults must be present on the existing row.
+        let (currency, fy): (String, String) = conn
+            .query_row("SELECT currency, fiscal_year_start FROM company_settings WHERE id=1", [], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap();
+        assert_eq!(currency, "OMR");
+        assert_eq!(fy, "01-01");
+
+        cleanup_db(&db_path);
+    }
+
+    #[test]
+    #[allow(clippy::type_complexity)]
+    fn test_company_settings_round_trip_persists_profile() {
+        // Mirrors update_company_settings (settings.rs) against a fresh DB and
+        // verifies every field that the settings UI submits actually persists
+        // (regression for the silent serde-drop bug that left printed docs blank).
+        let db_path = std::env::temp_dir().join(format!("promax_set_{}.db", uuid::Uuid::new_v4()));
+        let conn = super::init_database(&db_path).expect("init");
+
+        conn.execute("INSERT OR IGNORE INTO company_settings(id) VALUES(1)", []).unwrap();
+
+        conn.execute(
+            "UPDATE company_settings SET
+               name=?, factory_name=?, address=?, phone=?, email=?, vat_number=?,
+               cr_number=?, default_vat_pct=?, currency=?, fiscal_year_start=?,
+               bank_name=?, bank_account_no=?, bank_iban=?, bank_swift=?, bank_details=?
+             WHERE id=1",
+            rusqlite::params![
+                "شركة الخماس", "Al Khumas Co", "مسقط، العذيبة", "24560000", "info@example.com",
+                "OM1122334455", "CR-2026-12345", 7.5, "SAR", "04-01",
+                "بنك مسقط", "0123456789", "OM00BBKS0000123456789", "MAQYOMRUXXX",
+                "بنك مسقط | رقم الحساب: 0123456789 | IBAN: OM00BBKS0000123456789 | SWIFT: MAQYOMRUXXX",
+            ],
+        ).unwrap();
+
+        // The exact SELECT used by get_company_settings.
+        let (name, vat_number, cr_number, vat_pct, currency, fy, bank_name, iban, bank_details): (
+            Option<String>, Option<String>, Option<String>, f64, String, String,
+            Option<String>, Option<String>, Option<String>,
+        ) = conn.query_row(
+            "SELECT name, vat_number, cr_number, default_vat_pct, currency, fiscal_year_start, bank_name, bank_iban, bank_details FROM company_settings WHERE id=1",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?)),
+        ).unwrap();
+
+        assert_eq!(name.as_deref(), Some("شركة الخماس"));
+        assert_eq!(vat_number.as_deref(), Some("OM1122334455"));
+        assert_eq!(cr_number.as_deref(), Some("CR-2026-12345"));
+        assert_eq!(vat_pct, 7.5);
+        assert_eq!(currency, "SAR");
+        assert_eq!(fy, "04-01");
+        assert_eq!(bank_name.as_deref(), Some("بنك مسقط"));
+        assert_eq!(iban.as_deref(), Some("OM00BBKS0000123456789"));
+        assert!(bank_details.as_deref().unwrap().contains("بنك مسقط"));
 
         cleanup_db(&db_path);
     }

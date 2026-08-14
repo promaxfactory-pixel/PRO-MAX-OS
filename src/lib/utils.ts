@@ -9,6 +9,14 @@ export function formatOMR(milli: number): string {
   return (milli / 1000).toFixed(3) + " ر.ع";
 }
 
+export function omrToMilli(omr: number): number {
+  return Math.round(omr * 1000);
+}
+
+export function milliToOmr(milli: number): number {
+  return milli / 1000;
+}
+
 export function formatNumber(n: number): string {
   return new Intl.NumberFormat("en-US").format(n);
 }

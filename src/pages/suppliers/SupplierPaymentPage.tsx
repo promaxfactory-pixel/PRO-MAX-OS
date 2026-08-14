@@ -2,7 +2,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
-import { formatOMR } from "@/lib/utils";
+import { formatOMR, omrToMilli } from "@/lib/utils";
 import { invoke } from "@/lib/tauri";
 import { ArrowRight, CreditCard } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
@@ -17,7 +17,7 @@ export default function SupplierPaymentPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const [amountMilli, setAmountMilli] = useState("");
+  const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("cash");
   const [reference, setReference] = useState("");
   const [notes, setNotes] = useState("");
@@ -29,16 +29,18 @@ export default function SupplierPaymentPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
+  const amountMilli = omrToMilli(Number(amount) || 0);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!amountMilli || Number(amountMilli) <= 0) return;
+    if (!amount || Number(amount) <= 0) return;
     setSubmitting(true);
     try {
       await invoke("create_supplier_payment", {
         supplierId: Number(id),
         input: {
           date,
-          amount_milli: Number(amountMilli),
+          amount_milli: amountMilli,
           method,
           reference: reference || null,
           notes: notes || null,
@@ -82,8 +84,9 @@ export default function SupplierPaymentPage() {
                 <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full input-field" required aria-label="التاريخ" />
               </div>
               <div>
-                <label className="block text-sm text-surface-400 mb-1">المبلغ (بالميلي)</label>
-                <input type="number" value={amountMilli} onChange={(e) => setAmountMilli(e.target.value)} className="w-full input-field" placeholder="0" min="1" required aria-label="المبلغ بالميلي" />
+                <label className="block text-sm text-surface-400 mb-1">المبلغ (بالريال)</label>
+                <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full input-field" placeholder="مثال: 125.500" min="0.001" step="0.001" required aria-label="المبلغ بالريال" />
+                {Number(amount) > 0 && <p className="text-xs text-surface-500 mt-1">= {amountMilli.toLocaleString("en-US")} بيسة/ملي</p>}
               </div>
             </div>
 

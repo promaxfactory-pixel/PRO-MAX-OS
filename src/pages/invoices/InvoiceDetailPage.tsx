@@ -9,7 +9,7 @@ import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@/lib/tauri";
 import { ArrowRight, Send, Ban, Copy, Printer, FileText, Truck } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
-import type { SalesInvoice, InvoiceLine } from "@/types";
+import type { SalesInvoice, InvoiceLine, InvoicePrintData, DeliveryNoteData } from "@/types";
 import InvoicePrintTemplate from "@/components/print/InvoicePrintTemplate";
 import DeliveryNotePrintTemplate from "@/components/print/DeliveryNotePrintTemplate";
 import { printComponent } from "@/utils/printUtils";
@@ -24,7 +24,7 @@ export default function InvoiceDetailPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<"post" | "void">("post");
-  const [printData, setPrintData] = useState<SalesInvoice | null>(null);
+  const [printData, setPrintData] = useState<InvoicePrintData | DeliveryNoteData | null>(null);
   const [printType, setPrintType] = useState<string>("");
   const [showPrintModal, setShowPrintModal] = useState(false);
 
@@ -68,7 +68,7 @@ export default function InvoiceDetailPage() {
 
   const handlePrint = async (type: string) => {
     try {
-      const result = await invoke<SalesInvoice>("get_invoice_for_print", { invoiceId: Number(id) });
+      const result = await invoke<InvoicePrintData>("get_invoice_for_print", { invoiceId: Number(id) });
       setPrintData(result);
       setPrintType(type);
       setShowPrintModal(false);
@@ -81,7 +81,7 @@ export default function InvoiceDetailPage() {
 
   const handlePrintDeliveryNote = async () => {
     try {
-      const result = await invoke<SalesInvoice>("get_delivery_note_for_print", { invoiceId: Number(id) });
+      const result = await invoke<DeliveryNoteData>("get_delivery_note_for_print", { invoiceId: Number(id) });
       setPrintData(result);
       setPrintType("delivery_note");
       setShowPrintModal(false);
@@ -94,7 +94,7 @@ export default function InvoiceDetailPage() {
 
   const handlePrintCustoms = async () => {
     try {
-      const result = await invoke<SalesInvoice>("get_invoice_for_print_customs", { invoiceId: Number(id) });
+      const result = await invoke<InvoicePrintData>("get_invoice_for_print_customs", { invoiceId: Number(id) });
       setPrintData(result);
       setPrintType("invoice_customs");
       setShowPrintModal(false);

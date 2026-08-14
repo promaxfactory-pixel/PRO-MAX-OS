@@ -16,12 +16,59 @@ export interface CompanySettings {
   phone: string;
   email: string;
   vat_number: string;
+  cr_number: string;
   logo_path: string;
   stamp_path: string;
   signature_path: string;
   footer_notes: string;
   bank_details: string;
   default_vat_pct: number;
+  currency: string;
+  fiscal_year_start: string;
+  bank_name: string;
+  bank_account_no: string;
+  bank_iban: string;
+  bank_swift: string;
+}
+
+export interface CustomerPrintInfo {
+  id: number;
+  name: string;
+  address: string | null;
+  vat_number: string | null;
+  phone: string | null;
+}
+
+export interface PaymentPrintInfo {
+  id: number;
+  receipt_no: string | null;
+  date: string;
+  amount_milli: number;
+  method: string | null;
+  reference: string | null;
+  status: string | null;
+  notes: string | null;
+}
+
+export interface InvoicePrintData {
+  invoice: SalesInvoice;
+  customer: CustomerPrintInfo;
+  lines: InvoiceLine[];
+  company: CompanySettings;
+  qr_data_url: string | null;
+}
+
+export interface DeliveryNoteData {
+  invoice: SalesInvoice;
+  customer: CustomerPrintInfo;
+  lines: InvoiceLine[];
+  company: CompanySettings;
+}
+
+export interface ReceiptPrintData {
+  payment: PaymentPrintInfo;
+  customer: CustomerPrintInfo;
+  company: CompanySettings;
 }
 
 export interface Account {
