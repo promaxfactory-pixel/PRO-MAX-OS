@@ -122,7 +122,6 @@ fn xml_escape(s: &str) -> String {
 
 #[allow(clippy::too_many_arguments)]
 fn generate_pint_om_xml(
-    _inv_id: i64,
     inv_no: &str,
     net_milli: i64,
     vat_milli: i64,
@@ -132,9 +131,10 @@ fn generate_pint_om_xml(
     cust_vat: &str,
     company_name: &str,
     company_vat: &str,
-    _company_addr: &str,
     company_cr: &str,
-    _contact_person: &str,
+    currency: &str,
+    vat_rate: f64,
+    country: &str,
     lines: &[(String, f64, f64, f64)],
 ) -> String {
     let mut xml = String::with_capacity(4096);
@@ -162,7 +162,7 @@ fn generate_pint_om_xml(
         xml.push_str(&format!("        <ram:ID schemeID=\"9921\">{}</ram:ID>\n", xml_escape(company_vat)));
     }
     if !company_cr.is_empty() {
-        xml.push_str("        <ram:ID schemeID=\"9930\">OM</ram:ID>\n");
+        xml.push_str(&format!("        <ram:ID schemeID=\"9930\">{}{}</ram:ID>\n", xml_escape(country), xml_escape(company_cr)));
     }
     xml.push_str("      </ram:SellerTradeParty>\n");
     xml.push_str("    </ram:ApplicableHeaderTradeAgreement>\n\n");
@@ -170,20 +170,20 @@ fn generate_pint_om_xml(
     xml.push_str(&format!("      <ram:ActualDeliverySupplyChainEvent><ram:OccurrenceDateTime><udt:DateTimeString format=\"102\">{}</udt:DateTimeString></ram:OccurrenceDateTime></ram:ActualDeliverySupplyChainEvent>\n", xml_escape(inv_date)));
     xml.push_str("    </ram:ApplicableHeaderTradeDelivery>\n\n");
     xml.push_str("    <ram:ApplicableHeaderTradeSettlement>\n");
-    xml.push_str("      <ram:InvoiceCurrencyCode>OMR</ram:InvoiceCurrencyCode>\n");
+    xml.push_str(&format!("      <ram:InvoiceCurrencyCode>{}</ram:InvoiceCurrencyCode>\n", xml_escape(currency)));
     xml.push_str(&format!("      <ram:PayeeTradeParty><ram:Name>{}</ram:Name></ram:PayeeTradeParty>\n", xml_escape(company_name)));
     xml.push_str("      <ram:ApplicableTradeTax>\n");
-    xml.push_str(&format!("        <ram:CalculatedAmount currencyID=\"OMR\">{:.3}</ram:CalculatedAmount>\n", vat_milli as f64 / 1000.0));
+    xml.push_str(&format!("        <ram:CalculatedAmount currencyID=\"{}\">{:.3}</ram:CalculatedAmount>\n", xml_escape(currency), vat_milli as f64 / 1000.0));
     xml.push_str("        <ram:TypeCode>VAT</ram:TypeCode>\n");
-    xml.push_str(&format!("        <ram:BasisAmount currencyID=\"OMR\">{:.3}</ram:BasisAmount>\n", net_milli as f64 / 1000.0));
-    xml.push_str("        <ram:RateApplicablePercent>5.00</ram:RateApplicablePercent>\n");
+    xml.push_str(&format!("        <ram:BasisAmount currencyID=\"{}\">{:.3}</ram:BasisAmount>\n", xml_escape(currency), net_milli as f64 / 1000.0));
+    xml.push_str(&format!("        <ram:RateApplicablePercent>{:.2}</ram:RateApplicablePercent>\n", vat_rate));
     xml.push_str("      </ram:ApplicableTradeTax>\n");
     xml.push_str("      <ram:SpecifiedTradeSettlementMonetarySummation>\n");
-    xml.push_str(&format!("        <ram:LineTotalAmount currencyID=\"OMR\">{:.3}</ram:LineTotalAmount>\n", net_milli as f64 / 1000.0));
-    xml.push_str(&format!("        <ram:TaxBasisTotalAmount currencyID=\"OMR\">{:.3}</ram:TaxBasisTotalAmount>\n", net_milli as f64 / 1000.0));
-    xml.push_str(&format!("        <ram:TaxTotalAmount currencyID=\"OMR\">{:.3}</ram:TaxTotalAmount>\n", vat_milli as f64 / 1000.0));
-    xml.push_str(&format!("        <ram:GrandTotalAmount currencyID=\"OMR\">{:.3}</ram:GrandTotalAmount>\n", total_milli as f64 / 1000.0));
-    xml.push_str(&format!("        <ram:DuePayableAmount currencyID=\"OMR\">{:.3}</ram:DuePayableAmount>\n", total_milli as f64 / 1000.0));
+    xml.push_str(&format!("        <ram:LineTotalAmount currencyID=\"{}\">{:.3}</ram:LineTotalAmount>\n", xml_escape(currency), net_milli as f64 / 1000.0));
+    xml.push_str(&format!("        <ram:TaxBasisTotalAmount currencyID=\"{}\">{:.3}</ram:TaxBasisTotalAmount>\n", xml_escape(currency), net_milli as f64 / 1000.0));
+    xml.push_str(&format!("        <ram:TaxTotalAmount currencyID=\"{}\">{:.3}</ram:TaxTotalAmount>\n", xml_escape(currency), vat_milli as f64 / 1000.0));
+    xml.push_str(&format!("        <ram:GrandTotalAmount currencyID=\"{}\">{:.3}</ram:GrandTotalAmount>\n", xml_escape(currency), total_milli as f64 / 1000.0));
+    xml.push_str(&format!("        <ram:DuePayableAmount currencyID=\"{}\">{:.3}</ram:DuePayableAmount>\n", xml_escape(currency), total_milli as f64 / 1000.0));
     xml.push_str("      </ram:SpecifiedTradeSettlementMonetarySummation>\n");
     xml.push_str("    </ram:ApplicableHeaderTradeSettlement>\n\n");
     for (idx, (desc, qty, price, total)) in lines.iter().enumerate() {
@@ -195,7 +195,7 @@ fn generate_pint_om_xml(
         xml.push_str(&format!("        <ram:Name>{}</ram:Name>\n", xml_escape(desc)));
         xml.push_str("      </ram:SpecifiedTradeProduct>\n");
         xml.push_str("      <ram:SpecifiedLineTradeAgreement>\n");
-        xml.push_str(&format!("        <ram:NetPriceAmount currencyID=\"OMR\">{:.3}</ram:NetPriceAmount>\n", price));
+        xml.push_str(&format!("        <ram:NetPriceAmount currencyID=\"{}\">{:.3}</ram:NetPriceAmount>\n", xml_escape(currency), price));
         xml.push_str("      </ram:SpecifiedLineTradeAgreement>\n");
         xml.push_str("      <ram:SpecifiedLineTradeDelivery>\n");
         xml.push_str(&format!("        <ram:BilledQuantity unitCode=\"C62\">{:.0}</ram:BilledQuantity>\n", qty));
@@ -203,10 +203,10 @@ fn generate_pint_om_xml(
         xml.push_str("      <ram:SpecifiedLineTradeSettlement>\n");
         xml.push_str("        <ram:ApplicableTradeTax>\n");
         xml.push_str("          <ram:TypeCode>VAT</ram:TypeCode>\n");
-        xml.push_str("          <ram:RateApplicablePercent>5.00</ram:RateApplicablePercent>\n");
+        xml.push_str(&format!("          <ram:RateApplicablePercent>{:.2}</ram:RateApplicablePercent>\n", vat_rate));
         xml.push_str("        </ram:ApplicableTradeTax>\n");
         xml.push_str("        <ram:SpecifiedTradeSettlementMonetarySummation>\n");
-        xml.push_str(&format!("          <ram:LineTotalAmount currencyID=\"OMR\">{:.3}</ram:LineTotalAmount>\n", total));
+        xml.push_str(&format!("          <ram:LineTotalAmount currencyID=\"{}\">{:.3}</ram:LineTotalAmount>\n", xml_escape(currency), total));
         xml.push_str("        </ram:SpecifiedTradeSettlementMonetarySummation>\n");
         xml.push_str("      </ram:SpecifiedLineTradeSettlement>\n");
         xml.push_str("    </ram:IncludedSupplyChainTradeLineItem>\n\n");
@@ -214,6 +214,58 @@ fn generate_pint_om_xml(
     xml.push_str("  </rsm:SupplyChainTradeTransaction>\n");
     xml.push_str("</rsm:CrossIndustryInvoice>\n");
     xml
+}
+
+/// Prefer the active company record, falling back to company_settings.
+fn load_company_for_einvoice(
+    conn: &rusqlite::Connection,
+) -> (String, String, String, String, String, f64) {
+    conn.query_row(
+        "SELECT COALESCE(name_ar, name_en, ''), COALESCE(vat_number, ''), COALESCE(address, ''),
+                COALESCE(cr_number, ''), COALESCE(default_currency, 'KWD'), COALESCE(default_vat_pct, 5.0)
+         FROM companies WHERE active = 1 ORDER BY id LIMIT 1",
+        [],
+        |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, f64>(5)?,
+            ))
+        },
+    )
+    .or_else(|_| {
+        conn.query_row(
+            "SELECT COALESCE(name, ''), COALESCE(vat_number, ''), COALESCE(address, ''),
+                    '', 'KWD', COALESCE(default_vat_pct, 5.0)
+             FROM company_settings LIMIT 1",
+            [],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    String::new(),
+                    String::from("KWD"),
+                    row.get::<_, f64>(5)?,
+                ))
+            },
+        )
+    })
+    .unwrap_or_default()
+}
+
+fn country_code_for_currency(currency: &str) -> &'static str {
+    match currency.to_uppercase().as_str() {
+        "OMR" => "OM",
+        "SAR" => "SA",
+        "AED" => "AE",
+        "BHD" => "BH",
+        "QAR" => "QA",
+        _ => "KW",
+    }
 }
 
 #[tauri::command]
@@ -251,33 +303,10 @@ pub fn einvoice_generate(
 
     let (_inv_id, inv_no, net_milli, vat_milli, total_milli, inv_date, cust_name, cust_vat) = inv;
 
-    let company = conn.query_row(
-        "SELECT COALESCE(name, ''), COALESCE(vat_number, ''), COALESCE(address, ''), COALESCE(cr_number, '')
-         FROM companies WHERE id = (SELECT company_id FROM sales_invoices WHERE id = ?1)
-         UNION ALL
-         SELECT COALESCE(name, ''), COALESCE(vat_number, ''), COALESCE(address, ''), ''
-         FROM company_settings LIMIT 1",
-        [invoice_id],
-        |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-            ))
-        },
-    ).unwrap_or_default();
+    let (company_name, company_vat, _company_addr, company_cr, currency, vat_rate) =
+        load_company_for_einvoice(&conn);
 
-    let (company_name, company_vat, company_addr, company_cr) = company;
-
-    let contact_person = conn
-        .query_row(
-            "SELECT COALESCE(contact_person, '') FROM customers
-             WHERE id = (SELECT customer_id FROM sales_invoices WHERE id = ?1)",
-            [invoice_id],
-            |row| row.get::<_, String>(0),
-        )
-        .unwrap_or_default();
+    let country = country_code_for_currency(&currency);
 
     let mut lines_data: Vec<(String, f64, f64, f64)> = Vec::new();
     {
@@ -306,10 +335,10 @@ pub fn einvoice_generate(
 
     let inv_date_short = if inv_date.len() >= 10 { &inv_date[..10] } else { &inv_date };
     let xml = generate_pint_om_xml(
-        invoice_id, &inv_no, net_milli, vat_milli, total_milli,
+        &inv_no, net_milli, vat_milli, total_milli,
         inv_date_short, &cust_name, &cust_vat,
-        &company_name, &company_vat, &company_addr, &company_cr,
-        &contact_person, &lines_data,
+        &company_name, &company_vat, &company_cr,
+        &currency, vat_rate, country, &lines_data,
     );
 
     let xml_hash = compute_hash(xml.as_bytes());
@@ -1267,6 +1296,7 @@ pub fn einvoice_bulk_generate(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rusqlite::Connection;
 
     #[test]
     fn sha256_hash_is_deterministic_and_64_hex() {
@@ -1363,9 +1393,9 @@ mod tests {
     #[test]
     fn pint_om_xml_contains_core_identifiers() {
         let xml = generate_pint_om_xml(
-            1, "INV-0001", 100_000, 5_000, 105_000, "2026-08-10",
+            "INV-0001", 100_000, 5_000, 105_000, "2026-08-10",
             "ACME LLC", "OM123456", "PRO MAX FACTORY", "OM654321",
-            "Muscat", "CR12345", "Sales", &[
+            "CR12345", "OMR", 5.0, "OM", &[
                 ("Widget".to_string(), 10.0, 10.000, 100.000),
             ],
         );
@@ -1376,13 +1406,14 @@ mod tests {
         assert!(xml.contains("<ram:Name>PRO MAX FACTORY</ram:Name>"));
         assert!(xml.contains("schemeID=\"9921\""));
         assert!(xml.contains("schemeID=\"9930\""));
+        assert!(xml.contains("<ram:ID schemeID=\"9930\">OMCR12345</ram:ID>"));
     }
 
     #[test]
     fn pint_om_xml_uses_omr_amounts_and_vat_rate() {
         let xml = generate_pint_om_xml(
-            1, "INV-0002", 250_000, 12_500, 262_500, "2026-08-10",
-            "Buyer", "", "Seller", "", "", "", "", &[],
+            "INV-0002", 250_000, 12_500, 262_500, "2026-08-10",
+            "Buyer", "", "Seller", "", "", "OMR", 5.0, "OM", &[],
         );
         assert!(xml.contains("<ram:InvoiceCurrencyCode>OMR</ram:InvoiceCurrencyCode>"));
         assert!(xml.contains("<ram:LineTotalAmount currencyID=\"OMR\">250.000</ram:LineTotalAmount>"));
@@ -1394,10 +1425,24 @@ mod tests {
     }
 
     #[test]
+    fn pint_om_xml_uses_configured_currency_vat_rate_and_cr() {
+        let xml = generate_pint_om_xml(
+            "INV-0005", 100_000, 15_000, 115_000, "2026-08-10",
+            "Buyer", "", "KWT Factory", "888888888888888", "CR-7788",
+            "KWD", 15.0, "KW", &[],
+        );
+        assert!(xml.contains("<ram:InvoiceCurrencyCode>KWD</ram:InvoiceCurrencyCode>"));
+        assert!(xml.contains("<ram:RateApplicablePercent>15.00</ram:RateApplicablePercent>"));
+        assert!(xml.contains("<ram:ID schemeID=\"9930\">KWCR-7788</ram:ID>"));
+        assert!(xml.contains("<ram:GrandTotalAmount currencyID=\"KWD\">115.000</ram:GrandTotalAmount>"));
+        assert!(!xml.contains("OMR"));
+    }
+
+    #[test]
     fn pint_om_xml_escapes_special_chars_in_names() {
         let xml = generate_pint_om_xml(
-            1, "INV-0003", 100_000, 5_000, 105_000, "2026-08-10",
-            "ACME & Sons <Ltd>", "", "A&B Co", "", "", "", "", &[],
+            "INV-0003", 100_000, 5_000, 105_000, "2026-08-10",
+            "ACME & Sons <Ltd>", "", "A&B Co", "", "", "OMR", 5.0, "OM", &[],
         );
         assert!(xml.contains("<ram:Name>ACME &amp; Sons &lt;Ltd&gt;</ram:Name>"));
         assert!(xml.contains("<ram:Name>A&amp;B Co</ram:Name>"));
@@ -1407,8 +1452,8 @@ mod tests {
     #[test]
     fn pint_om_xml_includes_line_items_with_indexes() {
         let xml = generate_pint_om_xml(
-            1, "INV-0004", 30_000, 1_500, 31_500, "2026-08-10",
-            "Buyer", "", "Seller", "", "", "", "", &[
+            "INV-0004", 30_000, 1_500, 31_500, "2026-08-10",
+            "Buyer", "", "Seller", "", "", "OMR", 5.0, "OM", &[
                 ("First".to_string(), 2.0, 10.000, 20.000),
                 ("Second".to_string(), 1.0, 10.000, 10.000),
             ],
@@ -1420,5 +1465,72 @@ mod tests {
         assert!(xml.contains("<ram:BilledQuantity unitCode=\"C62\">2</ram:BilledQuantity>"));
         assert!(xml.contains("<ram:NetPriceAmount currencyID=\"OMR\">10.000</ram:NetPriceAmount>"));
         assert!(xml.ends_with("</rsm:CrossIndustryInvoice>\n"));
+    }
+
+    #[test]
+    fn country_code_for_currency_maps_known_currencies() {
+        assert_eq!(country_code_for_currency("KWD"), "KW");
+        assert_eq!(country_code_for_currency("OMR"), "OM");
+        assert_eq!(country_code_for_currency("SAR"), "SA");
+        assert_eq!(country_code_for_currency("AED"), "AE");
+        assert_eq!(country_code_for_currency("BHD"), "BH");
+        assert_eq!(country_code_for_currency("QAR"), "QA");
+        assert_eq!(country_code_for_currency("USD"), "KW");
+    }
+
+    #[test]
+    fn load_company_prefers_active_company_record() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(include_str!("../schema.sql")).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE companies (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                code TEXT NOT NULL UNIQUE,
+                name_ar TEXT NOT NULL,
+                name_en TEXT,
+                cr_number TEXT,
+                vat_number TEXT,
+                address TEXT,
+                phone TEXT,
+                email TEXT,
+                website TEXT,
+                logo_path TEXT,
+                default_currency TEXT NOT NULL DEFAULT 'OMR',
+                default_vat_pct REAL NOT NULL DEFAULT 5.0,
+                fiscal_year_start TEXT NOT NULL DEFAULT '01-01',
+                active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );",
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO companies(code, name_ar, name_en, cr_number, vat_number, address, default_currency, default_vat_pct)
+             VALUES('MAIN', 'الشركة الرئيسية', 'Main Co', 'CR-7788', '777777777777777', 'Kuwait City', 'KWD', 15.0)",
+            [],
+        ).unwrap();
+        let (name, vat, addr, cr, currency, vat_pct) = load_company_for_einvoice(&conn);
+        assert_eq!(name, "الشركة الرئيسية");
+        assert_eq!(vat, "777777777777777");
+        assert_eq!(addr, "Kuwait City");
+        assert_eq!(cr, "CR-7788");
+        assert_eq!(currency, "KWD");
+        assert_eq!(vat_pct, 15.0);
+    }
+
+    #[test]
+    fn load_company_falls_back_to_company_settings() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(include_str!("../schema.sql")).unwrap();
+        conn.execute(
+            "INSERT INTO company_settings(id, name, vat_number, address, default_vat_pct)
+             VALUES(1, 'Legacy Co', '123456789', 'Old Street', 10.0)",
+            [],
+        ).unwrap();
+        let (name, vat, addr, cr, currency, vat_pct) = load_company_for_einvoice(&conn);
+        assert_eq!(name, "Legacy Co");
+        assert_eq!(vat, "123456789");
+        assert_eq!(addr, "Old Street");
+        assert_eq!(cr, "");
+        assert_eq!(currency, "KWD");
+        assert_eq!(vat_pct, 10.0);
     }
 }
