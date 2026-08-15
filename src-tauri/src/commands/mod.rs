@@ -17,6 +17,7 @@ pub mod ocr;
 pub mod ai;
 pub mod excel_import;
 pub mod einvoice;
+pub mod factory;
 pub mod backup;
 pub mod file_reader;
 pub mod suppliers;

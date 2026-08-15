@@ -92,6 +92,9 @@ const IntegrationsPage = lazy(() => import("./pages/tools/IntegrationsPage"));
 const ImportTrackingPage = lazy(() => import("./pages/imports/ImportTrackingPage"));
 const BarterExchangePage = lazy(() => import("./pages/barter/BarterExchangePage"));
 const InstallmentTrackingPage = lazy(() => import("./pages/installments/InstallmentTrackingPage"));
+const FactoryDashboardPage = lazy(() => import("./pages/factory/FactoryDashboardPage"));
+const QuotationsPage = lazy(() => import("./pages/factory/QuotationsPage"));
+const CommercialInvoicesPage = lazy(() => import("./pages/factory/CommercialInvoicesPage"));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, validateToken } = useAuthStore();
@@ -226,6 +229,11 @@ export default function App() {
 
             {/* Installments */}
             <Route path="/installments" element={<ProtectedRoute><InstallmentTrackingPage /></ProtectedRoute>} />
+
+            {/* Cup Factory */}
+            <Route path="/factory" element={<ProtectedRoute><FactoryDashboardPage /></ProtectedRoute>} />
+            <Route path="/factory/quotations" element={<ProtectedRoute><QuotationsPage /></ProtectedRoute>} />
+            <Route path="/factory/commercial-invoices" element={<ProtectedRoute><CommercialInvoicesPage /></ProtectedRoute>} />
 
             {/* Settings */}
             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />

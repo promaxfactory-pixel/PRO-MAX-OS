@@ -386,6 +386,17 @@ pub(crate) fn auto_enqueue_on_post(
     if !enabled {
         return Ok(());
     }
+    // Commercial (non-tax) invoices are not e-invoiced — skip them.
+    let is_commercial: i64 = conn
+        .query_row(
+            "SELECT COALESCE(is_commercial, 0) FROM sales_invoices WHERE id = ?1",
+            [invoice_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+    if is_commercial > 0 {
+        return Ok(());
+    }
     if let Ok(_result) = generate_invoice_xml(conn, invoice_id) {
         conn.execute(
             "INSERT OR IGNORE INTO einvoice_queue (invoice_id, action, priority) VALUES (?1, 'submit', 0)",

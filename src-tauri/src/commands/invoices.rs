@@ -24,6 +24,7 @@ pub struct SalesInvoice {
     pub notes: Option<String>,
     pub created_by: Option<String>,
     pub created_at: Option<String>,
+    pub is_commercial: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -68,7 +69,7 @@ struct ProductInfo {
 pub fn list_invoices(state: State<'_, DbState>) -> Result<Vec<SalesInvoice>, AppError> {
     let conn = state.0.lock()?;
     let mut stmt = conn.prepare(
-        "SELECT si.id, si.inv_no, si.date, si.customer_id, c.name, si.payment_type, si.vat_enabled, si.net_milli, si.vat_milli, si.discount_milli, si.total_milli, si.discount_reason, si.cogs_milli, si.paid_milli, si.status, si.notes, si.created_by, si.created_at FROM sales_invoices si LEFT JOIN customers c ON si.customer_id=c.id ORDER BY si.id DESC"
+        "SELECT si.id, si.inv_no, si.date, si.customer_id, c.name, si.payment_type, si.vat_enabled, si.net_milli, si.vat_milli, si.discount_milli, si.total_milli, si.discount_reason, si.cogs_milli, si.paid_milli, si.status, si.notes, si.created_by, si.created_at, si.is_commercial FROM sales_invoices si LEFT JOIN customers c ON si.customer_id=c.id ORDER BY si.id DESC"
     )?;
     
     let rows = stmt.query_map([], |row| {
@@ -91,6 +92,7 @@ pub fn list_invoices(state: State<'_, DbState>) -> Result<Vec<SalesInvoice>, App
             notes: row.get(15)?,
             created_by: row.get(16)?,
             created_at: row.get(17)?,
+            is_commercial: row.get(18)?,
         })
     })?;
     
@@ -101,7 +103,7 @@ pub fn list_invoices(state: State<'_, DbState>) -> Result<Vec<SalesInvoice>, App
 pub fn get_invoice(state: State<'_, DbState>, id: i64) -> Result<SalesInvoice, AppError> {
     let conn = state.0.lock()?;
     Ok(conn.query_row(
-        "SELECT si.id, si.inv_no, si.date, si.customer_id, c.name, si.payment_type, si.vat_enabled, si.net_milli, si.vat_milli, si.discount_milli, si.total_milli, si.discount_reason, si.cogs_milli, si.paid_milli, si.status, si.notes, si.created_by, si.created_at FROM sales_invoices si LEFT JOIN customers c ON si.customer_id=c.id WHERE si.id=?",
+        "SELECT si.id, si.inv_no, si.date, si.customer_id, c.name, si.payment_type, si.vat_enabled, si.net_milli, si.vat_milli, si.discount_milli, si.total_milli, si.discount_reason, si.cogs_milli, si.paid_milli, si.status, si.notes, si.created_by, si.created_at, si.is_commercial FROM sales_invoices si LEFT JOIN customers c ON si.customer_id=c.id WHERE si.id=?",
         [id],
         |row| {
             Ok(SalesInvoice {
@@ -111,6 +113,7 @@ pub fn get_invoice(state: State<'_, DbState>, id: i64) -> Result<SalesInvoice, A
                 total_milli: row.get(10)?, discount_reason: row.get(11)?, cogs_milli: row.get(12)?,
                 paid_milli: row.get(13)?, status: row.get(14)?, notes: row.get(15)?,
                 created_by: row.get(16)?, created_at: row.get(17)?,
+                is_commercial: row.get(18)?,
             })
         },
     )?)
@@ -458,7 +461,7 @@ pub fn duplicate_invoice(state: State<'_, DbState>, user_id: i64, id: i64) -> Re
     rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     
     let inv: SalesInvoice = conn.query_row(
-        "SELECT si.id, si.inv_no, si.date, si.customer_id, c.name, si.payment_type, si.vat_enabled, si.net_milli, si.vat_milli, si.discount_milli, si.total_milli, si.discount_reason, si.cogs_milli, si.paid_milli, si.status, si.notes, si.created_by, si.created_at FROM sales_invoices si LEFT JOIN customers c ON si.customer_id=c.id WHERE si.id=?",
+        "SELECT si.id, si.inv_no, si.date, si.customer_id, c.name, si.payment_type, si.vat_enabled, si.net_milli, si.vat_milli, si.discount_milli, si.total_milli, si.discount_reason, si.cogs_milli, si.paid_milli, si.status, si.notes, si.created_by, si.created_at, si.is_commercial FROM sales_invoices si LEFT JOIN customers c ON si.customer_id=c.id WHERE si.id=?",
         [id],
         |row| {
             Ok(SalesInvoice {
@@ -468,6 +471,7 @@ pub fn duplicate_invoice(state: State<'_, DbState>, user_id: i64, id: i64) -> Re
                 total_milli: row.get(10)?, discount_reason: row.get(11)?, cogs_milli: row.get(12)?,
                 paid_milli: row.get(13)?, status: row.get(14)?, notes: row.get(15)?,
                 created_by: row.get(16)?, created_at: row.get(17)?,
+                is_commercial: row.get(18)?,
             })
         },
     ).map_err(|e| format!("Invoice not found: {}", e))?;
@@ -967,7 +971,7 @@ pub struct CreditNotePrintData {
     pub company: CompanyPrintInfo,
 }
 
-fn get_company_info(conn: &rusqlite::Connection) -> Result<CompanyPrintInfo, AppError> {
+pub(crate) fn get_company_info(conn: &rusqlite::Connection) -> Result<CompanyPrintInfo, AppError> {
     conn.query_row(
         "SELECT name, factory_name, address, phone, email, vat_number, cr_number, logo_path, stamp_path, signature_path, footer_notes, bank_details, default_vat_pct, currency, bank_name, bank_account_no, bank_iban, bank_swift FROM company_settings LIMIT 1",
         [],
@@ -994,7 +998,7 @@ fn get_company_info(conn: &rusqlite::Connection) -> Result<CompanyPrintInfo, App
     ).map_err(|e| AppError::business(format!("Company settings not found: {}", e)))
 }
 
-fn get_customer_info(conn: &rusqlite::Connection, customer_id: i64) -> Result<CustomerPrintInfo, AppError> {
+pub(crate) fn get_customer_info(conn: &rusqlite::Connection, customer_id: i64) -> Result<CustomerPrintInfo, AppError> {
     conn.query_row(
         "SELECT id, name, address, vat_number, phone FROM customers WHERE id=?",
         [customer_id],
@@ -1035,7 +1039,7 @@ pub fn get_invoice_for_print(state: State<'_, DbState>, invoice_id: i64) -> Resu
     get_invoice_for_print_inner(&conn, invoice_id)
 }
 
-fn get_invoice_for_print_inner(conn: &rusqlite::Connection, invoice_id: i64) -> Result<InvoicePrintData, AppError> {
+pub(crate) fn get_invoice_for_print_inner(conn: &rusqlite::Connection, invoice_id: i64) -> Result<InvoicePrintData, AppError> {
     let invoice = get_invoice_by_conn(conn, invoice_id)?;
     let customer = get_customer_info(conn, invoice.customer_id)?;
     let lines = get_invoice_lines_internal(conn, invoice_id)?;
@@ -1170,7 +1174,7 @@ pub fn get_credit_note_for_print(state: State<'_, DbState>, credit_note_id: i64)
 // Internal helpers that work with an existing connection (not State)
 fn get_invoice_by_conn(conn: &rusqlite::Connection, id: i64) -> Result<SalesInvoice, AppError> {
     conn.query_row(
-        "SELECT si.id, si.inv_no, si.date, si.customer_id, c.name, si.payment_type, si.vat_enabled, si.net_milli, si.vat_milli, si.discount_milli, si.total_milli, si.discount_reason, si.cogs_milli, si.paid_milli, si.status, si.notes, si.created_by, si.created_at FROM sales_invoices si LEFT JOIN customers c ON si.customer_id=c.id WHERE si.id=?",
+        "SELECT si.id, si.inv_no, si.date, si.customer_id, c.name, si.payment_type, si.vat_enabled, si.net_milli, si.vat_milli, si.discount_milli, si.total_milli, si.discount_reason, si.cogs_milli, si.paid_milli, si.status, si.notes, si.created_by, si.created_at, si.is_commercial FROM sales_invoices si LEFT JOIN customers c ON si.customer_id=c.id WHERE si.id=?",
         [id],
         |row| {
             Ok(SalesInvoice {
@@ -1180,6 +1184,7 @@ fn get_invoice_by_conn(conn: &rusqlite::Connection, id: i64) -> Result<SalesInvo
                 total_milli: row.get(10)?, discount_reason: row.get(11)?, cogs_milli: row.get(12)?,
                 paid_milli: row.get(13)?, status: row.get(14)?, notes: row.get(15)?,
                 created_by: row.get(16)?, created_at: row.get(17)?,
+                is_commercial: row.get(18)?,
             })
         },
     ).map_err(|e| AppError::not_found(format!("Invoice not found: {}", e)))

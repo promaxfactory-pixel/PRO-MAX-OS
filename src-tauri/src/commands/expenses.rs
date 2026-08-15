@@ -67,8 +67,17 @@ LEFT JOIN petty_cash_accounts pca ON e.petty_id = pca.id";
 pub fn list_expenses(state: State<'_, DbState>) -> Result<Vec<Expense>, AppError> {
     let conn = state.0.lock()?;
     let sql = format!("{} ORDER BY e.id DESC", EXPENSE_SELECT);
-    let mut stmt = conn.prepare(&sql)?;
-    let rows = stmt.query_map([], |row| {
+    expense_rows_from_sql(&conn, &sql, &[])
+}
+
+/// Shared row mapper for the EXPENSE_SELECT projection.
+fn expense_rows_from_sql(
+    conn: &rusqlite::Connection,
+    sql: &str,
+    params: &[&dyn rusqlite::types::ToSql],
+) -> Result<Vec<Expense>, AppError> {
+    let mut stmt = conn.prepare(sql)?;
+    let rows = stmt.query_map(params, |row| {
         Ok(Expense {
             id: row.get(0)?,
             exp_no: row.get(1)?,
@@ -100,6 +109,16 @@ pub fn list_expenses(state: State<'_, DbState>) -> Result<Vec<Expense>, AppError
         items.push(row?);
     }
     Ok(items)
+}
+
+/// Expenses whose date falls inside [date_from, date_to], newest first.
+pub(crate) fn expense_rows_in_range(
+    conn: &rusqlite::Connection,
+    date_from: &str,
+    date_to: &str,
+) -> Result<Vec<Expense>, AppError> {
+    let sql = format!("{} WHERE e.date >= ?1 AND e.date <= ?2 ORDER BY e.date DESC, e.id DESC", EXPENSE_SELECT);
+    expense_rows_from_sql(conn, &sql, &[&date_from as &dyn rusqlite::types::ToSql, &date_to as &dyn rusqlite::types::ToSql])
 }
 
 #[tauri::command]

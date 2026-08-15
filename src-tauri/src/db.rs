@@ -72,7 +72,7 @@ fn ensure_admin_user(conn: &Connection) -> Result<()> {
 mod migrations {
     use rusqlite::{Connection, Result};
     
-    pub(crate) const SCHEMA_VERSION: i32 = 35;
+    pub(crate) const SCHEMA_VERSION: i32 = 36;
     
     pub fn run(conn: &Connection) -> Result<()> {
         let current: i32 = conn
@@ -1016,6 +1016,74 @@ mod migrations {
                     }
                 }
             }
+            36 => {
+                // Cup-factory vertical: professional quotations (قوائم أسعار /
+                // عروض) and commercial (non-tax) invoices issued under the
+                // factory name only. Quotations carry free-form client details
+                // plus per-line cup specs (size, cups per carton) so a quote can
+                // be issued to anyone with any data the factory wants.
+                conn.execute_batch(
+                    "CREATE TABLE IF NOT EXISTS quotations (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        quote_no TEXT,
+                        date TEXT NOT NULL,
+                        customer_id INTEGER,
+                        client_name TEXT,
+                        client_contact TEXT,
+                        client_phone TEXT,
+                        client_email TEXT,
+                        client_address TEXT,
+                        title TEXT,
+                        notes TEXT,
+                        terms TEXT,
+                        validity_days INTEGER DEFAULT 7,
+                        net_milli INTEGER DEFAULT 0,
+                        discount_milli INTEGER DEFAULT 0,
+                        total_milli INTEGER DEFAULT 0,
+                        currency TEXT DEFAULT 'OMR',
+                        status TEXT DEFAULT 'Draft',
+                        created_by TEXT,
+                        created_at TEXT,
+                        updated_at TEXT
+                    );
+                    CREATE TABLE IF NOT EXISTS quotation_lines (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        quote_id INTEGER NOT NULL REFERENCES quotations(id) ON DELETE CASCADE,
+                        product_id INTEGER,
+                        item_name TEXT,
+                        cup_size TEXT,
+                        cups_per_carton INTEGER DEFAULT 1000,
+                        cartons REAL DEFAULT 0,
+                        unit_price_milli INTEGER DEFAULT 0,
+                        line_total_milli INTEGER DEFAULT 0,
+                        notes TEXT
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_quotation_lines_quote ON quotation_lines(quote_id);
+                    CREATE INDEX IF NOT EXISTS idx_quotations_date ON quotations(date);"
+                )
+                .map_err(|e| {
+                    eprintln!("Migration 36a failed: {}", e);
+                    e
+                })?;
+
+                // Commercial (non-tax) invoices are plain sales invoices marked
+                // so the print layer can render the factory name only (no company
+                // name, no tax number, no VAT) and e-invoicing never enqueues them.
+                let has_commercial: bool = conn
+                    .prepare("SELECT COUNT(*) FROM pragma_table_info('sales_invoices') WHERE name='is_commercial'")
+                    .and_then(|mut stmt| stmt.query_row([], |r| r.get::<_, i64>(0)))
+                    .map(|c| c > 0)
+                    .unwrap_or(false);
+                if !has_commercial {
+                    conn.execute_batch(
+                        "ALTER TABLE sales_invoices ADD COLUMN is_commercial INTEGER DEFAULT 0;",
+                    )
+                    .map_err(|e| {
+                        eprintln!("Migration 36b failed: {}", e);
+                        e
+                    })?;
+                }
+            }
             _ => {}
         }
         Ok(())
@@ -1166,7 +1234,8 @@ mod tests {
                 footer_notes TEXT, bank_details TEXT,
                 default_vat_pct REAL DEFAULT 5.0
              );
-             INSERT INTO company_settings(id) VALUES(1);",
+             INSERT INTO company_settings(id) VALUES(1);
+             CREATE TABLE sales_invoices (id INTEGER PRIMARY KEY AUTOINCREMENT, inv_no TEXT, date TEXT, customer_id INTEGER, net_milli INTEGER DEFAULT 0, vat_milli INTEGER DEFAULT 0, total_milli INTEGER DEFAULT 0, status TEXT DEFAULT 'Draft');",
         ).unwrap();
 
         super::migrations::run(&conn).expect("migrations must apply");
@@ -1296,6 +1365,7 @@ mod tests {
         let tables = [
             "approval_requests", "budgets", "budget_lines",
             "fixed_assets", "asset_maintenance_logs", "notifications",
+            "quotations", "quotation_lines",
         ];
         for table in &tables {
             let count: i64 = conn

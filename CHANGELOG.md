@@ -4,7 +4,51 @@ All notable changes to PRO MAX OS are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.5.0] - 2026-08-15
+## [2.6.0] - 2026-08-15
+
+### Added
+- **مصنع الأكواب (cup factory).** New dedicated section for the professional paper-cup
+  factory, accessible from a new "مصنع الكؤوس" sidebar group:
+  - **Factory dashboard (`/factory`).** Live production totals for today (total
+    cartons/cups, morning vs. evening shift), per-product and per-worker production
+    with waste, and a low-stock inventory alert table. Integrated expense summary
+    with a week/month toggle showing the grand total plus breakdowns by source
+    (من عهد الموظفين / من أصحاب المصنع / من الحسابات الرئيسية) and by category,
+    with the last recorded rows listed.
+  - **Quotations (عروض الأسعار / كوتيشن).** Full professional quotation flow with
+    sequential numbering (`QUOT-YYYY-####`), client info (linked customer or free
+    text), validity period, discount, terms and notes. Line editor supports products
+    (cup size, cups per carton, cartons, unit price) or free-form items with a live
+    total, Draft/Sent/Accepted/Rejected status lifecycle, and a sky-blue themed
+    professional print layout (signature blocks included).
+  - **Commercial invoices (فواتير تجارية — غير ضريبية).** Non-VAT commercial
+    invoices printed with the factory name only (no company, no VAT column, no
+    tax): numbered `CINV-YYYY-####`, customer, payment method, line editor
+    (product / cartons / unit price), posting to inventory and accounts, and a
+    green-themed print template marked "بيان تجاري غير ضريبي".
+  - **E-invoice integration.** Commercial invoices are explicitly excluded from the
+    Oman e-invoicing auto-enqueue path (`auto_enqueue_on_post` skips them), keeping
+    them fully non-tax and non-Fawtara.
+
+### Changed
+- Version bumped to 2.6.0 (installers and portable build regenerated).
+
+### Fixed
+- Fresh-install schema: `expenses` now includes `custody_txn_id`,
+  `reimbursement_status`, `reimbursement_date`, `reimbursed_by` (previously only
+  applied by an interrupted migration), and `sales_invoices` includes
+  `is_commercial` — existing databases are migrated automatically on upgrade.
+- `get_expense_summary` now returns a `details` list of every expense row in the
+  range alongside the source/category aggregates.
+
+### Tests
+- Rust: cup-factory suite — quotation create/update/delete/print flow, commercial
+  invoice non-VAT + printable, expense summary source/category grouping, and
+  commercial invoices skipped by e-invoice auto-enqueue. Full suite 136 green,
+  clippy clean.
+- Frontend: TypeScript strict, ESLint clean (no errors), production build green.
+
+
 
 ### Added
 - **Fawtara (Oman e-invoicing) foundation.** New `fawtara` module built on the

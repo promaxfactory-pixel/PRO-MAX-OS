@@ -234,7 +234,8 @@ CREATE TABLE IF NOT EXISTS sales_invoices (
     cogs_milli INTEGER DEFAULT 0, paid_milli INTEGER DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'Draft',
     cashbank_id INTEGER REFERENCES cashbank_accounts(id), delivery TEXT, notes TEXT,
-    created_by TEXT, created_at TEXT, journal_id INTEGER REFERENCES journal_entries(id)
+    created_by TEXT, created_at TEXT, journal_id INTEGER REFERENCES journal_entries(id),
+    is_commercial INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS sales_invoice_lines (
@@ -306,7 +307,9 @@ CREATE TABLE IF NOT EXISTS expenses (
     method TEXT DEFAULT 'cash', paid_from_source TEXT, cashbank_id INTEGER REFERENCES cashbank_accounts(id), petty_id INTEGER REFERENCES petty_cash_accounts(id),
     vendor TEXT, reference TEXT, notes TEXT,
     attachment_required INTEGER DEFAULT 0, approval_status TEXT DEFAULT 'posted',
-    created_by TEXT, created_at TEXT, journal_id INTEGER REFERENCES journal_entries(id)
+    created_by TEXT, created_at TEXT, journal_id INTEGER REFERENCES journal_entries(id),
+    paid_by_employee_id INTEGER, custody_txn_id INTEGER,
+    reimbursement_status TEXT DEFAULT 'none', reimbursement_date TEXT, reimbursed_by TEXT
 );
 
 CREATE TABLE IF NOT EXISTS cashbank_accounts (

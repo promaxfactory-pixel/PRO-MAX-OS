@@ -226,6 +226,7 @@ export interface SalesInvoice {
   created_by: string;
   created_at: string;
   journal_id: number | null;
+  is_commercial: number;
   lines?: InvoiceLine[];
 }
 
@@ -716,6 +717,73 @@ export interface SupplierReceiptPrintData {
   payment: SupplierPaymentPrintInfo;
   supplier: SupplierPrintInfo;
   company: CompanySettings;
+}
+
+export interface Quotation {
+  id: number;
+  quote_no: string | null;
+  date: string;
+  customer_id: number | null;
+  client_name: string | null;
+  client_contact: string | null;
+  client_phone: string | null;
+  client_email: string | null;
+  client_address: string | null;
+  title: string | null;
+  notes: string | null;
+  terms: string | null;
+  validity_days: number;
+  net_milli: number;
+  discount_milli: number;
+  total_milli: number;
+  currency: string;
+  status: string;
+  created_by: string | null;
+  created_at: string | null;
+}
+
+export interface QuotationLine {
+  id: number;
+  quote_id: number;
+  product_id: number | null;
+  product_name: string | null;
+  item_name: string | null;
+  cup_size: string | null;
+  cups_per_carton: number;
+  cartons: number;
+  unit_price_milli: number;
+  line_total_milli: number;
+  notes: string | null;
+}
+
+export interface QuotationPrintData {
+  quotation: Quotation;
+  lines: QuotationLine[];
+  company: CompanySettings;
+  client_name: string;
+}
+
+export interface ExpenseSourceTotal {
+  source: string;
+  label: string;
+  total_milli: number;
+  count: number;
+}
+
+export interface ExpenseCategoryTotal {
+  category: string;
+  total_milli: number;
+  count: number;
+}
+
+export interface ExpenseSummary {
+  date_from: string;
+  date_to: string;
+  total_milli: number;
+  count: number;
+  by_source: ExpenseSourceTotal[];
+  by_category: ExpenseCategoryTotal[];
+  details: Expense[];
 }
 
 export interface CustodyAccount {

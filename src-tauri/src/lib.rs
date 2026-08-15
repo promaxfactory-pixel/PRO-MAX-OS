@@ -148,6 +148,17 @@ pub fn run() {
             commands::expenses::approve_expense,
             commands::expenses::list_employees_for_select,
             commands::expenses::get_custody_accounts_for_select,
+            // Factory (cup-factory vertical)
+            commands::factory::list_quotations,
+            commands::factory::get_quotation,
+            commands::factory::create_quotation,
+            commands::factory::update_quotation,
+            commands::factory::delete_quotation,
+            commands::factory::get_quotation_for_print,
+            commands::factory::create_commercial_invoice,
+            commands::factory::list_commercial_invoices,
+            commands::factory::get_commercial_invoice_for_print,
+            commands::factory::get_expense_summary,
             // Petty Cash
             commands::petty_cash::list_petty_cash_accounts,
             commands::petty_cash::create_petty_cash_account,

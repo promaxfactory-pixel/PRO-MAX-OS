@@ -27,6 +27,7 @@ const sectionColors: Record<string, string> = {
   "accounting.title": "#d4af37",
   "nav.hr": "#f43f5e",
   "الحكومة": "#3b82f6",
+  "مصنع الكؤوس": "#06b6d4",
   "الاستيراد والتعاملات": "#f97316",
   "nav.reports": "#a855f7",
   "nav.tools": "#64748b",
@@ -40,6 +41,7 @@ const sectionIcons: Record<string, React.ElementType> = {
   "accounting.title": BookOpen,
   "nav.hr": Users,
   "الحكومة": Building2,
+  "مصنع الكؤوس": Factory,
   "الاستيراد والتعاملات": Ship,
   "nav.reports": BarChart3,
   "nav.tools": Wrench,
@@ -109,6 +111,14 @@ const menuSections = (t: (key: string) => string) => [
       { label: "وزارة العمل", icon: ScrollText, path: "/government/labour" },
       { label: "الإقامة والجوازات", icon: IdCard, path: "/government/residency" },
       { label: "التكامل الحكومي", icon: Globe, path: "/government/integrations" },
+    ],
+  },
+  {
+    title: "مصنع الكؤوس",
+    items: [
+      { label: "لوحة المصنع", icon: Factory, path: "/factory" },
+      { label: "عروض الأسعار (كوتيشن)", icon: FileText, path: "/factory/quotations" },
+      { label: "الفواتير التجارية", icon: Receipt, path: "/factory/commercial-invoices" },
     ],
   },
   {
