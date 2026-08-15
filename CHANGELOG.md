@@ -4,6 +4,36 @@ All notable changes to PRO MAX OS are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.1] - 2026-08-15
+
+### Added
+- **Credit notes (إشعار دائن) — full flow shipped.**
+  - Backend `create_credit_note` (against a posted invoice): per-product return
+    quantities validated against the original invoice (price/VAT always taken from
+    the original invoice lines, never trusted from the client), cumulative credit
+    checks against existing non-voided notes, `CN-YYYY-####` numbering via the
+    shared sequence, stock return + `credit_note` inventory movements, and a
+    balanced reversal journal (revenue/VAT/AR; inventory/COGS when applicable),
+    with AR balance reduction for credit-sale invoices and full audit logging.
+  - `list_credit_notes` (with invoice filter), `get_invoice_credit_remaining`
+    (per-product remaining returnable quantity), and the existing
+    `get_credit_note_for_print` are now all wired into the UI.
+  - New `/credit-notes` page (list + print) and a credit-note modal on
+    `InvoiceDetailPage` for Posted invoices (editable return quantities defaulting
+    to the remaining balance, live totals, reason field).
+- **Supplier payment receipt (سند صرف).** `get_supplier_receipt_for_print` +
+  `SupplierReceiptPrintTemplate`; `SupplierPaymentPage` now shows a success screen
+  with a "طباعة سند صرف" button after recording a payment.
+
+### Changed
+- Version bumped to 2.4.1 (installers and portable build regenerated).
+
+### Tests
+- Rust: `credit_note_reverses_invoice_and_returns_stock` (journal balance, stock
+  return, AR reduction, remaining quantities, over-return rejection, draft-invoice
+  rejection) and `supplier_receipt_print_returns_payment_and_supplier`. Full suite
+  123 green, clippy `-D warnings` clean.
+
 ## [2.4.0] - 2026-08-14
 
 ### Fixed

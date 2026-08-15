@@ -64,6 +64,10 @@ pub fn run() {
             commands::invoices::get_receipt_for_print,
             commands::invoices::get_delivery_note_for_print,
             commands::invoices::get_credit_note_for_print,
+            commands::invoices::create_credit_note,
+            commands::invoices::list_credit_notes,
+            commands::invoices::get_invoice_credit_remaining,
+            commands::invoices::get_supplier_receipt_for_print,
             // Products
             commands::products::list_products,
             commands::products::list_products_for_select,

@@ -10,7 +10,7 @@ import {
   Cog, Eye, ShoppingCart, Wallet, Coins, ListChecks,
   ClipboardCheck, RefreshCw, Bell, HandCoins, FileClock, FileWarning, Clock,
   Building2, ScrollText, IdCard, Globe,
-  Ship, ArrowLeftRight, Sun, Moon, Sparkles
+  Ship, ArrowLeftRight, Sun, Moon, Sparkles, Undo2
 } from "lucide-react";
 import LanguageSwitcher from "./LanguageSwitcher";
 
@@ -59,6 +59,7 @@ const menuSections = (t: (key: string) => string) => [
     title: t("nav.sales"),
     items: [
       { label: t("nav.invoices"), icon: FileText, path: "/invoices" },
+      { label: "الإشعارات الدائنة", icon: Undo2, path: "/credit-notes" },
       { label: t("nav.customers"), icon: Users, path: "/customers" },
       { label: t("nav.suppliers"), icon: Truck, path: "/suppliers" },
       { label: t("nav.purchases"), icon: ShoppingCart, path: "/purchases" },

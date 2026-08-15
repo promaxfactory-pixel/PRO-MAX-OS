@@ -640,6 +640,84 @@ export interface Attachment {
   notes: string;
 }
 
+export interface CreditNoteLineInfo {
+  id: number;
+  product_name: string | null;
+  cartons: number;
+  qty_cups: number;
+  unit_price_milli: number;
+  line_net_milli: number;
+  vat_pct: number;
+  vat_milli: number;
+}
+
+export interface CreditNoteInfo {
+  id: number;
+  cn_no: string | null;
+  date: string;
+  invoice_no: string | null;
+  reason: string | null;
+  net_milli: number;
+  vat_milli: number;
+  total_milli: number;
+  status: string;
+  notes: string | null;
+}
+
+export interface CreditNotePrintData {
+  credit_note: CreditNoteInfo;
+  customer: CustomerPrintInfo;
+  lines: CreditNoteLineInfo[];
+  company: CompanySettings;
+}
+
+export interface CreditNoteSummary {
+  id: number;
+  cn_no: string | null;
+  date: string;
+  invoice_id: number;
+  invoice_no: string | null;
+  customer_id: number;
+  customer_name: string | null;
+  net_milli: number;
+  vat_milli: number;
+  total_milli: number;
+  reason: string | null;
+  status: string;
+  created_at: string | null;
+}
+
+export interface InvoiceCreditRemaining {
+  product_id: number;
+  product_name: string | null;
+  original_cartons: number;
+  credited_cartons: number;
+}
+
+export interface SupplierPaymentPrintInfo {
+  id: number;
+  receipt_no: string | null;
+  date: string;
+  amount_milli: number;
+  method: string | null;
+  reference: string | null;
+  notes: string | null;
+}
+
+export interface SupplierPrintInfo {
+  id: number;
+  name: string;
+  address: string | null;
+  vat_number: string | null;
+  phone: string | null;
+}
+
+export interface SupplierReceiptPrintData {
+  payment: SupplierPaymentPrintInfo;
+  supplier: SupplierPrintInfo;
+  company: CompanySettings;
+}
+
 export function milliToNumber(milli: number): number {
   return milli / 1000;
 }

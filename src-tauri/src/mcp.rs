@@ -458,7 +458,7 @@ fn handle_request(conn: &Connection, req: &JsonRpcRequest) -> JsonRpcResponse {
             json!({
                 "protocolVersion": "2024-11-05",
                 "capabilities": { "tools": {}, "resources": {}, "prompts": {} },
-                "serverInfo": { "name": "promax-mcp", "version": "2.4.0" }
+                "serverInfo": { "name": "promax-mcp", "version": "2.4.1" }
             })
         }
         "tools/list" => json!({ "tools": get_tools() }),

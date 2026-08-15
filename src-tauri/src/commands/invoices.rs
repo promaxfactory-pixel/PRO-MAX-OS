@@ -541,6 +541,330 @@ pub fn update_invoice(state: State<'_, DbState>, user_id: i64, id: i64, notes: O
     Ok("تم التحديث".to_string())
 }
 
+#[derive(Debug, Deserialize)]
+pub struct CreateCreditNoteInput {
+    pub invoice_id: i64,
+    pub date: Option<String>,
+    pub reason: Option<String>,
+    pub notes: Option<String>,
+    pub lines: Vec<CreateCreditNoteLineInput>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateCreditNoteLineInput {
+    pub product_id: i64,
+    pub cartons: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreditNoteSummary {
+    pub id: i64,
+    pub cn_no: Option<String>,
+    pub date: String,
+    pub invoice_id: i64,
+    pub invoice_no: Option<String>,
+    pub customer_id: i64,
+    pub customer_name: Option<String>,
+    pub net_milli: i64,
+    pub vat_milli: i64,
+    pub total_milli: i64,
+    pub reason: Option<String>,
+    pub status: String,
+    pub created_at: Option<String>,
+}
+
+/// Creates a sales credit note against a posted invoice: returns goods to stock,
+/// reverses the invoice journal (revenue/VAT/AR, and inventory/COGS), and reduces
+/// the customer's AR balance for credit sales. Price/VAT always come from the
+/// original invoice lines (never trusted from the client).
+#[tauri::command]
+pub fn create_credit_note(state: State<'_, DbState>, user_id: i64, input: CreateCreditNoteInput) -> Result<i64, AppError> {
+    let mut conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
+    create_credit_note_inner(&mut conn, user_id, input)
+}
+
+pub(crate) fn create_credit_note_inner(conn: &mut rusqlite::Connection, user_id: i64, input: CreateCreditNoteInput) -> Result<i64, AppError> {
+    let tx = conn.transaction()?;
+
+    if input.lines.is_empty() {
+        return Err(AppError::validation("أدخل بنداً واحداً على الأقل"));
+    }
+
+    let (status, inv_no, payment_type, customer_id): (String, Option<String>, String, i64) = tx
+        .query_row(
+            "SELECT status, inv_no, COALESCE(payment_type, 'credit'), customer_id FROM sales_invoices WHERE id=?",
+            [input.invoice_id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+        )
+        .map_err(|e| AppError::not_found(format!("الفاتورة غير موجودة: {}", e)))?;
+    if status != "Posted" {
+        return Err(AppError::validation("يمكن عمل إشعار خصم على الفواتير المرحلة فقط"));
+    }
+
+    let now = chrono::Utc::now().format("%Y-%m-%d").to_string();
+    let year = chrono::Utc::now().format("%Y").to_string();
+    let cn_date = input.date.clone().unwrap_or_else(|| now.clone());
+
+    let mut net: i64 = 0;
+    let mut vat: i64 = 0;
+    let mut cogs: i64 = 0;
+    // (product_id, cartons, unit_price_milli, line_net_milli, vat_pct, line_vat_milli)
+    let mut processed: Vec<(i64, f64, i64, i64, f64, i64)> = Vec::new();
+
+    for line in &input.lines {
+        if line.cartons <= 0.0 {
+            return Err(AppError::validation("الكمية يجب أن تكون أكبر من صفر"));
+        }
+        let orig: Vec<(f64, i64, f64)> = {
+            let mut stmt = tx.prepare(
+                "SELECT cartons, unit_price_milli, vat_pct FROM sales_invoice_lines WHERE invoice_id=? AND product_id=?",
+            )?;
+            let rows = stmt.query_map(
+                rusqlite::params![input.invoice_id, line.product_id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )?;
+            let mut v = Vec::new();
+            for r in rows {
+                v.push(r?);
+            }
+            v
+        };
+        if orig.is_empty() {
+            return Err(AppError::validation(format!("المنتج {} غير موجود في الفاتورة الأصلية", line.product_id)));
+        }
+        let orig_cartons: f64 = orig.iter().map(|o| o.0).sum();
+        let unit_price: i64 = orig.iter().map(|o| o.1).max().unwrap_or(0);
+        let vat_pct: f64 = orig.iter().map(|o| o.2).fold(0.0f64, f64::max);
+
+        let credited: f64 = tx
+            .query_row(
+                "SELECT COALESCE(SUM(cnl.cartons), 0) FROM credit_note_lines cnl JOIN credit_notes cn ON cnl.cn_id=cn.id WHERE cn.invoice_id=? AND cnl.product_id=? AND cn.status != 'Void'",
+                rusqlite::params![input.invoice_id, line.product_id],
+                |r| r.get(0),
+            )
+            .unwrap_or(0.0);
+        if credited + line.cartons > orig_cartons + 1e-9 {
+            return Err(AppError::validation(format!(
+                "الكمية المردودة تتجاوز كمية الفاتورة (المتبقي: {:.2} كرتونة)",
+                orig_cartons - credited
+            )));
+        }
+
+        let line_net = (line.cartons * unit_price as f64).round() as i64;
+        let line_vat = (line_net as f64 * vat_pct / 100.0).round() as i64;
+        let line_cogs = credit_note_line_cogs(&tx, line.product_id, line.cartons)?;
+        net += line_net;
+        vat += line_vat;
+        cogs += line_cogs;
+        processed.push((line.product_id, line.cartons, unit_price, line_net, vat_pct, line_vat));
+    }
+
+    let total = net + vat;
+
+    let seq = next_sequence(&tx, "CN", &year)?;
+    let cn_no = format!("CN-{}-{:04}", year, seq);
+
+    tx.execute(
+        "INSERT INTO credit_notes(cn_no, date, customer_id, invoice_id, net_milli, vat_milli, total_milli, cogs_milli, reason, status, notes, created_by) VALUES(?,?,?,?,?,?,?,?,?,'Posted',?,?)",
+        rusqlite::params![cn_no, cn_date, customer_id, input.invoice_id, net, vat, total, cogs, input.reason, input.notes, user_id],
+    )?;
+    let cn_id = tx.last_insert_rowid();
+
+    for (product_id, cartons, unit_price, line_net, vat_pct, line_vat) in &processed {
+        tx.execute(
+            "INSERT INTO credit_note_lines(cn_id, product_id, cartons, qty_cups, unit_price_milli, line_net_milli, vat_pct, vat_milli) VALUES(?,?,?,0,?,?,?,?)",
+            rusqlite::params![cn_id, *product_id, *cartons, *unit_price, *line_net, *vat_pct, *line_vat],
+        )?;
+        let inv_item: Option<(i64, i64)> = tx
+            .query_row(
+                "SELECT id, CAST(avg_cost_milli AS INTEGER) FROM inventory_items WHERE product_id=? AND active=1 ORDER BY kind DESC LIMIT 1",
+                [*product_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .ok();
+        if let Some((inv_id, avg_cost)) = inv_item {
+            tx.execute(
+                "UPDATE inventory_items SET qty_on_hand = qty_on_hand + ?1 WHERE id=?2",
+                rusqlite::params![*cartons, inv_id],
+            )?;
+            tx.execute(
+                "INSERT INTO inventory_movements(ts, item_id, mtype, qty_in, qty_out, unit_cost_milli, ref_type, ref_id, notes) VALUES(datetime('now'),?1,'credit_note',?2,0,?3,'credit_note',?4,'إشعار خصم')",
+                rusqlite::params![inv_id, *cartons, avg_cost, cn_id],
+            )?;
+        }
+    }
+
+    // Reverse the posted invoice journal exactly (mirror of post_invoice).
+    let mut lines: Vec<(String, i64, i64, Option<String>)> = Vec::new();
+    lines.push(("4100".to_string(), net, 0, Some("إشعار خصم مبيعات".to_string())));
+    if vat > 0 {
+        lines.push(("2100".to_string(), vat, 0, None));
+    }
+    lines.push(("1200".to_string(), 0, total, None));
+    if cogs > 0 {
+        lines.push(("1400".to_string(), cogs, 0, None));
+        lines.push(("5100".to_string(), 0, cogs, None));
+    }
+    let journal_id = crate::commands::accounting::post_to_journal(
+        &tx,
+        "credit_note",
+        cn_id,
+        &cn_date,
+        &format!("إشعار خصم {} على فاتورة {}", cn_no, inv_no.unwrap_or_default()),
+        &lines,
+        "system",
+    )?;
+    tx.execute("UPDATE credit_notes SET journal_id=? WHERE id=?", rusqlite::params![journal_id, cn_id])?;
+
+    if payment_type == "credit" {
+        tx.execute(
+            "UPDATE customers SET balance_milli = COALESCE(balance_milli,0) - ?1 WHERE id=?2",
+            rusqlite::params![total, customer_id],
+        )?;
+    }
+
+    let _ = rbac::log_audit(&tx, Some(user_id), None, "create_credit_note", "credit_notes", Some(cn_id), None, Some(&format!("total: {} mil, journal: {}", total, journal_id)), None);
+
+    tx.commit()?;
+    Ok(cn_id)
+}
+
+fn credit_note_line_cogs(conn: &rusqlite::Connection, product_id: i64, cartons: f64) -> Result<i64, AppError> {
+    let inv_item: Option<(i64, i64)> = conn
+        .query_row(
+            "SELECT id, CAST(avg_cost_milli AS INTEGER) FROM inventory_items WHERE product_id=? AND active=1 ORDER BY kind DESC LIMIT 1",
+            [product_id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .ok();
+    Ok(match inv_item {
+        Some((_, avg_cost)) => (cartons * avg_cost as f64).round() as i64,
+        None => 0,
+    })
+}
+
+#[tauri::command]
+pub fn list_credit_notes(state: State<'_, DbState>) -> Result<Vec<CreditNoteSummary>, AppError> {    let conn = state.0.lock()?;
+    let mut stmt = conn.prepare(
+        "SELECT cn.id, cn.cn_no, cn.date, cn.invoice_id, si.inv_no, cn.customer_id, c.name, cn.net_milli, cn.vat_milli, cn.total_milli, cn.reason, cn.status, cn.created_at FROM credit_notes cn LEFT JOIN sales_invoices si ON cn.invoice_id=si.id LEFT JOIN customers c ON cn.customer_id=c.id ORDER BY cn.id DESC"
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(CreditNoteSummary {
+            id: row.get(0)?,
+            cn_no: row.get(1)?,
+            date: row.get(2)?,
+            invoice_id: row.get(3)?,
+            invoice_no: row.get(4)?,
+            customer_id: row.get(5)?,
+            customer_name: row.get(6)?,
+            net_milli: row.get(7)?,
+            vat_milli: row.get(8)?,
+            total_milli: row.get(9)?,
+            reason: row.get(10)?,
+            status: row.get(11)?,
+            created_at: row.get(12)?,
+        })
+    })?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct InvoiceCreditRemaining {
+    pub product_id: i64,
+    pub product_name: Option<String>,
+    pub original_cartons: f64,
+    pub credited_cartons: f64,
+}
+
+#[tauri::command]
+pub fn get_invoice_credit_remaining(state: State<'_, DbState>, invoice_id: i64) -> Result<Vec<InvoiceCreditRemaining>, AppError> {
+    let conn = state.0.lock()?;
+    get_invoice_credit_remaining_inner(&conn, invoice_id)
+}
+
+fn get_invoice_credit_remaining_inner(conn: &rusqlite::Connection, invoice_id: i64) -> Result<Vec<InvoiceCreditRemaining>, AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT sil.product_id, p.name_ar, SUM(sil.cartons) AS orig, COALESCE((SELECT SUM(cnl.cartons) FROM credit_note_lines cnl JOIN credit_notes cn ON cnl.cn_id=cn.id WHERE cn.invoice_id=sil.invoice_id AND cnl.product_id=sil.product_id AND cn.status != 'Void'), 0) AS credited FROM sales_invoice_lines sil LEFT JOIN products p ON sil.product_id=p.id WHERE sil.invoice_id=? GROUP BY sil.product_id"
+    )?;
+    let rows = stmt.query_map([invoice_id], |row| {
+        Ok(InvoiceCreditRemaining {
+            product_id: row.get(0)?,
+            product_name: row.get(1)?,
+            original_cartons: row.get(2)?,
+            credited_cartons: row.get(3)?,
+        })
+    })?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SupplierPaymentPrintInfo {
+    pub id: i64,
+    pub receipt_no: Option<String>,
+    pub date: String,
+    pub amount_milli: i64,
+    pub method: Option<String>,
+    pub reference: Option<String>,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SupplierPrintInfo {
+    pub id: i64,
+    pub name: String,
+    pub address: Option<String>,
+    pub vat_number: Option<String>,
+    pub phone: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SupplierReceiptPrintData {
+    pub payment: SupplierPaymentPrintInfo,
+    pub supplier: SupplierPrintInfo,
+    pub company: CompanyPrintInfo,
+}
+
+#[tauri::command]
+pub fn get_supplier_receipt_for_print(state: State<'_, DbState>, payment_id: i64) -> Result<SupplierReceiptPrintData, AppError> {
+    let conn = state.0.lock()?;
+    get_supplier_receipt_for_print_inner(&conn, payment_id)
+}
+
+fn get_supplier_receipt_for_print_inner(conn: &rusqlite::Connection, payment_id: i64) -> Result<SupplierReceiptPrintData, AppError> {
+    let payment = conn.query_row(
+        "SELECT sp.id, sp.pay_no, sp.date, sp.amount_milli, sp.method, sp.reference, sp.notes FROM supplier_payments sp WHERE sp.id=?",
+        [payment_id],
+        |row| Ok(SupplierPaymentPrintInfo {
+            id: row.get(0)?,
+            receipt_no: row.get(1)?,
+            date: row.get(2)?,
+            amount_milli: row.get(3)?,
+            method: row.get(4)?,
+            reference: row.get(5)?,
+            notes: row.get(6)?,
+        }),
+    ).map_err(|e| format!("Payment not found: {}", e))?;
+    let supplier_id: i64 = conn
+        .query_row("SELECT supplier_id FROM supplier_payments WHERE id=?", [payment_id], |r| r.get(0))
+        .unwrap_or(0);
+    let supplier = conn
+        .query_row(
+            "SELECT id, name, address, vat_number, phone FROM suppliers WHERE id=?",
+            [supplier_id],
+            |row| Ok(SupplierPrintInfo {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                address: row.get(2)?,
+                vat_number: row.get(3)?,
+                phone: row.get(4)?,
+            }),
+        )
+        .map_err(|e| format!("Supplier not found: {}", e))?;
+    let company = get_company_info(conn)?;
+    Ok(SupplierReceiptPrintData { payment, supplier, company })
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CompanyPrintInfo {
     pub name: Option<String>,
@@ -945,6 +1269,137 @@ mod tests {
         assert_eq!(data.invoice.vat_milli, 10000);
         assert_eq!(data.invoice.total_milli, 210000);
         assert!(data.qr_data_url.is_some());
+        cleanup(&db_path);
+    }
+
+    #[test]
+    fn credit_note_reverses_invoice_and_returns_stock() {
+        let db_path = std::env::temp_dir().join(format!("promax_cn_{}.db", uuid::Uuid::new_v4()));
+        let mut conn = init_database(&db_path).expect("fresh db");
+        conn.execute("INSERT INTO company_settings(name, vat_number, default_vat_pct) VALUES('شركة','OM0000000000000',5.0)", []).unwrap();
+        conn.execute(
+            "INSERT INTO customers(code, name, ctype, contact, phone, email, address, vat_number, credit_limit_milli, payment_terms, payment_terms_days, notes) VALUES('C1','عميل','credit',NULL,'999',NULL,NULL,NULL,0,'net',30,NULL)",
+            [],
+        ).unwrap();
+        let cid = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO products(code, name_ar, name_en, cups_per_carton, default_price_milli, vat_pct) VALUES('P1','كوب','Cup',5,10000,5.0)",
+            [],
+        ).unwrap();
+        let pid = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO inventory_items(product_id, kind, qty_on_hand, avg_cost_milli) VALUES(?1,'main',100,6000)",
+            [pid],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO sales_invoices(inv_no, date, customer_id, payment_type, net_milli, vat_milli, total_milli, cogs_milli, status) VALUES('INV-2026-0001','2026-08-13',?1,'credit',100000,5000,105000,60000,'Posted')",
+            [cid],
+        ).unwrap();
+        let iid = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO sales_invoice_lines(invoice_id, product_id, cartons, cups_per_carton, qty_cups, unit_price_milli, customs_price_milli, line_net_milli, vat_pct, vat_milli) VALUES(?1,?2,10,5,50,10000,20000,100000,5.0,5000)",
+            rusqlite::params![iid, pid],
+        ).unwrap();
+        conn.execute("UPDATE customers SET balance_milli=105000 WHERE id=?", [cid]).unwrap();
+
+        let cn_id = create_credit_note_inner(&mut conn, 1, CreateCreditNoteInput {
+            invoice_id: iid,
+            date: Some("2026-08-14".to_string()),
+            reason: Some("مرتجعات".to_string()),
+            notes: None,
+            lines: vec![CreateCreditNoteLineInput { product_id: pid, cartons: 4.0 }],
+        }).expect("credit note created");
+
+        let (cn_no, net, vat, total, cogs, status): (String, i64, i64, i64, i64, String) = conn
+            .query_row(
+                "SELECT cn_no, net_milli, vat_milli, total_milli, cogs_milli, status FROM credit_notes WHERE id=?",
+                [cn_id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)),
+            )
+            .unwrap();
+        assert!(cn_no.starts_with("CN-2026-"), "cn_no = {}", cn_no);
+        assert_eq!(net, 40000);
+        assert_eq!(vat, 2000);
+        assert_eq!(total, 42000);
+        assert_eq!(cogs, 24000);
+        assert_eq!(status, "Posted");
+
+        // 100 on-hand + 4 returned = 104.
+        let qty: f64 = conn.query_row("SELECT qty_on_hand FROM inventory_items WHERE product_id=?", [pid], |r| r.get(0)).unwrap();
+        assert_eq!(qty, 104.0);
+
+        // 105000 - 42000 = 63000 AR balance.
+        let bal: i64 = conn.query_row("SELECT balance_milli FROM customers WHERE id=?", [cid], |r| r.get(0)).unwrap();
+        assert_eq!(bal, 63000);
+
+        // Remaining returnable quantity is 10 - 4 = 6 cartons.
+        let remaining = get_invoice_credit_remaining_inner(&conn, iid).expect("remaining");
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].original_cartons, 10.0);
+        assert_eq!(remaining[0].credited_cartons, 4.0);
+
+        // Reversal journal is balanced and references the credit note.
+        let jid: i64 = conn.query_row("SELECT journal_id FROM credit_notes WHERE id=?", [cn_id], |r| r.get(0)).unwrap();
+        let (d, c): (i64, i64) = conn
+            .query_row(
+                "SELECT SUM(debit_milli), SUM(credit_milli) FROM journal_entry_lines WHERE entry_id=?",
+                [jid],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert!(d > 0 && d == c);
+
+        // Over-return is rejected (4 credited + 7 > 10 cartons).
+        let err = create_credit_note_inner(&mut conn, 1, CreateCreditNoteInput {
+            invoice_id: iid,
+            date: None,
+            reason: None,
+            notes: None,
+            lines: vec![CreateCreditNoteLineInput { product_id: pid, cartons: 7.0 }],
+        }).unwrap_err();
+        assert!(err.to_string().contains("تتجاوز"), "err = {}", err);
+
+        // Draft invoices cannot be credited.
+        conn.execute(
+            "INSERT INTO sales_invoices(inv_no, date, customer_id, payment_type, net_milli, vat_milli, total_milli, status) VALUES('INV-2026-0002','2026-08-13',?1,'credit',0,0,0,'Draft')",
+            [cid],
+        ).unwrap();
+        let did = conn.last_insert_rowid();
+        let err2 = create_credit_note_inner(&mut conn, 1, CreateCreditNoteInput {
+            invoice_id: did,
+            date: None,
+            reason: None,
+            notes: None,
+            lines: vec![CreateCreditNoteLineInput { product_id: pid, cartons: 1.0 }],
+        }).unwrap_err();
+        assert!(err2.to_string().contains("المرحلة"), "err2 = {}", err2);
+
+        cleanup(&db_path);
+    }
+
+    #[test]
+    fn supplier_receipt_print_returns_payment_and_supplier() {
+        let db_path = std::env::temp_dir().join(format!("promax_srp_{}.db", uuid::Uuid::new_v4()));
+        let conn = init_database(&db_path).expect("fresh db");
+        conn.execute("INSERT INTO company_settings(name, vat_number, default_vat_pct) VALUES('شركة','OM0000000000000',5.0)", []).unwrap();
+        conn.execute(
+            "INSERT INTO suppliers(code, name, contact, phone, email, address, vat_number, currency, payment_terms, notes) VALUES('S1','مورد','Ali','998','a@b.com','نزوى','OM123','OMR','net',NULL)",
+            [],
+        ).unwrap();
+        let sid = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO supplier_payments(pay_no, date, supplier_id, amount_milli, method, reference, notes) VALUES('PAY-2026-0001','2026-08-13',?1,50000,'bank_transfer','REF1','دفع')",
+            [sid],
+        ).unwrap();
+        let pay_id = conn.last_insert_rowid();
+
+        let data = get_supplier_receipt_for_print_inner(&conn, pay_id).expect("print data");
+        assert_eq!(data.payment.amount_milli, 50000);
+        assert_eq!(data.payment.receipt_no.as_deref(), Some("PAY-2026-0001"));
+        assert_eq!(data.supplier.name, "مورد");
+        assert_eq!(data.supplier.vat_number.as_deref(), Some("OM123"));
+        assert!(data.company.name.is_some());
+
         cleanup(&db_path);
     }
 }

@@ -17,6 +17,7 @@ const CustomerPaymentPage = lazy(() => import("./pages/customers/CustomerPayment
 const InvoiceListPage = lazy(() => import("./pages/invoices/InvoiceListPage"));
 const InvoiceCreatePage = lazy(() => import("./pages/invoices/InvoiceCreatePage"));
 const InvoiceDetailPage = lazy(() => import("./pages/invoices/InvoiceDetailPage"));
+const CreditNoteListPage = lazy(() => import("./pages/invoices/CreditNoteListPage"));
 const ProductListPage = lazy(() => import("./pages/inventory/ProductListPage"));
 const ProductDetailPage = lazy(() => import("./pages/inventory/ProductDetailPage"));
 const ProductFormPage = lazy(() => import("./pages/products/ProductFormPage"));
@@ -140,6 +141,7 @@ export default function App() {
             <Route path="/invoices" element={<ProtectedRoute><InvoiceListPage /></ProtectedRoute>} />
             <Route path="/invoices/new" element={<ProtectedRoute><InvoiceCreatePage /></ProtectedRoute>} />
             <Route path="/invoices/:id" element={<ProtectedRoute><InvoiceDetailPage /></ProtectedRoute>} />
+            <Route path="/credit-notes" element={<ProtectedRoute><CreditNoteListPage /></ProtectedRoute>} />
 
             {/* Suppliers */}
             <Route path="/suppliers" element={<ProtectedRoute><SupplierListPage /></ProtectedRoute>} />

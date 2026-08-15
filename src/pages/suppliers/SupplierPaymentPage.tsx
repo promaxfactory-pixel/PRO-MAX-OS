@@ -4,9 +4,11 @@ import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { formatOMR, omrToMilli } from "@/lib/utils";
 import { invoke } from "@/lib/tauri";
-import { ArrowRight, CreditCard } from "lucide-react";
+import { ArrowRight, CreditCard, Printer } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
-import { Supplier } from "@/types";
+import { Supplier, SupplierReceiptPrintData } from "@/types";
+import SupplierReceiptPrintTemplate from "@/components/print/SupplierReceiptPrintTemplate";
+import { printComponent } from "@/utils/printUtils";
 
 export default function SupplierPaymentPage() {
   const { id } = useParams();
@@ -15,6 +17,9 @@ export default function SupplierPaymentPage() {
   const [supplier, setSupplier] = useState<Supplier | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [savedPaymentId, setSavedPaymentId] = useState<number | null>(null);
+  const [printData, setPrintData] = useState<SupplierReceiptPrintData | null>(null);
+  const [printing, setPrinting] = useState(false);
 
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [amount, setAmount] = useState("");
@@ -36,7 +41,7 @@ export default function SupplierPaymentPage() {
     if (!amount || Number(amount) <= 0) return;
     setSubmitting(true);
     try {
-      await invoke("create_supplier_payment", {
+      const paymentId = await invoke<number>("create_supplier_payment", {
         supplierId: Number(id),
         input: {
           date,
@@ -46,13 +51,27 @@ export default function SupplierPaymentPage() {
           notes: notes || null,
         },
       });
+      setSavedPaymentId(paymentId);
       addNotification({ id: crypto.randomUUID(), type: "success", title: "تم بنجاح", message: "تم تسجيل الدفعة بنجاح" });
-      navigate(`/suppliers/${id}`);
     } catch (err) {
       addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "فشل في تسجيل الدفعة" });
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handlePrintReceipt = async () => {
+    if (savedPaymentId == null) return;
+    setPrinting(true);
+    try {
+      const result = await invoke<SupplierReceiptPrintData>("get_supplier_receipt_for_print", { paymentId: savedPaymentId });
+      setPrintData(result);
+      setTimeout(() => {
+        printComponent("print-area");
+        setPrintData(null);
+      }, 200);
+    } catch (err: unknown) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(err) }); }
+    finally { setPrinting(false); }
   };
 
   if (loading) {
@@ -61,6 +80,40 @@ export default function SupplierPaymentPage() {
 
   if (!supplier) {
     return <div className="flex flex-col items-center justify-center h-64 gap-4"><p className="text-surface-400">تعذر تحميل بيانات المورد</p><button className="btn-outline px-4 py-2 rounded-xl text-sm" onClick={() => window.location.reload()}>إعادة المحاولة</button></div>;
+  }
+
+  if (savedPaymentId != null) {
+    return (
+      <div className="space-y-6">
+        <div className="page-header">
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate(`/suppliers/${id}`)} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
+            <div>
+              <h1 className="page-title">تم تسجيل الدفعة</h1>
+              <p className="page-subtitle">{supplier.name}</p>
+            </div>
+          </div>
+        </div>
+        <Card className="max-w-lg mx-auto text-center">
+          <div className="py-8 space-y-4">
+            <div className="w-16 h-16 mx-auto rounded-full bg-green-500/15 flex items-center justify-center">
+              <svg className="w-8 h-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+            </div>
+            <p className="text-3xl font-bold gradient-text">{formatOMR(amountMilli)}</p>
+            <p className="text-sm text-surface-400">تم تسجيل دفعة {method === "cash" ? "نقدية" : method === "bank_transfer" ? "تحويل بنكي" : "شيك"} بتاريخ {date}</p>
+            <div className="flex items-center justify-center gap-3 pt-4">
+              <Button onClick={handlePrintReceipt} loading={printing} icon={<Printer className="w-4 h-4" />}>طباعة سند صرف</Button>
+              <Button variant="outline" onClick={() => navigate(`/suppliers/${id}`)}>العودة للمورد</Button>
+            </div>
+          </div>
+        </Card>
+        {printData && (
+          <div style={{ position: "absolute", left: "-9999px" }}>
+            <SupplierReceiptPrintTemplate data={printData} />
+          </div>
+        )}
+      </div>
+    );
   }
 
   return (

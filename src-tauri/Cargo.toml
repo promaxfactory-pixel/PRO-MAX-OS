@@ -1,6 +1,6 @@
 [package]
 name = "promax-os"
-version = "2.4.0"
+version = "2.4.1"
 description = "PRO MAX OS - Professional Manufacturing ERP System"
 authors = ["Mayadeen Bahla National Company"]
 edition = "2021"
