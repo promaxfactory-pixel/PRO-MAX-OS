@@ -1,9 +1,11 @@
 ﻿import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Card from "@/components/ui/Card";
+import Button from "@/components/ui/Button";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { formatOMR } from "@/lib/utils";
 import { invoke } from "@/lib/tauri";
-import { ArrowRight, Package } from "lucide-react";
+import { ArrowRight, Package, Edit, Trash2 } from "lucide-react";
 import { useUIStore } from "../../stores/uiStore";
 import { Product } from "@/types";
 
@@ -13,10 +15,22 @@ export default function ProductDetailPage() {
   const navigate = useNavigate();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     invoke("get_product", { id: Number(id) }).then((d) => setProduct(d as Product)).catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" })).finally(() => setLoading(false));
   }, [id]);
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await invoke("delete_product", { id: Number(id) });
+      addNotification({ id: crypto.randomUUID(), type: "success", title: "تم الحذف", message: "تم حذف المنتج بنجاح" });
+      navigate("/products");
+    } catch (err: unknown) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(err) }); }
+    finally { setDeleting(false); setDeleteOpen(false); }
+  };
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="w-12 h-12 border-2 border-brand-800 border-t-gold-400 rounded-full animate-spin" /></div>;
 
@@ -31,6 +45,10 @@ export default function ProductDetailPage() {
             <h1 className="page-title">{product.name_ar || product.name_en}</h1>
             <p className="page-subtitle font-mono">{product.code}</p>
           </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" icon={<Edit className="w-4 h-4" />} onClick={() => navigate(`/products/${id}/edit`)}>تعديل</Button>
+          <Button variant="danger" icon={<Trash2 className="w-4 h-4" />} onClick={() => setDeleteOpen(true)}>حذف</Button>
         </div>
       </div>
       <div className="grid grid-cols-3 gap-6">
@@ -56,6 +74,16 @@ export default function ProductDetailPage() {
           <p className="text-xs text-surface-400">ضريبة القيمة المضافة</p>
         </Card>
       </div>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onCancel={() => setDeleteOpen(false)}
+        onConfirm={handleDelete}
+        title="حذف المنتج"
+        message={`هل تريد حذف المنتج «${product.name_ar || product.name_en}»؟ سيتم تعطيله ولن يظهر في القوائم، مع الحفاظ على سجلاته.`}
+        confirmLabel="حذف"
+        loading={deleting}
+      />
     </div>
   );
 }

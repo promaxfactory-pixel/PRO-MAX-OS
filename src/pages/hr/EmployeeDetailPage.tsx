@@ -2,9 +2,10 @@
 import { useParams, useNavigate } from "react-router-dom";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@/lib/tauri";
-import { ArrowRight, Edit } from "lucide-react";
+import { ArrowRight, Edit, Trash2 } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 import { Employee } from "@/types";
 
@@ -14,8 +15,20 @@ export default function EmployeeDetailPage() {
   const { addNotification } = useUIStore();
   const [emp, setEmp] = useState<Employee | null>(null);
   const [loading, setLoading] = useState(true);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => { invoke("get_employee", { id: Number(id) }).then((d) => setEmp(d as Employee)).catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" })).finally(() => setLoading(false)); }, [id]);
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await invoke("delete_employee", { id: Number(id) });
+      addNotification({ id: crypto.randomUUID(), type: "success", title: "تم الحذف", message: "تم حذف الموظف بنجاح" });
+      navigate("/hr/employees");
+    } catch (err: unknown) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(err) }); }
+    finally { setDeleting(false); setDeleteOpen(false); }
+  };
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="w-12 h-12 border-2 border-brand-800 border-t-gold-400 rounded-full animate-spin" /></div>;
 
@@ -38,7 +51,10 @@ export default function EmployeeDetailPage() {
           <button onClick={() => navigate("/hr/employees")} className="btn-ghost p-2"><ArrowRight className="w-5 h-5" /></button>
           <div><h1 className="page-title">{emp.name}</h1><p className="page-subtitle">{emp.job || "—"}</p></div>
         </div>
-        <Button variant="outline" icon={<Edit className="w-4 h-4" />} onClick={() => navigate(`/hr/employees/${id}/edit`)}>تعديل</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" icon={<Edit className="w-4 h-4" />} onClick={() => navigate(`/hr/employees/${id}/edit`)}>تعديل</Button>
+          <Button variant="danger" icon={<Trash2 className="w-4 h-4" />} onClick={() => setDeleteOpen(true)}>حذف</Button>
+        </div>
       </div>
       <div className="grid grid-cols-3 gap-6">
         <Card className="col-span-2">
@@ -68,6 +84,16 @@ export default function EmployeeDetailPage() {
           </div>
         </Card>
       </div>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onCancel={() => setDeleteOpen(false)}
+        onConfirm={handleDelete}
+        title="حذف الموظف"
+        message={`هل تريد حذف الموظف «${emp.name}»؟ سيتم تعطيله ولن يظهر في القوائم، مع الحفاظ على سجلاته.`}
+        confirmLabel="حذف"
+        loading={deleting}
+      />
     </div>
   );
 }

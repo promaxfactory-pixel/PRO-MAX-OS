@@ -718,6 +718,33 @@ export interface SupplierReceiptPrintData {
   company: CompanySettings;
 }
 
+export interface CustodyAccount {
+  id: number;
+  code: string | null;
+  name: string;
+  responsible: string | null;
+  employee_id: number | null;
+  spending_limit_milli: number;
+  balance_milli: number;
+  active: number;
+  notes: string | null;
+  created_at: string | null;
+}
+
+export interface CustodyTransaction {
+  id: number;
+  ts: string;
+  petty_id: number;
+  ttype: string | null;
+  debit_milli: number;
+  credit_milli: number;
+  balance_milli: number;
+  category: string | null;
+  reference: string | null;
+  notes: string | null;
+  journal_id: number | null;
+}
+
 export function milliToNumber(milli: number): number {
   return milli / 1000;
 }

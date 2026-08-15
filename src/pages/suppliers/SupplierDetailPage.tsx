@@ -2,9 +2,10 @@
 import { useParams, useNavigate } from "react-router-dom";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { formatOMR } from "@/lib/utils";
 import { invoke } from "@/lib/tauri";
-import { ArrowRight, Phone, Mail, MapPin, Edit, FileText, Banknote } from "lucide-react";
+import { ArrowRight, Phone, Mail, MapPin, Edit, FileText, Banknote, Trash2 } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 import { Supplier } from "@/types";
 
@@ -16,9 +17,21 @@ export default function SupplierDetailPage() {
   
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   useEffect(() => {
     invoke("get_supplier", { id: Number(id) }).then((d) => setSupplier(d as Supplier)).catch((e: unknown) => { const msg = String(e); setLoadError(msg); addNotification({ title: "خطأ", message: String(e), type: "error" }); }).finally(() => setLoading(false));
   }, [id]);
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await invoke("delete_supplier", { id: Number(id) });
+      addNotification({ id: crypto.randomUUID(), type: "success", title: "تم الحذف", message: "تم حذف المورد بنجاح" });
+      navigate("/suppliers");
+    } catch (err: unknown) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(err) }); }
+    finally { setDeleting(false); setDeleteOpen(false); }
+  };
 
   if (loading) {
     return <div className="flex items-center justify-center h-64"><div className="w-12 h-12 border-2 border-brand-800 border-t-gold-400 rounded-full animate-spin" /></div>;
@@ -41,6 +54,7 @@ export default function SupplierDetailPage() {
           <Button variant="outline" icon={<FileText className="w-4 h-4" />} onClick={() => navigate(`/suppliers/${id}/statement`)}>كشف حساب</Button>
           <Button variant="gold" icon={<Banknote className="w-4 h-4" />} onClick={() => navigate(`/suppliers/${id}/pay`)}>تسجيل دفعة</Button>
           <Button variant="outline" icon={<Edit className="w-4 h-4" />} onClick={() => navigate(`/suppliers/${id}/edit`)}>تعديل</Button>
+          <Button variant="danger" icon={<Trash2 className="w-4 h-4" />} onClick={() => setDeleteOpen(true)}>حذف</Button>
         </div>
       </div>
 
@@ -85,6 +99,16 @@ export default function SupplierDetailPage() {
           </div>
         </Card>
       </div>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onCancel={() => setDeleteOpen(false)}
+        onConfirm={handleDelete}
+        title="حذف المورد"
+        message={`هل تريد حذف المورد «${supplier.name}»؟ سيتم تعطيله ولن يظهر في القوائم، مع الحفاظ على سجلاته المحاسبية.`}
+        confirmLabel="حذف"
+        loading={deleting}
+      />
     </div>
   );
 }

@@ -267,6 +267,7 @@ pub(crate) fn post_invoice_inner(conn: &mut rusqlite::Connection, user_id: i64, 
     let _ = rbac::log_audit(&tx, Some(user_id), None, "post_invoice", "sales_invoices", Some(id), None, Some(&format!("COGS: {} mil, status: Posted, journal: {}", total_cogs, journal_id)), None);
 
     tx.commit()?;
+    let _ = crate::commands::einvoice::auto_enqueue_on_post(conn, id);
     Ok("تم ترحيل الفاتورة بنجاح".to_string())
 }
 

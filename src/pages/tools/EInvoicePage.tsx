@@ -58,6 +58,36 @@ interface ValidationIssue {
   severity: string;
 }
 
+interface FawtaraCheck {
+  key: string;
+  label: string;
+  ok: boolean;
+  detail: string;
+}
+
+interface FawtaraReadiness {
+  ready: boolean;
+  score: number;
+  checks: FawtaraCheck[];
+  note: string;
+}
+
+interface FawtaraQrTag {
+  tag: number;
+  name: string;
+  value: string;
+}
+
+interface FawtaraPayload {
+  invoice_id: number;
+  invoice_no: string;
+  xml_content: string;
+  hash: string;
+  qr_base64: string;
+  qr_tags: FawtaraQrTag[];
+  note: string;
+}
+
 interface QueueItem {
   id: number;
   invoice_id: number;
@@ -113,6 +143,8 @@ export default function EInvoicePage() {
   const [showSettings, setShowSettings] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [readiness, setReadiness] = useState<FawtaraReadiness | null>(null);
+  const [fawtaraPayload, setFawtaraPayload] = useState<FawtaraPayload | null>(null);
 
   // Settings form
   const [sEnv, setSEnv] = useState("sandbox");
@@ -126,16 +158,18 @@ export default function EInvoicePage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [dash, recs, q, set] = await Promise.all([
+      const [dash, recs, q, set, ready] = await Promise.all([
         invoke<DashboardData>("einvoice_get_dashboard"),
         invoke<EinvoiceRecord[]>("einvoice_list", { status: statusFilter }).catch(() => []),
         invoke<QueueItem[]>("einvoice_get_queue").catch(() => []),
         invoke<EinvoiceSettings | null>("einvoice_get_settings").catch(() => null),
+        invoke<FawtaraReadiness>("fawtara_readiness").catch(() => null),
       ]);
       setDashboard(dash);
       setRecords(recs);
       setQueue(q);
       setSettings(set);
+      setReadiness(ready);
       if (set) {
         setSEnv(set.environment);
         setSAuto(set.auto_submit);
@@ -155,11 +189,14 @@ export default function EInvoicePage() {
     setGenerating(true);
     setResult(null);
     setValidation(null);
+    setFawtaraPayload(null);
     try {
       const data = await invoke<EInvResult>("einvoice_generate", { invoiceId: selectedId });
       setResult(data);
       const valid = await invoke<ValidationResult>("einvoice_validate", { invoiceId: selectedId });
       setValidation(valid);
+      const payload = await invoke<FawtaraPayload>("fawtara_build_payload", { invoiceId: selectedId }).catch(() => null);
+      setFawtaraPayload(payload);
       loadData();
     } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setGenerating(false); }
@@ -239,9 +276,9 @@ export default function EInvoicePage() {
         <div>
           <h1 className="page-title flex items-center gap-2">
             <FileCheck className="w-6 h-6 text-gold-400" />
-            الفوترة الإلكترونية
+            الفوترة الإلكترونية — فاوترة
           </h1>
-          <p className="page-subtitle">إنشاء وإدارة وإرسال الفواتير الإلكترونية لهيئة الزكاة والضريبة</p>
+          <p className="page-subtitle">أساس فني لتوافق فاوترة العمانية (القرار 189/2026) — لم يُعتمد بعد من هيئة الضرائب ويتطلب ربط ASP/OTA</p>
         </div>
         <div className="flex items-center gap-3">
           <Button variant="outline" icon={<RefreshCw className="w-4 h-4" />} onClick={loadData}>تحديث</Button>
@@ -249,6 +286,36 @@ export default function EInvoicePage() {
             onClick={() => setShowSettings(!showSettings)}>الإعدادات</Button>
         </div>
       </div>
+
+      {/* Fawtara Readiness */}
+      {readiness && (
+        <Card>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="section-title mb-0 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-gold-400" />
+              جاهزية فاوترة
+            </h3>
+            <span className={cn(
+              "inline-flex items-center rounded-full px-3 py-1 text-sm font-bold",
+              readiness.ready ? "bg-emerald-500/20 text-emerald-400" : "bg-amber-500/20 text-amber-400"
+            )}>
+              {readiness.score}%
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            {readiness.checks.map((c) => (
+              <div key={c.key} className={cn(
+                "p-3 rounded-xl text-sm",
+                c.ok ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-400"
+              )}>
+                <div className="font-medium mb-1">{c.label}</div>
+                <div className={cn("text-xs", c.ok ? "text-emerald-400/80" : "text-amber-400/90")}>{c.detail}</div>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-surface-500 mt-3">{readiness.note}</p>
+        </Card>
+      )}
 
       {/* Dashboard Stats */}
       {dashboard && (
@@ -267,7 +334,7 @@ export default function EInvoicePage() {
         <Card>
           <h3 className="section-title flex items-center gap-2 mb-4">
             <Settings2 className="w-5 h-5 text-gold-400" />
-            إعدادات التكامل مع هيئة الزكاة والضريبة
+            إعدادات التكامل مع فاوترة (هيئة الضرائب العمانية)
           </h3>
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
@@ -335,7 +402,7 @@ export default function EInvoicePage() {
                 <p className="text-center text-surface-500 py-6 text-sm">لا توجد فواتير إلكترونية</p>
               ) : records.map((rec) => (
                 <div key={rec.id}
-                  onClick={() => { setSelectedId(rec.invoice_id); setResult(null); setValidation(null); }}
+                  onClick={() => { setSelectedId(rec.invoice_id); setResult(null); setValidation(null); setFawtaraPayload(null); }}
                   className={cn(
                     "flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all",
                     selectedId === rec.invoice_id ? "bg-brand-800/30 border border-brand-500/40" : "bg-surface-800/50 hover:bg-surface-800 border border-transparent"
@@ -433,6 +500,41 @@ export default function EInvoicePage() {
                 )}
               </Card>
             </div>
+          )}
+
+          {/* Fawtara QR payload */}
+          {fawtaraPayload && (
+            <Card>
+              <h3 className="section-title flex items-center gap-2 mb-4">
+                <Hash className="w-5 h-5 text-gold-400" />
+                رمز QR لفاوترة (TLV)
+              </h3>
+              <div className="overflow-x-auto mb-3">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-surface-800 text-surface-400">
+                      <th className="px-3 py-2 text-right font-medium">الوسم</th>
+                      <th className="px-3 py-2 text-right font-medium">الحقل</th>
+                      <th className="px-3 py-2 text-right font-medium">القيمة</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {fawtaraPayload.qr_tags.map((t) => (
+                      <tr key={t.tag} className="border-t border-surface-700">
+                        <td className="px-3 py-2 font-mono text-surface-500">{t.tag}</td>
+                        <td className="px-3 py-2">{t.name}</td>
+                        <td className="px-3 py-2 font-mono text-surface-200">{t.value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-surface-500">
+                <Hash className="w-3 h-3 flex-shrink-0" />
+                <span className="font-mono break-all">{fawtaraPayload.qr_base64}</span>
+              </div>
+              <p className="text-xs text-amber-400/80 mt-3">{fawtaraPayload.note}</p>
+            </Card>
           )}
         </div>
 

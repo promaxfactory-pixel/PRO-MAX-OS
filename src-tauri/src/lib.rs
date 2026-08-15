@@ -7,6 +7,7 @@ pub mod validation;
 mod zatca;
 pub mod zatca2;
 pub mod qayd;
+pub mod fawtara;
 
 use tauri::Manager;
 
@@ -268,6 +269,11 @@ pub fn run() {
             commands::einvoice::einvoice_retry_queue_item,
             commands::einvoice::einvoice_get_xml,
             commands::einvoice::einvoice_bulk_generate,
+            // Fawtara (Oman e-invoicing foundation)
+            fawtara::fawtara_build_payload,
+            fawtara::fawtara_readiness,
+            fawtara::fawtara_connector_status,
+            fawtara::fawtara_submit,
             // Backup
             commands::backup::backup_create,
             commands::backup::backup_restore,

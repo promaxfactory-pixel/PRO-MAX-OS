@@ -121,7 +121,7 @@ fn xml_escape(s: &str) -> String {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn generate_pint_om_xml(
+pub(crate) fn generate_pint_om_xml(
     inv_no: &str,
     net_milli: i64,
     vat_milli: i64,
@@ -217,7 +217,7 @@ fn generate_pint_om_xml(
 }
 
 /// Prefer the active company record, falling back to company_settings.
-fn load_company_for_einvoice(
+pub(crate) fn load_company_for_einvoice(
     conn: &rusqlite::Connection,
 ) -> (String, String, String, String, String, f64) {
     conn.query_row(
@@ -268,16 +268,12 @@ fn country_code_for_currency(currency: &str) -> &'static str {
     }
 }
 
-#[tauri::command]
-pub fn einvoice_generate(
-    state: State<'_, DbState>,
-    user_id: i64,
+/// Generate (or regenerate) the PINT-OM XML, hash, and QR payload for an invoice.
+/// Does not enforce RBAC/licensing; callers are responsible for authorization.
+pub(crate) fn generate_invoice_xml(
+    conn: &rusqlite::Connection,
     invoice_id: i64,
 ) -> Result<EInvoiceResult, AppError> {
-    crate::commands::licensing::require_feature(crate::commands::licensing::FEAT_EINVOICE)?;
-    let conn = state.0.lock()?;
-    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
-
     let inv = conn
         .query_row(
             "SELECT si.id, si.inv_no, si.net_milli, si.vat_milli, si.total_milli,
@@ -304,7 +300,7 @@ pub fn einvoice_generate(
     let (_inv_id, inv_no, net_milli, vat_milli, total_milli, inv_date, cust_name, cust_vat) = inv;
 
     let (company_name, company_vat, _company_addr, company_cr, currency, vat_rate) =
-        load_company_for_einvoice(&conn);
+        load_company_for_einvoice(conn);
 
     let country = country_code_for_currency(&currency);
 
@@ -363,7 +359,6 @@ pub fn einvoice_generate(
     )
     ?;
 
-    let _ = rbac::log_audit(&conn, Some(user_id), None, "einvoice_generate", "e_invoices", Some(invoice_id), None, Some(&inv_no), None);
     Ok(EInvoiceResult {
         invoice_id,
         invoice_no: inv_no,
@@ -372,6 +367,48 @@ pub fn einvoice_generate(
         qr_code_data,
         generated_at: now,
     })
+}
+
+/// When settings enable submit-on-post, generate the XML and enqueue it for submission.
+/// Failures are non-fatal to the posting flow.
+pub(crate) fn auto_enqueue_on_post(
+    conn: &rusqlite::Connection,
+    invoice_id: i64,
+) -> Result<(), AppError> {
+    let enabled: bool = conn
+        .query_row(
+            "SELECT COUNT(*) FROM einvoice_settings WHERE active = 1 AND submit_on_post = 1",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|c| c > 0)
+        .unwrap_or(false);
+    if !enabled {
+        return Ok(());
+    }
+    if let Ok(_result) = generate_invoice_xml(conn, invoice_id) {
+        conn.execute(
+            "INSERT OR IGNORE INTO einvoice_queue (invoice_id, action, priority) VALUES (?1, 'submit', 0)",
+            [invoice_id],
+        ).ok();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn einvoice_generate(
+    state: State<'_, DbState>,
+    user_id: i64,
+    invoice_id: i64,
+) -> Result<EInvoiceResult, AppError> {
+    crate::commands::licensing::require_feature(crate::commands::licensing::FEAT_EINVOICE)?;
+    let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
+
+    let result = generate_invoice_xml(&conn, invoice_id)?;
+
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "einvoice_generate", "e_invoices", Some(invoice_id), None, Some(&result.invoice_no), None);
+    Ok(result)
 }
 
 #[tauri::command]
@@ -734,7 +771,7 @@ pub fn einvoice_submit(
     }
 }
 
-fn submit_to_tax_authority(
+pub(crate) fn submit_to_tax_authority(
     invoice_id: &str,
     environment: &str,
     endpoint: Option<&str>,

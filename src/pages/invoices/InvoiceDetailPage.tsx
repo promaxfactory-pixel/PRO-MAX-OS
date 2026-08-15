@@ -8,7 +8,7 @@ import DataTable, { Column } from "@/components/ui/DataTable";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { formatOMR, formatDate } from "@/lib/utils";
 import { invoke } from "@/lib/tauri";
-import { ArrowRight, Send, Ban, Copy, Printer, FileText, Truck, Undo2 } from "lucide-react";
+import { ArrowRight, Send, Ban, Copy, Printer, FileText, Truck, Undo2, Edit } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 import type { SalesInvoice, InvoiceLine, InvoicePrintData, DeliveryNoteData, InvoiceCreditRemaining } from "@/types";
 import InvoicePrintTemplate from "@/components/print/InvoicePrintTemplate";
@@ -42,6 +42,10 @@ export default function InvoiceDetailPage() {
   const [creditEntries, setCreditEntries] = useState<CreditLineEntry[]>([]);
   const [creditReason, setCreditReason] = useState("");
   const [creditSubmitting, setCreditSubmitting] = useState(false);
+
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [notesText, setNotesText] = useState("");
+  const [notesSaving, setNotesSaving] = useState(false);
 
   const loadInvoice = useCallback(async () => {
     setLoading(true);
@@ -108,6 +112,22 @@ export default function InvoiceDetailPage() {
       await loadInvoice();
     } catch (err: unknown) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(err) }); }
     finally { setCreditSubmitting(false); }
+  };
+
+  const openNotesModal = () => {
+    setNotesText(invoice?.notes || "");
+    setNotesOpen(true);
+  };
+
+  const handleSaveNotes = async () => {
+    setNotesSaving(true);
+    try {
+      await invoke("update_invoice", { id: Number(id), notes: notesText.trim() || null });
+      setNotesOpen(false);
+      addNotification({ id: crypto.randomUUID(), type: "success", title: "تم الحفظ", message: "تم تحديث ملاحظات الفاتورة" });
+      await loadInvoice();
+    } catch (err: unknown) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(err) }); }
+    finally { setNotesSaving(false); }
   };
 
   const handlePost = async () => {
@@ -252,8 +272,12 @@ export default function InvoiceDetailPage() {
             </div>
           </Card>
           <Card>
-            <p className="text-xs text-surface-500">أنشأ: {invoice.created_by || "—"}</p>
-            <p className="text-xs text-surface-500">الوقت: {invoice.created_at || "—"}</p>
+            <div className="flex items-center justify-between">
+              <h3 className="section-title">الملاحظات</h3>
+              <button onClick={openNotesModal} className="btn-outline px-3 py-1.5 rounded-lg text-xs" aria-label="تعديل الملاحظات"><Edit className="w-3.5 h-3.5" /> تعديل</button>
+            </div>
+            <p className="text-sm text-surface-300 mt-2">{invoice.notes || "لا توجد ملاحظات"}</p>
+            <p className="text-xs text-surface-500 mt-4">أنشأ: {invoice.created_by || "—"} • {invoice.created_at || "—"}</p>
           </Card>
         </div>
       </div>
@@ -334,6 +358,27 @@ export default function InvoiceDetailPage() {
             <div><span className="text-surface-400">الإجمالي: </span><span className="font-bold gradient-text text-lg">{formatOMR(creditTotals.total)}</span></div>
           </div>
         </div>
+      </Modal>
+
+      <Modal
+        open={notesOpen}
+        onClose={() => setNotesOpen(false)}
+        title="تعديل ملاحظات الفاتورة"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setNotesOpen(false)}>إلغاء</Button>
+            <Button onClick={handleSaveNotes} loading={notesSaving} icon={<Edit className="w-4 h-4" />}>حفظ</Button>
+          </>
+        }
+      >
+        <textarea
+          value={notesText}
+          onChange={(e) => setNotesText(e.target.value)}
+          className="w-full input-field"
+          rows={5}
+          placeholder="ملاحظات تظهر في الفاتورة المطبوعة…"
+          aria-label="ملاحظات الفاتورة"
+        />
       </Modal>
 
       {printData && printType === "invoice" && (

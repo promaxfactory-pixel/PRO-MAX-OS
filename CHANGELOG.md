@@ -4,6 +4,47 @@ All notable changes to PRO MAX OS are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-08-15
+
+### Added
+- **Fawtara (Oman e-invoicing) foundation.** New `fawtara` module built on the
+  existing PINT-OM (CrossIndustryInvoice) engine, explicitly marked as a technical
+  foundation for Decision 189/2026 — not yet accredited by the Omani tax authority
+  and requiring an ASP/OTA connection to go live.
+  - `fawtara_build_payload`: regenerates the PINT-OM XML + SHA-256 hash and builds a
+    TLV (tag-length-value) QR payload (seller, tax number, timestamp, total, VAT)
+    with a per-tag breakdown for audit.
+  - `fawtara_readiness`: company-level compliance checklist (name, VAT number, CR
+    number, OMR currency, 5% VAT, ASP/OTA connection) with a readiness score.
+  - `fawtara_connector_status` + `fawtara_submit` behind a `FawtaraConnector`
+    abstraction: a local `DevConnector` for sandbox (synthetic references) and an
+    `HttpsConnector` for a configured production ASP/OTA endpoint; credentials are
+    decrypted before transmission.
+  - **Auto-enqueue on posting.** `post_invoice` now honors the existing
+    "إرسال عند ترحيل الفاتورة" setting: when enabled, posting an invoice
+    generates the XML and queues it for submission.
+  - E-Invoice page relabeled "الفوترة الإلكترونية — فاوترة" with a live readiness
+    card and QR TLV preview; sidebar updated.
+- **Custody & petty cash (العهد والصرف النثري).** New `/custody` page over the
+  existing `custody` command set: fund creation (opening balance), spend recording,
+  fund-to-fund transfers, and date-filtered statements with running balances; three
+  stat cards (accounts, total balances, spending limits). Sidebar entry updated.
+- **Delete actions on detail pages.** Customer, Supplier, Product, and Employee
+  detail pages now offer a soft-delete (حذف) with confirmation dialog, keeping
+  accounting history intact.
+- **Invoice notes editing.** `InvoiceDetailPage` gains an editable "الملاحظات" card
+  backed by `update_invoice` (visible on the printed invoice).
+
+### Changed
+- Version bumped to 2.5.0 (installers and portable build regenerated).
+
+### Tests
+- Rust: `fawtara` suite — TLV round-trip (incl. extended-length values), truncated
+  payload rejection, QR tag layout, bad-base64 rejection, readiness detection for
+  missing CR / non-OMR currency, fully-configured readiness, dev connector
+  reference, and environment→connector resolution. Full suite 132 green, clippy
+  `-D warnings` clean.
+
 ## [2.4.1] - 2026-08-15
 
 ### Added

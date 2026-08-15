@@ -68,6 +68,7 @@ const PurchaseCreatePage = lazy(() => import("./pages/purchases/PurchaseCreatePa
 const ExpensesPage = lazy(() => import("./pages/expenses/ExpensesPage"));
 const CashBankPage = lazy(() => import("./pages/cashbank/CashBankPage"));
 const PettyCashPage = lazy(() => import("./pages/pettycash/PettyCashPage"));
+const CustodyPage = lazy(() => import("./pages/custody/CustodyPage"));
 const ChequesPage = lazy(() => import("./pages/finance/ChequesPage"));
 const RenewalsPage = lazy(() => import("./pages/settings/RenewalsPage"));
 const GovernmentDashboardPage = lazy(() => import("./pages/government/GovernmentDashboardPage"));
@@ -181,6 +182,7 @@ export default function App() {
             <Route path="/expenses" element={<ProtectedRoute><ExpensesPage /></ProtectedRoute>} />
             <Route path="/cashbank" element={<ProtectedRoute><CashBankPage /></ProtectedRoute>} />
             <Route path="/petty-cash" element={<ProtectedRoute><PettyCashPage /></ProtectedRoute>} />
+            <Route path="/custody" element={<ProtectedRoute><CustodyPage /></ProtectedRoute>} />
             <Route path="/cheques" element={<ProtectedRoute><ChequesPage /></ProtectedRoute>} />
 
             {/* HR */}
