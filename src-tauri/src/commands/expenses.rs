@@ -112,13 +112,23 @@ fn expense_rows_from_sql(
 }
 
 /// Expenses whose date falls inside [date_from, date_to], newest first.
+/// An optional `approval_status` narrows the rows (e.g. "approved").
 pub(crate) fn expense_rows_in_range(
     conn: &rusqlite::Connection,
     date_from: &str,
     date_to: &str,
+    approval_status: Option<&str>,
 ) -> Result<Vec<Expense>, AppError> {
     let sql = format!("{} WHERE e.date >= ?1 AND e.date <= ?2 ORDER BY e.date DESC, e.id DESC", EXPENSE_SELECT);
-    expense_rows_from_sql(conn, &sql, &[&date_from as &dyn rusqlite::types::ToSql, &date_to as &dyn rusqlite::types::ToSql])
+    let mut rows = expense_rows_from_sql(
+        conn,
+        &sql,
+        &[&date_from as &dyn rusqlite::types::ToSql, &date_to as &dyn rusqlite::types::ToSql],
+    )?;
+    if let Some(s) = approval_status.filter(|s| !s.is_empty()) {
+        rows.retain(|e| e.approval_status.as_deref() == Some(s));
+    }
+    Ok(rows)
 }
 
 #[tauri::command]

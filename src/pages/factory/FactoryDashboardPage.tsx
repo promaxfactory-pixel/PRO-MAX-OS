@@ -54,6 +54,7 @@ export default function FactoryDashboardPage() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<"week" | "month">("week");
+  const [summaryFilter, setSummaryFilter] = useState<"" | "approved">("");
   const today = todayStr();
 
   const loadAll = useCallback(async () => {
@@ -76,18 +77,18 @@ export default function FactoryDashboardPage() {
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
-  const loadSummary = useCallback(async (r: "week" | "month") => {
+  const loadSummary = useCallback(async (r: "week" | "month", filter: "" | "approved") => {
     const dateTo = todayStr();
     const dateFrom = r === "week" ? addDays(dateTo, -6) : `${dateTo.slice(0, 8)}01`;
     try {
-      const res = await invoke<ExpenseSummary>("get_expense_summary", { dateFrom, dateTo });
+      const res = await invoke<ExpenseSummary>("get_expense_summary", { dateFrom, dateTo, approvalStatus: filter || null });
       setSummary(res);
     } catch (err) {
       addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(err) });
     }
   }, [addNotification]);
 
-  useEffect(() => { loadSummary(range); }, [range, loadSummary]);
+  useEffect(() => { loadSummary(range, summaryFilter); }, [range, summaryFilter, loadSummary]);
 
   const productionColumns: Column<LiveDashboard["products"][number]>[] = useMemo(() => [
     { key: "product_name", header: "الصنف", render: (r) => <span className="font-medium text-white">{r.product_name || "—"}</span> },
@@ -151,9 +152,15 @@ export default function FactoryDashboardPage() {
       </div>
 
       <div className="card">
-        <div className="px-5 py-4 border-b border-[var(--border)]">
-          <h2 className="text-sm font-bold text-white flex items-center gap-2"><Wallet className="w-4 h-4 text-gold-400" />مصاريف {range === "week" ? "الأسبوع" : "الشهر"}</h2>
-          <p className="text-xs text-surface-500 mt-1">إجمالي {fmtInt(summary?.count ?? 0)} حركة • {formatOMR(summary?.total_milli ?? 0)}</p>
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-[var(--border)]">
+          <div>
+            <h2 className="text-sm font-bold text-white flex items-center gap-2"><Wallet className="w-4 h-4 text-gold-400" />مصاريف {range === "week" ? "الأسبوع" : "الشهر"}</h2>
+            <p className="text-xs text-surface-500 mt-1">إجمالي {fmtInt(summary?.count ?? 0)} حركة • {formatOMR(summary?.total_milli ?? 0)}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant={summaryFilter === "" ? "primary" : "outline"} onClick={() => setSummaryFilter("")}>الكل</Button>
+            <Button size="sm" variant={summaryFilter === "approved" ? "primary" : "outline"} onClick={() => setSummaryFilter("approved")}>معتمد فقط</Button>
+          </div>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 p-5">
           <div className="space-y-3">
@@ -184,7 +191,12 @@ export default function FactoryDashboardPage() {
                   <span className="text-sm text-surface-300">{e.category || "عام"}</span>
                   <span className="font-mono font-bold text-gold-400">{formatOMR((e.amount_milli || 0) + (e.vat_milli || 0))}</span>
                 </div>
-                <div className="text-[11px] text-surface-500 mt-1">{e.date}{e.vendor ? ` • ${e.vendor}` : ""}</div>
+                <div className="text-[11px] text-surface-500 mt-1 flex items-center gap-2">
+                  <span>{e.date}{e.vendor ? ` • ${e.vendor}` : ""}</span>
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${e.approval_status === "approved" ? "bg-emerald-500/20 text-emerald-400" : "bg-yellow-500/20 text-yellow-400"}`}>
+                    {e.approval_status === "approved" ? "معتمد" : "قيد المراجعة"}
+                  </span>
+                </div>
               </div>
             ))}
             {(summary?.details ?? []).length === 0 && <p className="text-sm text-surface-500">لا توجد تفاصيل</p>}

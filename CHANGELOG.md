@@ -4,6 +4,30 @@ All notable changes to PRO MAX OS are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.1] - 2026-08-15
+
+### Fixed
+- **Commercial invoice line totals.** `line_net_milli` was stored as the carton
+  unit price instead of `cartons × unit price`, which corrupted the printed line
+  totals, the invoice detail view and the product-sales reports
+  (`SUM(sales_invoice_lines.line_net_milli)`). Header totals and accounting
+  posting were never affected. Regression test added (250 cartons × 15,000 = 3,750,000).
+- **Quotation print validity.** "ساري حتى" now shows the actual expiry date
+  (`date + validity days`) instead of the literal "+ N يوم" text.
+- **Atomic creation.** `create_quotation` and `create_commercial_invoice` are now
+  transactional: a failure while inserting lines rolls the whole document back
+  instead of leaving an orphan header.
+- **Unknown products fail loudly.** Quotation/commercial-invoice lines referencing
+  a missing `product_id` now return "المنتج غير موجود" instead of silently
+  defaulting to 1,000 cups.
+- **Expense summary scope.** `get_expense_summary` accepts an optional
+  `approval_status` filter; the factory dashboard gains a "الكل / معتمد فقط"
+  toggle and each detail row now shows its approval status badge. Totals keep the
+  "all types of expenses" behaviour by default.
+
+### Changed
+- Version bumped to 2.6.1 (installers and portable build regenerated).
+
 ## [2.6.0] - 2026-08-15
 
 ### Added

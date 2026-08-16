@@ -1,5 +1,14 @@
 import { formatOMR, formatDate, htmlEscape } from "@/utils/printUtils";
 
+function addDays(base: string, days: number): string {
+  const d = new Date(`${base}T00:00:00`);
+  if (isNaN(d.getTime())) return base;
+  d.setDate(d.getDate() + days);
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
 const S = {
   c: {
     fontFamily: "'Cairo', 'system-ui', sans-serif",
@@ -114,7 +123,7 @@ export default function QuotationPrintTemplate({ data }: Props) {
           <div style={S.dm}>
             <strong>رقم:</strong> {htmlEscape(quotation.quote_no)}<br />
             <strong>التاريخ:</strong> {formatDate(quotation.date)}<br />
-            <strong>ساري حتى:</strong> {formatDate(quotation.date)} + {quotation.validity_days || 7} يوم
+            <strong>ساري حتى:</strong> {formatDate(addDays(quotation.date, quotation.validity_days || 7))}
           </div>
         </div>
       </div>

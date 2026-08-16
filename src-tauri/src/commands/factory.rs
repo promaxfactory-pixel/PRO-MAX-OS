@@ -162,7 +162,7 @@ fn compute_quote_totals(lines: &[CreateQuotationLineInput]) -> i64 {
     lines.iter().map(|l| (l.cartons * l.unit_price_milli as f64).round() as i64).sum()
 }
 
-fn quote_line_defaults(conn: &rusqlite::Connection, line: &CreateQuotationLineInput) -> (i64, String) {
+fn quote_line_defaults(conn: &rusqlite::Connection, line: &CreateQuotationLineInput) -> Result<(i64, String), AppError> {
     match line.product_id {
         Some(pid) => conn
             .query_row(
@@ -170,14 +170,14 @@ fn quote_line_defaults(conn: &rusqlite::Connection, line: &CreateQuotationLineIn
                 params![pid],
                 |r| Ok((r.get(0)?, r.get(1)?)),
             )
-            .unwrap_or((1000, String::new())),
-        None => (1000, String::new()),
+            .map_err(|_| AppError::not_found("المنتج غير موجود")),
+        None => Ok((1000, String::new())),
     }
 }
 
 fn insert_quote_lines(conn: &rusqlite::Connection, quote_id: i64, lines: &[CreateQuotationLineInput]) -> Result<(), AppError> {
     for line in lines {
-        let (default_cpc, default_name) = quote_line_defaults(conn, line);
+        let (default_cpc, default_name) = quote_line_defaults(conn, line)?;
         let cpc = line.cups_per_carton.unwrap_or(default_cpc);
         let item_name = line.item_name.clone().unwrap_or(default_name);
         let line_total = (line.cartons * line.unit_price_milli as f64).round() as i64;
@@ -247,23 +247,24 @@ pub(crate) fn get_quotation_inner(conn: &rusqlite::Connection, id: i64) -> Resul
 
 #[tauri::command]
 pub fn create_quotation(state: State<'_, DbState>, user_id: i64, input: CreateQuotationInput) -> Result<i64, AppError> {
-    let conn = state.0.lock()?;
+    let mut conn = state.0.lock()?;
     rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
-    create_quotation_inner(&conn, user_id, &input)
+    create_quotation_inner(&mut conn, user_id, &input)
 }
 
-pub(crate) fn create_quotation_inner(conn: &rusqlite::Connection, user_id: i64, input: &CreateQuotationInput) -> Result<i64, AppError> {
+pub(crate) fn create_quotation_inner(conn: &mut rusqlite::Connection, user_id: i64, input: &CreateQuotationInput) -> Result<i64, AppError> {
+    let tx = conn.transaction()?;
     let now = chrono::Utc::now().format("%Y-%m-%d").to_string();
     let year = chrono::Utc::now().format("%Y").to_string();
-    let seq = next_sequence(conn, "QUOT", &year)?;
+    let seq = next_sequence(&tx, "QUOT", &year)?;
     let quote_no = format!("QUOT-{}-{:04}", year, seq);
     let date = input.date.clone().unwrap_or(now);
     let discount = input.discount_milli.unwrap_or(0).max(0);
     let net = compute_quote_totals(&input.lines);
     let total = (net - discount).max(0);
-    let created_by = current_user_name(conn, user_id);
+    let created_by = current_user_name(&tx, user_id);
 
-    conn.execute(
+    tx.execute(
         "INSERT INTO quotations(quote_no, date, customer_id, client_name, client_contact, client_phone,
             client_email, client_address, title, notes, terms, validity_days, net_milli, discount_milli,
             total_milli, currency, status, created_by, created_at, updated_at)
@@ -277,10 +278,11 @@ pub(crate) fn create_quotation_inner(conn: &rusqlite::Connection, user_id: i64, 
             created_by,
         ],
     )?;
-    let quote_id = conn.last_insert_rowid();
-    insert_quote_lines(conn, quote_id, &input.lines)?;
+    let quote_id = tx.last_insert_rowid();
+    insert_quote_lines(&tx, quote_id, &input.lines)?;
 
-    let _ = rbac::log_audit(conn, Some(user_id), None, "create_quotation", "quotations", Some(quote_id), None, Some(&quote_no), None);
+    let _ = rbac::log_audit(&tx, Some(user_id), None, "create_quotation", "quotations", Some(quote_id), None, Some(&quote_no), None);
+    tx.commit()?;
     Ok(quote_id)
 }
 
@@ -393,22 +395,23 @@ pub struct CreateCommercialInvoiceLineInput {
 
 #[tauri::command]
 pub fn create_commercial_invoice(state: State<'_, DbState>, user_id: i64, input: CreateCommercialInvoiceInput) -> Result<i64, AppError> {
-    let conn = state.0.lock()?;
+    let mut conn = state.0.lock()?;
     rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
-    create_commercial_invoice_inner(&conn, user_id, &input)
+    create_commercial_invoice_inner(&mut conn, user_id, &input)
 }
 
-pub(crate) fn create_commercial_invoice_inner(conn: &rusqlite::Connection, user_id: i64, input: &CreateCommercialInvoiceInput) -> Result<i64, AppError> {
+pub(crate) fn create_commercial_invoice_inner(conn: &mut rusqlite::Connection, user_id: i64, input: &CreateCommercialInvoiceInput) -> Result<i64, AppError> {
+    let tx = conn.transaction()?;
     let now = chrono::Utc::now().format("%Y-%m-%d").to_string();
     let year = chrono::Utc::now().format("%Y").to_string();
-    let seq = next_sequence(conn, "CINV", &year)?;
+    let seq = next_sequence(&tx, "CINV", &year)?;
     let inv_no = format!("CINV-{}-{:04}", year, seq);
     let date = input.date.clone().unwrap_or(now);
 
     let mut net: i64 = 0;
     let mut product_infos: Vec<i64> = Vec::new();
     for line in &input.lines {
-        let cpc: i64 = conn
+        let cpc: i64 = tx
             .query_row(
                 "SELECT COALESCE(cups_per_carton, 1000) FROM products WHERE id = ?1",
                 params![line.product_id],
@@ -419,24 +422,26 @@ pub(crate) fn create_commercial_invoice_inner(conn: &rusqlite::Connection, user_
         net += (line.cartons * line.unit_price_milli as f64).round() as i64;
     }
 
-    conn.execute(
+    tx.execute(
         "INSERT INTO sales_invoices(inv_no, date, customer_id, payment_type, vat_enabled, net_milli, vat_milli, total_milli, status, notes, is_commercial)
          VALUES(?1, ?2, ?3, ?4, 0, ?5, 0, ?5, 'Draft', ?6, 1)",
         params![inv_no, date, input.customer_id, input.payment_type.clone().unwrap_or_else(|| "credit".into()), net, input.notes],
     )?;
-    let inv_id = conn.last_insert_rowid();
+    let inv_id = tx.last_insert_rowid();
 
     for (i, line) in input.lines.iter().enumerate() {
         let cpc = product_infos[i];
         let qty_cups = line.cartons * cpc as f64;
-        conn.execute(
+        let line_net = (line.cartons * line.unit_price_milli as f64).round() as i64;
+        tx.execute(
             "INSERT INTO sales_invoice_lines(invoice_id, product_id, cartons, cups_per_carton, qty_cups, unit_price_milli, customs_price_milli, line_net_milli, vat_pct, vat_milli)
              VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?6, ?7, 0, 0)",
-            params![inv_id, line.product_id, line.cartons, cpc, qty_cups, line.unit_price_milli, line.unit_price_milli],
+            params![inv_id, line.product_id, line.cartons, cpc, qty_cups, line.unit_price_milli, line_net],
         )?;
     }
 
-    let _ = rbac::log_audit(conn, Some(user_id), None, "create_commercial_invoice", "sales_invoices", Some(inv_id), None, Some(&inv_no), None);
+    let _ = rbac::log_audit(&tx, Some(user_id), None, "create_commercial_invoice", "sales_invoices", Some(inv_id), None, Some(&inv_no), None);
+    tx.commit()?;
     Ok(inv_id)
 }
 
@@ -528,61 +533,60 @@ fn source_label(source: &str) -> &'static str {
 /// Total (amount + VAT) and per-source / per-category breakdown of expenses in
 /// a date range, plus the detail rows. The user asked for "إجمالي وتفاصيل كل
 /// أنواع المصاريف أسبوعياً وشهرياً سواء من عهد الموظفين أو من أصحاب المصنع أو
-/// من الحسابات الرئيسية".
+/// من الحسابات الرئيسية". An optional `approval_status` narrows the scope to
+/// e.g. approved expenses only.
 #[tauri::command]
-pub fn get_expense_summary(state: State<'_, DbState>, date_from: String, date_to: String) -> Result<ExpenseSummary, AppError> {
+pub fn get_expense_summary(
+    state: State<'_, DbState>,
+    date_from: String,
+    date_to: String,
+    approval_status: Option<String>,
+) -> Result<ExpenseSummary, AppError> {
     let conn = state.0.lock()?;
-    get_expense_summary_inner(&conn, &date_from, &date_to)
+    get_expense_summary_inner(&conn, &date_from, &date_to, approval_status.as_deref())
 }
 
-pub(crate) fn get_expense_summary_inner(conn: &rusqlite::Connection, date_from: &str, date_to: &str) -> Result<ExpenseSummary, AppError> {
-    let total_milli: i64 = conn
-        .query_row(
-            "SELECT COALESCE(SUM(amount_milli + vat_milli), 0) FROM expenses WHERE date >= ?1 AND date <= ?2",
-            params![date_from, date_to],
-            |r| r.get(0),
-        )
-        .unwrap_or(0);
-    let count: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM expenses WHERE date >= ?1 AND date <= ?2",
-            params![date_from, date_to],
-            |r| r.get(0),
-        )
-        .unwrap_or(0);
+pub(crate) fn get_expense_summary_inner(
+    conn: &rusqlite::Connection,
+    date_from: &str,
+    date_to: &str,
+    approval_status: Option<&str>,
+) -> Result<ExpenseSummary, AppError> {
+    let details = crate::commands::expenses::expense_rows_in_range(conn, date_from, date_to, approval_status)?;
 
-    let mut src_stmt = conn.prepare(
-        "SELECT COALESCE(paid_from_source, 'company'), SUM(amount_milli + vat_milli), COUNT(*)
-         FROM expenses WHERE date >= ?1 AND date <= ?2
-         GROUP BY paid_from_source ORDER BY SUM(amount_milli + vat_milli) DESC",
-    )?;
-    let mut by_source = Vec::new();
-    for row in src_stmt.query_map(params![date_from, date_to], |r| {
-        Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, i64>(2)?))
-    })? {
-        let (source, sum, cnt) = row?;
-        by_source.push(ExpenseSourceTotal {
-            source: source.clone(),
-            label: source_label(&source).to_string(),
-            total_milli: sum,
-            count: cnt,
-        });
+    let total_milli: i64 = details.iter().map(|e| e.amount_milli + e.vat_milli).sum();
+    let count = details.len() as i64;
+
+    let mut source_totals: std::collections::HashMap<String, (String, i64, i64)> = std::collections::HashMap::new();
+    for e in &details {
+        let source = e.paid_from_source.clone().unwrap_or_else(|| "company".to_string());
+        let entry = source_totals.entry(source.clone()).or_insert_with(|| (source_label(&source).to_string(), 0, 0));
+        entry.1 += e.amount_milli + e.vat_milli;
+        entry.2 += 1;
     }
+    let mut by_source: Vec<ExpenseSourceTotal> = source_totals
+        .into_iter()
+        .map(|(source, (label, sum, cnt))| ExpenseSourceTotal { source, label, total_milli: sum, count: cnt })
+        .collect();
+    by_source.sort_by_key(|a| std::cmp::Reverse(a.total_milli));
 
-    let mut cat_stmt = conn.prepare(
-        "SELECT COALESCE(NULLIF(TRIM(category), ''), 'عام'), SUM(amount_milli + vat_milli), COUNT(*)
-         FROM expenses WHERE date >= ?1 AND date <= ?2
-         GROUP BY category ORDER BY SUM(amount_milli + vat_milli) DESC",
-    )?;
-    let mut by_category = Vec::new();
-    for row in cat_stmt.query_map(params![date_from, date_to], |r| {
-        Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, i64>(2)?))
-    })? {
-        let (category, sum, cnt) = row?;
-        by_category.push(ExpenseCategoryTotal { category, total_milli: sum, count: cnt });
+    let mut category_totals: std::collections::HashMap<String, (i64, i64)> = std::collections::HashMap::new();
+    for e in &details {
+        let category = e
+            .category
+            .clone()
+            .map(|c| c.trim().to_string())
+            .filter(|c| !c.is_empty())
+            .unwrap_or_else(|| "عام".to_string());
+        let entry = category_totals.entry(category).or_insert((0, 0));
+        entry.0 += e.amount_milli + e.vat_milli;
+        entry.1 += 1;
     }
-
-    let details = crate::commands::expenses::expense_rows_in_range(conn, date_from, date_to)?;
+    let mut by_category: Vec<ExpenseCategoryTotal> = category_totals
+        .into_iter()
+        .map(|(category, (sum, cnt))| ExpenseCategoryTotal { category, total_milli: sum, count: cnt })
+        .collect();
+    by_category.sort_by_key(|a| std::cmp::Reverse(a.total_milli));
 
     Ok(ExpenseSummary { date_from: date_from.to_string(), date_to: date_to.to_string(), total_milli, count, by_source, by_category, details })
 }
@@ -658,7 +662,7 @@ mod tests {
             lines: vec![quote_line(1, 500.0, 12000), quote_line(2, 300.0, 18000)],
         };
 
-        let quote_id = create_quotation_inner(&conn, 1, &input).expect("create quote");
+        let quote_id = create_quotation_inner(&mut conn, 1, &input).expect("create quote");
         // 500*12000 + 300*18000 = 6,000,000 + 5,400,000 = 11,400,000; minus 1000 discount.
         let quotes = list_quotations_inner(&conn, None).unwrap();
         assert_eq!(quotes.len(), 1);
@@ -712,12 +716,41 @@ mod tests {
 
         delete_quotation_inner(&conn, 1, quote_id).unwrap();
         assert!(list_quotations_inner(&conn, None).unwrap().is_empty());
+
+        // Unknown product must fail cleanly and roll back the whole quotation.
+        let bad = CreateQuotationInput {
+            date: None,
+            customer_id: None,
+            client_name: Some("x".to_string()),
+            client_contact: None,
+            client_phone: None,
+            client_email: None,
+            client_address: None,
+            title: None,
+            notes: None,
+            terms: None,
+            validity_days: None,
+            discount_milli: None,
+            currency: None,
+            status: None,
+            lines: vec![CreateQuotationLineInput {
+                product_id: Some(9999),
+                item_name: None,
+                cup_size: None,
+                cups_per_carton: None,
+                cartons: 1.0,
+                unit_price_milli: 1000,
+                notes: None,
+            }],
+        };
+        assert!(create_quotation_inner(&mut conn, 1, &bad).is_err());
+        assert!(list_quotations_inner(&conn, None).unwrap().is_empty(), "failed create must not leave a partial quotation");
         cleanup(&db_path);
     }
 
     #[test]
     fn commercial_invoice_is_non_vat_and_printable() {
-        let (db_path, conn) = setup();
+        let (db_path, mut conn) = setup();
         let input = CreateCommercialInvoiceInput {
             customer_id: 1,
             payment_type: Some("credit".to_string()),
@@ -725,7 +758,7 @@ mod tests {
             notes: Some("فاتورة تجارية".to_string()),
             lines: vec![CreateCommercialInvoiceLineInput { product_id: 1, cartons: 250.0, unit_price_milli: 15000 }],
         };
-        let inv_id = create_commercial_invoice_inner(&conn, 1, &input).unwrap();
+        let inv_id = create_commercial_invoice_inner(&mut conn, 1, &input).unwrap();
         let list = list_commercial_invoices_inner(&conn).unwrap();
         assert_eq!(list.len(), 1);
         let inv = &list[0];
@@ -742,6 +775,32 @@ mod tests {
         assert_eq!(print_data.lines.len(), 1);
         assert_eq!(print_data.lines[0].vat_pct, 0.0);
         assert_eq!(print_data.lines[0].vat_milli, 0);
+        // Regression: line_net_milli must be cartons * unit price, not unit price alone.
+        let (db_line_net, db_unit, db_customs, db_qty_cups): (i64, i64, i64, f64) = conn
+            .query_row(
+                "SELECT line_net_milli, unit_price_milli, customs_price_milli, qty_cups FROM sales_invoice_lines WHERE invoice_id = ?1",
+                params![inv_id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )
+            .unwrap();
+        assert_eq!(db_unit, 15000);
+        assert_eq!(db_customs, 15000);
+        assert_eq!(db_line_net, 3_750_000);
+        assert_eq!(db_qty_cups, 250_000.0);
+        assert_eq!(print_data.lines[0].unit_price_milli, 15000);
+        assert_eq!(print_data.lines[0].line_net_milli, 3_750_000);
+        assert_eq!(print_data.lines[0].qty_cups, 250_000.0);
+
+        // A missing product must fail cleanly and roll back the whole invoice.
+        let bad = CreateCommercialInvoiceInput {
+            customer_id: 1,
+            payment_type: None,
+            date: None,
+            notes: None,
+            lines: vec![CreateCommercialInvoiceLineInput { product_id: 9999, cartons: 1.0, unit_price_milli: 1000 }],
+        };
+        assert!(create_commercial_invoice_inner(&mut conn, 1, &bad).is_err());
+        assert_eq!(list_commercial_invoices_inner(&conn).unwrap().len(), 1, "failed create must not leave a partial invoice");
         cleanup(&db_path);
     }
 
@@ -761,31 +820,49 @@ mod tests {
             )
             .unwrap();
         }
-        let summary = get_expense_summary_inner(&conn, "2026-08-01", "2026-08-31").unwrap();
-        assert_eq!(summary.total_milli, 900_000);
-        assert_eq!(summary.count, 4);
-        assert_eq!(summary.details.len(), 4);
+        // A pending (not yet approved) expense: included in "all", excluded from "approved".
+        conn.execute(
+            "INSERT INTO expenses(exp_no, date, category, amount_milli, vat_milli, approval_status, paid_from_source)
+             VALUES('EXP-2026-8888', '2026-08-13', 'قيد المراجعة', 999999, 0, 'pending', 'company')",
+            [],
+        )
+        .unwrap();
+        let summary = get_expense_summary_inner(&conn, "2026-08-01", "2026-08-31", None).unwrap();
+        assert_eq!(summary.total_milli, 1_899_999);
+        assert_eq!(summary.count, 5);
+        assert_eq!(summary.details.len(), 5);
 
         let src = summary.by_source.iter().find(|s| s.source == "custody").unwrap();
         assert_eq!(src.total_milli, 320_000);
         assert_eq!(src.label, "من عهد الموظفين");
         let comp = summary.by_source.iter().find(|s| s.source == "company").unwrap();
-        assert_eq!(comp.total_milli, 500_000);
+        assert_eq!(comp.total_milli, 1_499_999);
         assert_eq!(comp.label, "من الحسابات الرئيسية");
 
         let cat = summary.by_category.iter().find(|c| c.category == "ورق خام").unwrap();
         assert_eq!(cat.total_milli, 700_000);
 
-        // Range filter excludes the 08-10 row.
-        let week = get_expense_summary_inner(&conn, "2026-08-11", "2026-08-17").unwrap();
-        assert_eq!(week.total_milli, 400_000);
-        assert_eq!(week.count, 3);
+        // Approved-only view excludes the pending row.
+        let approved = get_expense_summary_inner(&conn, "2026-08-01", "2026-08-31", Some("approved")).unwrap();
+        assert_eq!(approved.total_milli, 900_000);
+        assert_eq!(approved.count, 4);
+        assert_eq!(approved.details.len(), 4);
+        let comp_approved = approved.by_source.iter().find(|s| s.source == "company").unwrap();
+        assert_eq!(comp_approved.total_milli, 500_000);
+
+        // Range filter excludes the 08-10 row (pending 08-13 still in range).
+        let week = get_expense_summary_inner(&conn, "2026-08-11", "2026-08-17", None).unwrap();
+        assert_eq!(week.total_milli, 1_399_999);
+        assert_eq!(week.count, 4);
+        let week_approved = get_expense_summary_inner(&conn, "2026-08-11", "2026-08-17", Some("approved")).unwrap();
+        assert_eq!(week_approved.total_milli, 400_000);
+        assert_eq!(week_approved.count, 3);
         cleanup(&db_path);
     }
 
     #[test]
     fn commercial_invoices_are_skipped_by_auto_enqueue() {
-        let (db_path, conn) = setup();
+        let (db_path, mut conn) = setup();
         conn.execute(
             "INSERT INTO companies(code, name_ar, default_vat_pct) VALUES('MAIN', 'شركة التجربة', 5.0)",
             [],
@@ -803,7 +880,7 @@ mod tests {
             notes: None,
             lines: vec![CreateCommercialInvoiceLineInput { product_id: 1, cartons: 10.0, unit_price_milli: 15000 }],
         };
-        let inv_id = create_commercial_invoice_inner(&conn, 1, &input).unwrap();
+        let inv_id = create_commercial_invoice_inner(&mut conn, 1, &input).unwrap();
         crate::commands::einvoice::auto_enqueue_on_post(&conn, inv_id).unwrap();
         let queued: i64 = conn
             .query_row("SELECT COUNT(*) FROM einvoice_queue WHERE invoice_id = ?1", params![inv_id], |r| r.get(0))

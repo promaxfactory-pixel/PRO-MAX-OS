@@ -1,7 +1,7 @@
 {
   "name": "promax-os",
   "private": true,
-  "version": "2.6.0",
+  "version": "2.6.1",
   "description": "PRO MAX OS - Professional Manufacturing ERP System",
   "type": "module",
   "scripts": {
