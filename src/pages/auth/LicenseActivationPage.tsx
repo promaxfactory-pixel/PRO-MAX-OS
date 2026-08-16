@@ -136,7 +136,7 @@ export default function LicenseActivationPage() {
         </div>
 
         <p className="text-center mt-6 text-xs text-gray-600">
-          PRO MAX OS v2.6.2 &copy; 2026
+          PRO MAX OS v2.6.3 &copy; 2026
         </p>
       </div>
     </div>

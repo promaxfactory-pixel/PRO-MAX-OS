@@ -3,7 +3,9 @@ import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { invoke } from "@/lib/tauri";
 import { useLicenseStore } from "@/stores/licenseStore";
-import { Save, Building2, Shield, Key, Eye, EyeOff, CheckCircle, Copy } from "lucide-react";
+import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { Save, Building2, Shield, Key, Eye, EyeOff, CheckCircle, Copy, RefreshCw, Download } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 
 export default function SettingsPage() {
@@ -22,7 +24,49 @@ export default function SettingsPage() {
   const [genMaxUsers, setGenMaxUsers] = useState("5");
   const [genResult, setGenResult] = useState("");
   const [genLoading, setGenLoading] = useState(false);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState<string | null>(null);
+  const [updateVersion, setUpdateVersion] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
   const { isLicensed, license } = useLicenseStore();
+
+  const handleCheckUpdate = async () => {
+    setCheckingUpdate(true);
+    setUpdateInfo(null);
+    setUpdateVersion(null);
+    try {
+      const update = await check();
+      if (update) {
+        setUpdateVersion(update.version);
+        setUpdateInfo(`يتوفر إصدار جديد ${update.version}`);
+      } else {
+        setUpdateInfo("أنت على أحدث إصدار");
+      }
+    } catch (err) {
+      setUpdateInfo(`تعذر التحقق من التحديثات: ${String(err)}`);
+    } finally {
+      setCheckingUpdate(false);
+    }
+  };
+
+  const handleInstallUpdate = async () => {
+    setDownloading(true);
+    try {
+      const update = await check();
+      if (!update) {
+        setUpdateInfo("لا يتوفر تحديث");
+        return;
+      }
+      setUpdateInfo("جاري تحميل وتثبيت التحديث...");
+      await update.downloadAndInstall();
+      setUpdateInfo("تم التثبيت. سيتم إعادة تشغيل التطبيق.");
+      await relaunch();
+    } catch (err) {
+      setUpdateInfo(`فشل تثبيت التحديث: ${String(err)}`);
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const [form, setForm] = useState({
     name: "",
@@ -228,9 +272,38 @@ export default function SettingsPage() {
               )}
               <p className="text-xs text-gray-600 mt-2">
                 <button onClick={() => { const c = clickCount + 1; setClickCount(c); if (c >= 5) { setShowDevMode(true); setClickCount(0); } }} className="hover:text-gray-400 transition-colors">
-                  PRO MAX OS v2.6.2
+                  PRO MAX OS v2.6.3
                 </button>
               </p>
+            </div>
+          </Card>
+
+          <Card>
+            <div className="flex items-center gap-2 mb-4">
+              <Download className="w-5 h-5 text-brand-400" />
+              <h3 className="section-title">التحديثات</h3>
+            </div>
+            <div className="space-y-3">
+              <p className="text-xs text-gray-500">تحقق من وجود نسخة أحدث من التطبيق وتثبيتها تلقائياً</p>
+              <Button
+                onClick={handleCheckUpdate}
+                loading={checkingUpdate}
+                icon={<RefreshCw className="w-4 h-4" />}
+                disabled={downloading}
+              >
+                التحقق من التحديثات
+              </Button>
+              {updateInfo && (
+                <div className={`flex items-center gap-2 text-sm ${updateVersion ? "text-amber-400" : "text-gray-400"}`}>
+                  <CheckCircle className="w-4 h-4 shrink-0" />
+                  <span>{updateInfo}</span>
+                </div>
+              )}
+              {updateVersion && (
+                <Button onClick={handleInstallUpdate} loading={downloading} icon={<Download className="w-4 h-4" />}>
+                  تثبيت الإصدار {updateVersion}
+                </Button>
+              )}
             </div>
           </Card>
 

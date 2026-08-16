@@ -1,7 +1,7 @@
 {
   "name": "promax-os",
   "private": true,
-  "version": "2.6.2",
+  "version": "2.6.3",
   "description": "PRO MAX OS - Professional Manufacturing ERP System",
   "type": "module",
   "scripts": {
@@ -18,7 +18,9 @@
     "@tauri-apps/api": "^2.2.0",
     "@tauri-apps/plugin-dialog": "^2.2.0",
     "@tauri-apps/plugin-fs": "^2.2.0",
+    "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-shell": "^2.2.0",
+    "@tauri-apps/plugin-updater": "^2.10.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "framer-motion": "^11.18.0",

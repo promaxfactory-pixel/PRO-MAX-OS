@@ -1,5 +1,5 @@
 {
-  "app": { "name": "PRO MAX OS", "tagline": "एंटरप्राइज़ रिसोर्स प्लानिंग सिस्टम",     "version": "संस्करण 2.6.2" },
+  "app": { "name": "PRO MAX OS", "tagline": "एंटरप्राइज़ रिसोर्स प्लानिंग सिस्टम",     "version": "संस्करण 2.6.3" },
   "nav": {
     "dashboard": "डैशबोर्ड", "sales": "बिक्री", "customers": "ग्राहक",
     "invoices": "चालान", "inventory": "इन्वेंटरी", "products": "उत्पाद",

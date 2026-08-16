@@ -1,6 +1,6 @@
 [package]
 name = "promax-os"
-version = "2.6.2"
+version = "2.6.3"
 description = "PRO MAX OS - Professional Manufacturing ERP System"
 authors = ["Mayadeen Bahla National Company"]
 edition = "2021"
@@ -53,3 +53,7 @@ actix-web = "4"
 actix-cors = "0.7"
 actix-rt = "2"
 k256 = { version = "0.13", default-features = false, features = ["ecdsa", "sha2", "pkcs8", "std"] }
+tauri-plugin-process = "2.3.1"
+
+[dev-dependencies]
+minisign-verify = "0.2.5"

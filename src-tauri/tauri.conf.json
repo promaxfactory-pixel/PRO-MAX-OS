@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicholasoxford/tauri-v2-docs/main/schemas/tauri.conf.schema.json",
   "productName": "PRO MAX OS",
-  "version": "2.6.2",
+  "version": "2.6.3",
   "identifier": "com.promaxos.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -32,6 +32,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -51,9 +52,9 @@
     "updater": {
       "active": true,
       "endpoints": [
-        "https://releases.promaxos.com/update/{{target}}/{{current_version}}"
+        "https://releases.promaxos.com/update/{{target}}/{{bundle_type}}/{{current_version}}"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY1QkNDQjI5N0U2MjcwNzkKUldSNWNHSitLY3U4WlpPY3RoVDJLTk4wV3JrbUtEbjFNUS9yVUZnUFRUWW9YSEhqeGpibjFFUWkK"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDNDNjJGNTQxQ0RENDNCMApSV1N3UTkwY1ZDL0dBeTU4TlJzbWZEVFQ4andPR3hGbkhDSjVYUWdIeURTZmJGeWNiQllod29vRgo="
     }
   }
 }

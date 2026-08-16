@@ -1,6 +1,6 @@
 # PRO MAX OS
 
-[![Version](https://img.shields.io/badge/Version-2.6.2-blue.svg)](https://github.com/promaxfactory-pixel/PRO-MAX-OS/releases/tag/v2.6.2)
+[![Version](https://img.shields.io/badge/Version-2.6.3-blue.svg)](https://github.com/promaxfactory-pixel/PRO-MAX-OS/releases/tag/v2.6.3)
 [![License](https://img.shields.io/badge/License-B2B%20Commercial-red.svg)](LICENSE)
 [![Tech Stack](https://img.shields.io/badge/Tech-Tauri%202%20%7C%20React%2019%20%7C%20TypeScript%20%7C%20SQLite-6366F1.svg)](https://github.com/promaxfactory-pixel/PRO-MAX-OS)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](https://github.com/promaxfactory-pixel/PRO-MAX-OS)
@@ -20,14 +20,14 @@ Built with **Tauri 2** (Rust backend + React 18/TypeScript frontend), PRO MAX OS
 
 | Attribute | Detail |
 |---|---|
-| **Version** | 2.6.2 |
+| **Version** | 2.6.3 |
 | **Target Industry** | Paper Cup & Carton Manufacturing |
 | **Region** | Oman (Omani Labor Law Compliant) |
 | **License** | B2B Commercial |
 | **Tech Stack** | Tauri 2.11, Rust, React 18, TypeScript, Tailwind CSS, SQLite (WAL), Recharts, Framer Motion |
 | **Database** | SQLite (WAL mode, 36 migrations, 109 tables, 248 indexes) |
 | **Authentication** | Argon2id + AES-256-GCM + JWT with RBAC |
-| **Auto-Updater** | Tauri updater plugin with minisign signing |
+| **Auto-Updater** | Tauri updater plugin with `rsign` key signing (minisign-compatible pubkey) |
 | **3 Binaries** | `promax-os` (GUI), `promax-mcp` (MCP stdio), `promax-api` (Actix-Web REST) |
 | **Mobile** | Progressive Web App (PWA) served by `promax-api` |
 
@@ -449,7 +449,7 @@ default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src
 
 ### Auto-Updater Security
 
-- Updates signed via **minisign** (public-key cryptography)
+- Updates signed with the Tauri updater key (`rsign`, minisign-compatible public key)
 - Signing key pair generated per project
 - Update integrity verified on each update check
 - Update server endpoint: `https://releases.promaxos.com/update/{{target}}/{{current_version}}`
@@ -482,8 +482,8 @@ Production builds produce the following artifacts in `src-tauri/target/release/b
 
 | Format | File | Size |
 |---|---|---|
-| **MSI** | `PRO MAX OS_2.6.2_x64_en-US.msi` | ~15 MB |
-| **NSIS** | `PRO MAX OS_2.6.2_x64-setup.exe` | ~9.2 MB |
+| **MSI** | `PRO MAX OS_2.6.3_x64_en-US.msi` | ~15 MB |
+| **NSIS** | `PRO MAX OS_2.6.3_x64-setup.exe` | ~9.2 MB |
 | **Portable** | `promax-os.exe` | Optimized release binary |
 
 Build with signing:
@@ -588,7 +588,13 @@ For technical support, feature requests, or licensing inquiries:
 
 ## Changelog
 
-### v2.6.2 (Current) — Precision & Verification Pass
+### v2.6.3 (Current) — Auto-Update & Signed Releases
+- In-app updates: Settings → "التحديثات" checks, downloads, installs, and relaunches (`@tauri-apps/plugin-updater` + `tauri-plugin-process` registered; `updater:default`/`process:default` permissions)
+- Installers are now signed with the Tauri updater key (`rsign`); `.sig` files published with each release; `pubkey` rotated in `tauri.conf.json`
+- `updates.json` template for `releases.promaxos.com` update server with per-platform signatures
+- `scripts/release.ps1` + `docs/RELEASE.md` make releases fully reproducible; GitHub Actions CI enforces tests/lints
+
+### v2.6.2 — Precision & Verification Pass
 - Backend input validation + transactional writes across factory, invoices, purchases, supplier payments, expenses, customer payments, and barter exchange (no orphan headers, negative quantities/prices rejected)
 - `duplicate_invoice` made transactional and preserves `vat_enabled`, `is_commercial`, `payment_type`, and `customs_price_milli`; fixed a column-mismatch bug that wrote the note into the invoice `status` field
 - Credit-note reversals credit the exact account the original invoice debited (1100 cash / 1101 cheque / 1200 credit sales); credit limits enforced at posting time (0 = unlimited)
@@ -635,7 +641,7 @@ For technical support, feature requests, or licensing inquiries:
 - 53 unwrap() + 2 panic! removed from Rust code
 - 5 database migrations (24-28): PK fixes, 18 new indexes, money type conversion
 - 71 FOREIGN KEY constraints across 39 tables
-- Auto-updater with minisign signing (tauri-plugin-updater v2.10)
+- Auto-updater with rsign key signing (tauri-plugin-updater v2.10)
 - Custody module: update commands, date filtering, description search
 - 404/403 error pages with glassmorphism
 - Light mode compatibility: text-white CSS variables

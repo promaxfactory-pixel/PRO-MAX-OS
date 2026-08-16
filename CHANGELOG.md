@@ -4,6 +4,24 @@ All notable changes to PRO MAX OS are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.3] - 2026-08-16
+
+### Added
+- **In-app update management.** Settings → "التحديثات" now checks for new
+  versions, downloads and installs the update, and relaunches the app. Wired
+  through `@tauri-apps/plugin-updater` + `tauri-plugin-process`, with
+  `updater:default` / `process:default` capabilities.
+- **Signed update artifacts.** Installers are now signed with a Tauri updater
+  key (`rsign`, minisign-compatible public key); `.sig` files ship alongside
+  the MSI/NSIS bundles. The updater `pubkey` in `tauri.conf.json` was rotated
+  to the new key.
+- **`updates.json` template** for the update server (`releases.promaxos.com`),
+  with signatures for the MSI and NSIS artifacts.
+
+### Changed
+- Version bumped to 2.6.3 (previous 2.6.2 installers were unsigned; the new
+  builds embed the rotated signing key and the update UI).
+
 ## [2.6.2] - 2026-08-16
 
 ### Fixed

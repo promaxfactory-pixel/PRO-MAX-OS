@@ -68,6 +68,9 @@ jobs:
       - name: ESLint
         run: npx eslint src/ --ext .ts,.tsx
 
+      - name: Frontend tests
+        run: npx vitest run
+
   # Release binaries are built LOCALLY and published manually:
   # tauri.conf.json bundles src-tauri/promax.secrets.json, whose real key
   # material exists only on the maintainer's machine (the tracked file is a

@@ -2,7 +2,7 @@
   "app": {
     "name": "PRO MAX OS",
     "tagline": "Enterprise Resource Planning System",
-    "version": "Version 2.6.2"
+    "version": "Version 2.6.3"
   },
   "nav": {
     "dashboard": "Dashboard",
