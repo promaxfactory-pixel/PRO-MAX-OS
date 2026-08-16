@@ -95,6 +95,7 @@ CREATE TABLE IF NOT EXISTS inventory_items (
     avg_cost_milli  INTEGER NOT NULL DEFAULT 0,
     reorder_level   REAL NOT NULL DEFAULT 0,
     supplier_id     INTEGER REFERENCES suppliers(id),
+    warehouse_id    INTEGER REFERENCES multi_warehouse(id),
     notes           TEXT,
     active          INTEGER NOT NULL DEFAULT 1
 );
@@ -676,6 +677,8 @@ CREATE TABLE IF NOT EXISTS production_shift_lines (
     cartons_produced REAL NOT NULL DEFAULT 0,
     cups_per_carton INTEGER NOT NULL DEFAULT 1000,
     waste_cartons REAL NOT NULL DEFAULT 0,
+    unit_cost_milli INTEGER NOT NULL DEFAULT 0,
+    material_cost_milli INTEGER NOT NULL DEFAULT 0,
     ts TEXT NOT NULL DEFAULT (datetime('now')),
     recorded_by TEXT
 );

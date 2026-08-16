@@ -296,14 +296,19 @@ pub fn add_production_line(
 ) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
     rbac::require_role(&conn, user_id, &["admin", "manager", "operator"])?;
+    let cpc = input.cups_per_carton.unwrap_or(1000);
+    let cups_good = (input.cartons_good * cpc as f64).round() as i64;
+    let cups_waste = (input.cartons_waste * cpc as f64).round() as i64;
     conn.execute(
-        "INSERT INTO production_lines(order_id, product_id, cups_per_carton, cartons_good, cartons_waste, worker, brand_type, customer_id, batch_no) VALUES(?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO production_lines(order_id, product_id, cups_per_carton, cartons_good, cups_good, cartons_waste, cups_waste, worker, brand_type, customer_id, batch_no) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
         rusqlite::params![
             input.order_id,
             input.product_id,
-            input.cups_per_carton.unwrap_or(1000),
+            cpc,
             input.cartons_good,
+            cups_good,
             input.cartons_waste,
+            cups_waste,
             input.worker,
             input.brand_type.unwrap_or_else(|| "factory".into()),
             input.customer_id,

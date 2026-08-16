@@ -257,15 +257,48 @@ pub fn adjust_stock(
     let conn = state.0.lock()?;
     crate::commands::rbac::require_role(&conn, user_id, &["admin", "manager", "operator"])?;
 
+    let item = adjust_stock_inner(&conn, &input)?;
+
+    let _ = crate::commands::rbac::log_audit(&conn, Some(user_id), None, "adjust_stock", "inventory_movements", Some(input.item_id), None, Some(&format!("qty_change={}", input.qty_change)), None);
+    Ok(item)
+}
+
+pub(crate) fn adjust_stock_inner(
+    conn: &rusqlite::Connection,
+    input: &AdjustStockInput,
+) -> Result<InventoryItem, AppError> {
     let (qty_in, qty_out) = if input.qty_change >= 0.0 {
         (input.qty_change, 0.0)
     } else {
         (0.0, input.qty_change.abs())
     };
 
+    let (old_qty, old_avg): (f64, i64) = conn
+        .query_row(
+            "SELECT qty_on_hand, avg_cost_milli FROM inventory_items WHERE id = ?1",
+            params![input.item_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|_| AppError::not_found("العنصر غير موجود"))?;
+
+    // When a unit cost is supplied on an increase, merge it into the running
+    // weighted-average cost instead of leaving avg_cost_milli untouched.
+    let mut new_avg = old_avg;
+    if input.qty_change > 0.0 {
+        if let Some(cost) = input.unit_cost_milli {
+            if cost > 0 {
+                let new_qty = old_qty + input.qty_change;
+                if new_qty > 0.0 {
+                    new_avg = ((old_qty * old_avg as f64 + input.qty_change * cost as f64) / new_qty)
+                        .round() as i64;
+                }
+            }
+        }
+    }
+
     conn.execute(
-        "UPDATE inventory_items SET qty_on_hand = qty_on_hand + ?1 WHERE id = ?2",
-        params![input.qty_change, input.item_id],
+        "UPDATE inventory_items SET qty_on_hand = qty_on_hand + ?1, avg_cost_milli = ?2 WHERE id = ?3",
+        params![input.qty_change, new_avg, input.item_id],
     )?;
 
     conn.execute(
@@ -275,14 +308,31 @@ pub fn adjust_stock(
             input.item_id,
             qty_in,
             qty_out,
-            input.unit_cost_milli.unwrap_or(0),
+            input.unit_cost_milli.unwrap_or(old_avg),
             input.notes,
         ],
     )?;
 
-    let item = fetch_item(&conn, input.item_id)?;
-    let _ = crate::commands::rbac::log_audit(&conn, Some(user_id), None, "adjust_stock", "inventory_movements", Some(input.item_id), None, Some(&format!("qty_change={}", input.qty_change)), None);
-    Ok(item)
+    // Persist the adjustment in its own table for an audit trail.
+    let seq: i64 = conn
+        .query_row("SELECT COALESCE(MAX(id), 0) + 1 FROM inventory_adjustments", [], |row| row.get(0))
+        ?;
+    let adj_no = format!("ADJ-{:04}", seq);
+    let direction = if input.qty_change >= 0.0 { "in" } else { "out" };
+    conn.execute(
+        "INSERT INTO inventory_adjustments (adj_no, date, item_id, direction, qty, unit_cost_milli, reason, status, created_at)
+         VALUES (?1, date('now'), ?2, ?3, ?4, ?5, ?6, 'Approved', datetime('now'))",
+        params![
+            adj_no,
+            input.item_id,
+            direction,
+            input.qty_change.abs(),
+            input.unit_cost_milli.unwrap_or(old_avg),
+            input.notes,
+        ],
+    )?;
+
+    fetch_item(conn, input.item_id)
 }
 
 #[tauri::command]
@@ -324,4 +374,71 @@ pub fn get_inventory_movements(
         movements.push(row?);
     }
     Ok(movements)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::Connection;
+
+    fn test_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(include_str!("../schema.sql")).unwrap();
+        conn.execute(
+            "INSERT INTO users(username, password_hash, salt, role) VALUES('admin', 'x', 'y', 'admin')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO inventory_items(id, code, name_ar, kind, qty_on_hand, avg_cost_milli) VALUES(1, 'RM1', 'بكرة ورق', 'raw', 10, 500)",
+            [],
+        )
+        .unwrap();
+        conn
+    }
+
+    #[test]
+    fn adjust_stock_merges_cost_when_provided() {
+        let conn = test_db();
+        let input = AdjustStockInput {
+            item_id: 1,
+            qty_change: 10.0,
+            unit_cost_milli: Some(1000),
+            notes: Some("إدخال أولي".into()),
+        };
+        let item = adjust_stock_inner(&conn, &input).unwrap();
+        assert!((item.qty_on_hand - 20.0).abs() < 1e-9);
+        // (10*500 + 10*1000) / 20 = 750
+        assert_eq!(item.avg_cost_milli, 750);
+
+        let (adj_qty, direction, status): (f64, String, String) = conn
+            .query_row(
+                "SELECT qty, direction, status FROM inventory_adjustments WHERE item_id=1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert!((adj_qty - 10.0).abs() < 1e-9);
+        assert_eq!(direction, "in");
+        assert_eq!(status, "Approved");
+    }
+
+    #[test]
+    fn adjust_stock_down_keeps_cost() {
+        let conn = test_db();
+        let input = AdjustStockInput {
+            item_id: 1,
+            qty_change: -4.0,
+            unit_cost_milli: None,
+            notes: None,
+        };
+        let item = adjust_stock_inner(&conn, &input).unwrap();
+        assert!((item.qty_on_hand - 6.0).abs() < 1e-9);
+        assert_eq!(item.avg_cost_milli, 500);
+
+        let direction: String = conn
+            .query_row("SELECT direction FROM inventory_adjustments WHERE item_id=1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(direction, "out");
+    }
 }

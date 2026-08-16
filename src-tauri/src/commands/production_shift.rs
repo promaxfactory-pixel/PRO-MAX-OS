@@ -16,6 +16,8 @@ pub struct ShiftLine {
     pub cartons_produced: f64,
     pub cups_per_carton: i64,
     pub waste_cartons: f64,
+    pub unit_cost_milli: i64,
+    pub material_cost_milli: i64,
     pub ts: String,
     pub recorded_by: Option<String>,
     pub worker_id: Option<i64>,
@@ -107,7 +109,7 @@ pub fn record_production(
 
     let line = conn.query_row(
         "SELECT psl.id, psl.sheet_id, psl.product_id, COALESCE(p.name_ar, p.name_en, '') as product_name,
-                psl.customer_brand, psl.cartons_produced, psl.cups_per_carton, psl.waste_cartons, psl.ts, psl.recorded_by,
+                psl.customer_brand, psl.cartons_produced, psl.cups_per_carton, psl.waste_cartons, psl.unit_cost_milli, psl.material_cost_milli, psl.ts, psl.recorded_by,
                 psl.worker_id, e.name as worker_name
          FROM production_shift_lines psl
          LEFT JOIN products p ON p.id = psl.product_id
@@ -162,35 +164,42 @@ pub fn get_shift_lines(state: State<'_, DbState>, sheet_id: i64) -> Result<Vec<S
 
 #[tauri::command]
 pub fn complete_shift(state: State<'_, DbState>, user_id: i64, sheet_id: i64, completed_by: String) -> Result<String, AppError> {
-    let conn = state.0.lock()?;
+    let mut conn = state.0.lock()?;
     rbac::require_role(&conn, user_id, &["admin", "manager", "operator"])?;
+    let tx = conn.transaction()?;
+    let res = complete_shift_inner(&tx, sheet_id, &completed_by)?;
+    let _ = rbac::log_audit(&tx, Some(user_id), None, "complete_shift", "operations_daily_sheets", Some(sheet_id), None, None, None);
+    tx.commit()?;
+    Ok(res)
+}
 
+/// Closes a shift sheet, posts finished goods to stock at their computed cost,
+/// and — when a BOM exists for the product — consumes the required raw
+/// materials (qty per carton + waste allowance). The per-line production cost is
+/// written back to `production_shift_lines` for accurate factory costing.
+///
+/// Atomic: if any material is short, the whole shift is rejected and nothing is
+/// posted (guarded by the caller's transaction).
+pub(crate) fn complete_shift_inner(conn: &rusqlite::Connection, sheet_id: i64, completed_by: &str) -> Result<String, AppError> {
     let status: String = conn.query_row(
         "SELECT status FROM operations_daily_sheets WHERE id = ?1",
         params![sheet_id],
         |row| row.get(0),
-    ).map_err(|_| AppError::not_found("الوريiodية غير موجودة"))?;
+    ).map_err(|_| AppError::not_found("الوردية غير موجودة"))?;
 
     if status != "Draft" {
         return Err(AppError::validation("لا يمكن إقفال وردية تم إقفالها مسبقاً"));
     }
 
-    conn.execute(
-        "UPDATE operations_daily_sheets SET status = 'Completed', completed_by = ?1, completed_at = datetime('now')
-         WHERE id = ?2",
-        params![completed_by, sheet_id],
-    )
-    ?;
-
-    let lines: Vec<(i64, f64)> = {
+    let lines: Vec<(i64, f64, f64)> = {
         let mut stmt = conn
             .prepare(
-                "SELECT psl.product_id, psl.cartons_produced
+                "SELECT psl.product_id, psl.cartons_produced, psl.waste_cartons
                  FROM production_shift_lines psl WHERE psl.sheet_id = ?1",
             )
             ?;
         let rows = stmt.query_map(params![sheet_id], |row| {
-            Ok((row.get::<_, i64>(0)?, row.get::<_, f64>(1)?))
+            Ok((row.get::<_, i64>(0)?, row.get::<_, f64>(1)?, row.get::<_, f64>(2)?))
         })?;
         let mut v = Vec::new();
         for r in rows {
@@ -199,23 +208,139 @@ pub fn complete_shift(state: State<'_, DbState>, user_id: i64, sheet_id: i64, co
         v
     };
 
-    for (product_id, cartons) in &lines {
-        conn.execute(
-            "UPDATE inventory_items SET qty_on_hand = qty_on_hand + ?1 WHERE product_id = ?2 AND kind = 'finished'",
-            params![cartons, product_id],
-        )
-        ?;
+    // ---- Pass 1: plan and validate every material BEFORE mutating anything,
+    // so a shortage anywhere rejects the whole shift atomically even if the
+    // caller did not open an outer transaction.
+    struct MaterialPlan {
+        item_id: i64,
+        required: f64,
+        avg_cost_milli: i64,
+    }
+    struct LinePlan {
+        product_id: i64,
+        cartons: f64,
+        materials: Vec<MaterialPlan>,
+        has_bom: bool,
+        fallback_cost_milli: i64,
+    }
+    let mut plans: Vec<LinePlan> = Vec::new();
 
-        conn.execute(
-            "INSERT INTO inventory_movements (ts, item_id, mtype, qty_in, ref_type, ref_id, notes)
-             SELECT datetime('now'), ii.id, 'production', ?1, 'production_shift', ?2, 'إنتاج من الوردية'
-             FROM inventory_items ii WHERE ii.product_id = ?3 AND ii.kind = 'finished'",
-            params![cartons, sheet_id, product_id],
-        )
-        ?;
+    for (product_id, cartons, waste) in &lines {
+        if *cartons <= 0.0 {
+            continue;
+        }
+        let total_produced = *cartons + *waste;
+        let mut materials: Vec<MaterialPlan> = Vec::new();
+        let mut has_bom = false;
+
+        let mut bom_stmt = conn.prepare(
+            "SELECT b.item_id, b.qty_per_carton, b.waste_pct FROM bom b WHERE b.product_id = ?1 AND b.active = 1",
+        )?;
+        let bom_rows = bom_stmt.query_map(params![product_id], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, f64>(1)?, row.get::<_, f64>(2)?))
+        })?;
+        for br in bom_rows {
+            let (item_id, qty_per_carton, waste_pct) = br?;
+            has_bom = true;
+            let required = total_produced * qty_per_carton * (1.0 + waste_pct / 100.0);
+            if required <= 0.0 {
+                continue;
+            }
+            let (on_hand, item_name, avg_cost): (f64, String, i64) = conn
+                .query_row(
+                    "SELECT ii.qty_on_hand, COALESCE(ii.name_ar, ii.name_en, ''), ii.avg_cost_milli
+                     FROM inventory_items ii WHERE ii.id = ?1",
+                    params![item_id],
+                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+                )
+                .map_err(|_| AppError::not_found("مادة خام في قائمة BOM غير موجودة بالمخزون"))?;
+            if on_hand + 1e-9 < required {
+                return Err(AppError::validation(format!(
+                    "رصيد غير كافٍ للمادة '{}': المتاح {:.3}، المطلوب {:.3} للورديية",
+                    item_name, on_hand, required
+                )));
+            }
+            materials.push(MaterialPlan { item_id, required, avg_cost_milli: avg_cost });
+        }
+
+        let fallback_cost_milli: i64 = conn
+            .query_row(
+                "SELECT COALESCE(default_cost_milli, 0) FROM products WHERE id = ?1",
+                params![product_id],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+
+        plans.push(LinePlan { product_id: *product_id, cartons: *cartons, materials, has_bom, fallback_cost_milli });
     }
 
-    let _ = rbac::log_audit(&conn, Some(user_id), None, "complete_shift", "operations_daily_sheets", Some(sheet_id), None, None, None);
+    // ---- Pass 2: apply consumption, finished-goods posting and costs.
+    for plan in &plans {
+        let mut material_cost_milli: i64 = 0;
+        for m in &plan.materials {
+            conn.execute(
+                "UPDATE inventory_items SET qty_on_hand = qty_on_hand - ?1 WHERE id = ?2",
+                params![m.required, m.item_id],
+            )?;
+            conn.execute(
+                "INSERT INTO inventory_movements (ts, item_id, mtype, qty_in, qty_out, unit_cost_milli, ref_type, ref_id, notes)
+                 VALUES (datetime('now'), ?1, 'production', 0, ?2, ?3, 'production_shift', ?4, 'صرف خامات للورديية')",
+                params![m.item_id, m.required, m.avg_cost_milli, sheet_id],
+            )?;
+            material_cost_milli += (m.required * m.avg_cost_milli as f64).round() as i64;
+        }
+
+        // Production cost of the good cartons. With a BOM the cost is the raw
+        // material bill; without one we fall back to the product's default cost.
+        let total_cost_milli = if plan.has_bom {
+            material_cost_milli
+        } else {
+            (plan.fallback_cost_milli as f64 * plan.cartons).round() as i64
+        };
+        let unit_cost_milli = (total_cost_milli as f64 / plan.cartons).round() as i64;
+
+        // Finished goods enter stock at the computed cost (weighted-average merge).
+        let fin: Option<(f64, i64)> = conn
+            .query_row(
+                "SELECT ii.qty_on_hand, ii.avg_cost_milli FROM inventory_items ii
+                 WHERE ii.product_id = ?1 AND ii.kind = 'finished'",
+                params![plan.product_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .ok();
+        if let Some((old_qty, old_avg)) = fin {
+            let new_qty = old_qty + plan.cartons;
+            let new_avg = if new_qty > 0.0 {
+                ((old_qty * old_avg as f64 + plan.cartons * unit_cost_milli as f64) / new_qty).round() as i64
+            } else {
+                0
+            };
+            conn.execute(
+                "UPDATE inventory_items SET qty_on_hand = qty_on_hand + ?1, avg_cost_milli = ?2
+                 WHERE product_id = ?3 AND kind = 'finished'",
+                params![plan.cartons, new_avg, plan.product_id],
+            )?;
+            conn.execute(
+                "INSERT INTO inventory_movements (ts, item_id, mtype, qty_in, qty_out, unit_cost_milli, ref_type, ref_id, notes)
+                 SELECT datetime('now'), ii.id, 'production', ?1, 0, ?2, 'production_shift', ?3, 'إنتاج من الوردية'
+                 FROM inventory_items ii WHERE ii.product_id = ?4 AND ii.kind = 'finished'",
+                params![plan.cartons, unit_cost_milli, sheet_id, plan.product_id],
+            )?;
+        }
+
+        conn.execute(
+            "UPDATE production_shift_lines SET unit_cost_milli = ?1, material_cost_milli = ?2
+             WHERE sheet_id = ?3 AND product_id = ?4",
+            params![unit_cost_milli, material_cost_milli, sheet_id, plan.product_id],
+        )?;
+    }
+
+    conn.execute(
+        "UPDATE operations_daily_sheets SET status = 'Completed', completed_by = ?1, completed_at = datetime('now')
+         WHERE id = ?2",
+        params![completed_by, sheet_id],
+    )
+    ?;
 
     Ok("تم إقفال الوردية وتحديث المخزون".to_string())
 }
@@ -347,7 +472,7 @@ pub fn get_live_dashboard(state: State<'_, DbState>) -> Result<LiveProductionSum
 
     let mut recent = conn.prepare(
         "SELECT psl.id, psl.sheet_id, psl.product_id, COALESCE(p.name_ar, p.name_en, ''),
-                psl.customer_brand, psl.cartons_produced, psl.cups_per_carton, psl.waste_cartons, psl.ts, psl.recorded_by,
+                psl.customer_brand, psl.cartons_produced, psl.cups_per_carton, psl.waste_cartons, psl.unit_cost_milli, psl.material_cost_milli, psl.ts, psl.recorded_by,
                 psl.worker_id, e.name as worker_name
          FROM production_shift_lines psl
          JOIN operations_daily_sheets ods ON ods.id = psl.sheet_id
@@ -495,10 +620,12 @@ fn row_to_shift_line(row: &rusqlite::Row) -> rusqlite::Result<ShiftLine> {
         cartons_produced: row.get(5)?,
         cups_per_carton: row.get(6)?,
         waste_cartons: row.get(7)?,
-        ts: row.get(8)?,
-        recorded_by: row.get(9)?,
-        worker_id: row.get(10)?,
-        worker_name: row.get(11)?,
+        unit_cost_milli: row.get(8)?,
+        material_cost_milli: row.get(9)?,
+        ts: row.get(10)?,
+        recorded_by: row.get(11)?,
+        worker_id: row.get(12)?,
+        worker_name: row.get(13)?,
     })
 }
 
@@ -651,4 +778,147 @@ pub fn get_shift_inventory_snapshots(state: State<'_, DbState>, date: String) ->
         snapshots.push(row?);
     }
     Ok(snapshots)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::Connection;
+
+    fn test_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(include_str!("../schema.sql")).unwrap();
+        conn.execute(
+            "INSERT INTO users(username, password_hash, salt, role) VALUES('admin', 'x', 'y', 'admin')",
+            [],
+        )
+        .unwrap();
+        conn
+    }
+
+    fn seed_shift(conn: &Connection, cartons: f64, waste: f64) {
+        conn.execute(
+            "INSERT INTO products(id, code, name_ar, cups_per_carton, default_cost_milli) VALUES(1, 'P1', 'كوب 9oz', 1000, 5000)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO inventory_items(id, code, name_ar, kind, qty_on_hand, avg_cost_milli) VALUES(1, 'RM1', 'بكرة ورق', 'raw', 100, 1000)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO inventory_items(id, code, name_ar, kind, product_id, qty_on_hand, avg_cost_milli) VALUES(2, 'FG1', 'كوب 9oz', 'finished', 1, 0, 0)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO bom(product_id, item_id, qty_per_carton, waste_pct, active) VALUES(1, 1, 2.0, 10.0, 1)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO operations_daily_sheets(id, sheet_no, date, shift, status) VALUES(1, 'PRD-0001', '2026-08-16', 'صباحي', 'Draft')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO production_shift_lines(sheet_id, product_id, cartons_produced, cups_per_carton, waste_cartons) VALUES(1, 1, ?1, 1000, ?2)",
+            rusqlite::params![cartons, waste],
+        ).unwrap();
+    }
+
+    #[test]
+    fn complete_shift_consumes_bom_and_posts_finished_goods_at_cost() {
+        let conn = test_db();
+        seed_shift(&conn, 10.0, 0.0);
+
+        let res = complete_shift_inner(&conn, 1, "operator").unwrap();
+        assert!(res.contains("إقفال"));
+
+        // raw consumed = 10 * 2.0 * 1.10 = 22
+        let raw_qty: f64 = conn
+            .query_row("SELECT qty_on_hand FROM inventory_items WHERE id=1", [], |r| r.get(0))
+            .unwrap();
+        assert!((raw_qty - 78.0).abs() < 1e-9);
+
+        // finished: 10 cartons @ material cost 22000 -> WAC 2200/carton
+        let (fg_qty, fg_avg): (f64, i64) = conn
+            .query_row("SELECT qty_on_hand, avg_cost_milli FROM inventory_items WHERE id=2", [], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap();
+        assert!((fg_qty - 10.0).abs() < 1e-9);
+        assert_eq!(fg_avg, 2200);
+
+        // per-line cost persisted
+        let (unit_cost, mat_cost): (i64, i64) = conn
+            .query_row("SELECT unit_cost_milli, material_cost_milli FROM production_shift_lines WHERE sheet_id=1", [], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap();
+        assert_eq!(unit_cost, 2200);
+        assert_eq!(mat_cost, 22000);
+
+        // movements recorded
+        let raw_out: f64 = conn
+            .query_row("SELECT qty_out FROM inventory_movements WHERE item_id=1 AND mtype='production'", [], |r| r.get(0))
+            .unwrap();
+        assert!((raw_out - 22.0).abs() < 1e-9);
+        let fg_in: f64 = conn
+            .query_row("SELECT qty_in FROM inventory_movements WHERE item_id=2 AND mtype='production'", [], |r| r.get(0))
+            .unwrap();
+        assert!((fg_in - 10.0).abs() < 1e-9);
+
+        let status: String = conn
+            .query_row("SELECT status FROM operations_daily_sheets WHERE id=1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(status, "Completed");
+    }
+
+    #[test]
+    fn complete_shift_rejects_shortage_without_mutating() {
+        let conn = test_db();
+        seed_shift(&conn, 100.0, 0.0); // needs 220 raw, only 100 available
+
+        let err = complete_shift_inner(&conn, 1, "operator").unwrap_err();
+        assert!(err.to_string().contains("غير كافٍ"));
+
+        let raw_qty: f64 = conn
+            .query_row("SELECT qty_on_hand FROM inventory_items WHERE id=1", [], |r| r.get(0))
+            .unwrap();
+        assert!((raw_qty - 100.0).abs() < 1e-9);
+        let status: String = conn
+            .query_row("SELECT status FROM operations_daily_sheets WHERE id=1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(status, "Draft");
+    }
+
+    #[test]
+    fn complete_shift_falls_back_to_default_cost_without_bom() {
+        let conn = test_db();
+        conn.execute(
+            "INSERT INTO products(id, code, name_ar, cups_per_carton, default_cost_milli) VALUES(1, 'P1', 'كوب 9oz', 1000, 5000)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO inventory_items(id, code, name_ar, kind, product_id, qty_on_hand, avg_cost_milli) VALUES(2, 'FG1', 'كوب 9oz', 'finished', 1, 0, 0)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO operations_daily_sheets(id, sheet_no, date, shift, status) VALUES(1, 'PRD-0001', '2026-08-16', 'صباحي', 'Draft')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO production_shift_lines(sheet_id, product_id, cartons_produced, cups_per_carton, waste_cartons) VALUES(1, 1, 10, 1000, 0)",
+            [],
+        ).unwrap();
+
+        complete_shift_inner(&conn, 1, "operator").unwrap();
+        let (fg_qty, fg_avg): (f64, i64) = conn
+            .query_row("SELECT qty_on_hand, avg_cost_milli FROM inventory_items WHERE id=2", [], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap();
+        assert!((fg_qty - 10.0).abs() < 1e-9);
+        assert_eq!(fg_avg, 5000); // product default cost
+    }
+
+    #[test]
+    fn complete_shift_twice_is_rejected() {
+        let conn = test_db();
+        seed_shift(&conn, 10.0, 0.0);
+        complete_shift_inner(&conn, 1, "operator").unwrap();
+        let err = complete_shift_inner(&conn, 1, "operator").unwrap_err();
+        assert!(err.to_string().contains("مسبقاً"));
+    }
 }

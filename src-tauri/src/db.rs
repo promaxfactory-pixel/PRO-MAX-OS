@@ -72,7 +72,7 @@ fn ensure_admin_user(conn: &Connection) -> Result<()> {
 mod migrations {
     use rusqlite::{Connection, Result};
     
-    pub(crate) const SCHEMA_VERSION: i32 = 36;
+    pub(crate) const SCHEMA_VERSION: i32 = 37;
     
     pub fn run(conn: &Connection) -> Result<()> {
         let current: i32 = conn
@@ -1088,6 +1088,53 @@ mod migrations {
                     })?;
                 }
             }
+            37 => {
+                // Factory costing for the live shift sheet: per-line material cost
+                // and unit cost (per good carton) written when a shift is closed.
+                // Also the current warehouse an inventory item is stored in, so a
+                // warehouse-to-warehouse transfer can actually move the item.
+                let cols: &[(&str, &str, &str)] = &[
+                    (
+                        "production_shift_lines",
+                        "unit_cost_milli",
+                        "ALTER TABLE production_shift_lines ADD COLUMN unit_cost_milli INTEGER NOT NULL DEFAULT 0",
+                    ),
+                    (
+                        "production_shift_lines",
+                        "material_cost_milli",
+                        "ALTER TABLE production_shift_lines ADD COLUMN material_cost_milli INTEGER NOT NULL DEFAULT 0",
+                    ),
+                    (
+                        "inventory_items",
+                        "warehouse_id",
+                        "ALTER TABLE inventory_items ADD COLUMN warehouse_id INTEGER REFERENCES multi_warehouse(id)",
+                    ),
+                ];
+                for (table, col, ddl) in cols {
+                    let table_exists: bool = conn
+                        .query_row(
+                            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
+                            [table],
+                            |r| r.get::<_, i64>(0),
+                        )
+                        .map(|c| c > 0)
+                        .unwrap_or(false);
+                    if !table_exists {
+                        continue;
+                    }
+                    let has_col: bool = conn
+                        .prepare(&format!("SELECT COUNT(*) FROM pragma_table_info('{}') WHERE name=?1", table))
+                        .and_then(|mut stmt| stmt.query_row([col], |r| r.get::<_, i64>(0)))
+                        .map(|c| c > 0)
+                        .unwrap_or(false);
+                    if !has_col {
+                        conn.execute_batch(ddl).map_err(|e| {
+                            eprintln!("Migration 37 failed for {}.{}: {}", table, col, e);
+                            e
+                        })?;
+                    }
+                }
+            }
             _ => {}
         }
         Ok(())
@@ -1261,6 +1308,79 @@ mod tests {
             .unwrap();
         assert_eq!(currency, "OMR");
         assert_eq!(fy, "01-01");
+
+        cleanup_db(&db_path);
+    }
+
+    #[test]
+    fn test_migration_37_adds_factory_costing_columns() {
+        // Simulate a v36 install: start from the full schema, then downgrade the
+        // two tables to their pre-37 shape and run the migration chain.
+        let db_path = std::env::temp_dir().join(format!("promax_m37_{}.db", uuid::Uuid::new_v4()));
+        let conn = Connection::open(&db_path).expect("open");
+        conn.execute_batch(include_str!("schema.sql")).unwrap();
+        conn.execute_batch(
+            "PRAGMA foreign_keys = OFF;
+             DROP TABLE production_shift_lines;
+             CREATE TABLE production_shift_lines (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sheet_id INTEGER NOT NULL REFERENCES operations_daily_sheets(id),
+                product_id INTEGER NOT NULL REFERENCES products(id),
+                customer_brand TEXT,
+                cartons_produced REAL NOT NULL DEFAULT 0,
+                cups_per_carton INTEGER NOT NULL DEFAULT 1000,
+                waste_cartons REAL NOT NULL DEFAULT 0,
+                ts TEXT NOT NULL DEFAULT (datetime('now')),
+                recorded_by TEXT
+             );
+             DROP TABLE inventory_items;
+             CREATE TABLE inventory_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                code TEXT, name_ar TEXT, name_en TEXT,
+                kind TEXT NOT NULL DEFAULT 'raw',
+                uom TEXT NOT NULL DEFAULT 'pcs',
+                product_id INTEGER REFERENCES products(id),
+                qty_on_hand REAL NOT NULL DEFAULT 0,
+                avg_cost_milli INTEGER NOT NULL DEFAULT 0,
+                reorder_level REAL NOT NULL DEFAULT 0,
+                supplier_id INTEGER REFERENCES suppliers(id),
+                notes TEXT,
+                active INTEGER NOT NULL DEFAULT 1
+             );
+             UPDATE app_settings SET value='36' WHERE key='schema_version';
+             PRAGMA foreign_keys = ON;",
+        ).unwrap();
+
+        super::migrations::run(&conn).expect("migrations must apply");
+
+        let cols: Vec<String> = conn
+            .prepare("SELECT name FROM pragma_table_info('production_shift_lines')")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        for required in ["unit_cost_milli", "material_cost_milli"] {
+            assert!(cols.iter().any(|c| c == required), "missing column {}", required);
+        }
+        let icols: Vec<String> = conn
+            .prepare("SELECT name FROM pragma_table_info('inventory_items')")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert!(icols.iter().any(|c| c == "warehouse_id"), "missing column warehouse_id");
+
+        // Existing rows keep safe defaults.
+        conn.execute(
+            "INSERT INTO inventory_items(id, code, name_ar, kind, qty_on_hand, avg_cost_milli) VALUES(1, 'RM1', 'بكرة ورق', 'raw', 10, 500)",
+            [],
+        ).unwrap();
+        let wh: Option<i64> = conn
+            .query_row("SELECT warehouse_id FROM inventory_items WHERE id=1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(wh, None);
 
         cleanup_db(&db_path);
     }

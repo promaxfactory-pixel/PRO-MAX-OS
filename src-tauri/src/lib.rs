@@ -186,9 +186,12 @@ pub fn run() {
             // BOM
             commands::bom::list_boms,
             commands::bom::create_bom,
+            commands::bom::update_bom,
+            commands::bom::delete_bom,
             // Stock Transfers
             commands::stock_transfers::list_stock_transfers,
             commands::stock_transfers::create_stock_transfer,
+            commands::stock_transfers::complete_stock_transfer,
             commands::stock_transfers::list_warehouses,
             // Payroll
             commands::payroll::list_payroll_runs,

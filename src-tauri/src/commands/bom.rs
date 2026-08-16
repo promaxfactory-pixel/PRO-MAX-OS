@@ -75,3 +75,36 @@ pub fn create_bom(state: State<'_, DbState>, user_id: i64, input: CreateBomInput
     let _ = rbac::log_audit(&conn, Some(user_id), None, "create_bom", "bom", Some(id), None, Some(&format!("product={}", input.product_id)), None);
     Ok(id)
 }
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateBomInput {
+    pub qty_per_carton: f64,
+    pub waste_pct: Option<f64>,
+}
+
+#[tauri::command]
+pub fn update_bom(state: State<'_, DbState>, user_id: i64, id: i64, input: UpdateBomInput) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "operator"])?;
+    if input.qty_per_carton < 0.0 {
+        return Err(AppError::validation("الكمية لكل كرتون لا يمكن أن تكون سالبة"));
+    }
+    conn.execute(
+        "UPDATE bom SET qty_per_carton = ?1, waste_pct = ?2 WHERE id = ?3",
+        rusqlite::params![input.qty_per_carton, input.waste_pct.unwrap_or(0.0), id],
+    )?;
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "update_bom", "bom", Some(id), None, None, None);
+    Ok("تم التحديث".to_string())
+}
+
+#[tauri::command]
+pub fn delete_bom(state: State<'_, DbState>, user_id: i64, id: i64) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "operator"])?;
+    conn.execute(
+        "UPDATE bom SET active = 0 WHERE id = ?1",
+        rusqlite::params![id],
+    )?;
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "delete_bom", "bom", Some(id), None, None, None);
+    Ok("تم الحذف".to_string())
+}
