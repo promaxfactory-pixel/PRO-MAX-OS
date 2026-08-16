@@ -47,7 +47,7 @@ verbatim content of the `.sig` file produced during the signed build.
     "platforms": {
       "windows-x86_64": {
         "signature": "<full .sig content>",
-        "url": "https://github.com/promaxfactory-pixel/PRO-MAX-OS/releases/download/v2.6.3/PRO%20MAX%20OS_2.6.3_x64-setup.exe"
+        "url": "https://github.com/promaxfactory-pixel/PRO-MAX-OS/releases/download/v2.6.3/PRO.MAX.OS_2.6.3_x64-setup.exe"
       }
     }
   }
@@ -56,7 +56,10 @@ verbatim content of the `.sig` file produced during the signed build.
 
 Notes:
 
-- URL-encode spaces in asset names: `PRO MAX OS` → `PRO%20MAX%20OS`.
+- Asset names on the GitHub release use dots, not spaces: `gh release create`
+  rewrites `PRO MAX OS_2.6.3_x64-setup.exe` → `PRO.MAX.OS_2.6.3_x64-setup.exe`.
+  The `url` must match the actual asset name exactly (verify by listing
+  `gh release view v2.6.3 --json assets`).
 - `signature` must be the exact `.sig` text (a base64 blob followed by a
   `trusted comment:` line). Keep the trailing newline.
 - The plugin verifies the signature against the embedded `pubkey` before

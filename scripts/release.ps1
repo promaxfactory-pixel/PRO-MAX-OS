@@ -146,7 +146,7 @@ foreach ($bt in @("nsis", "msi")) {
     version  = $Version
     notes    = $notes
     pub_date = $pub
-    platforms = @{ "windows-x86_64" = @{ signature = $sig.Trim(); url = "$base/$($sub -replace ' ', '%20')" } }
+    platforms = @{ "windows-x86_64" = @{ signature = $sig.Trim(); url = "$base/$($sub -replace ' ', '.')" } }
   } | ConvertTo-Json -Depth 5
   $target = Join-Path $updDir "$bt\$Version.json"
   New-Item -ItemType Directory -Path (Split-Path $target) -Force | Out-Null
