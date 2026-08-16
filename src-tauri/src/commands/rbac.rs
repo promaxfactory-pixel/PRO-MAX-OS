@@ -127,3 +127,67 @@ pub fn list_audit_logs(
     }
     Ok(entries)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::init_database;
+
+    fn setup_with_users() -> (std::path::PathBuf, rusqlite::Connection) {
+        let db_path = std::env::temp_dir().join(format!("promax_rbac_{}.db", uuid::Uuid::new_v4()));
+        let conn = init_database(&db_path).expect("fresh db");
+        for (name, role) in [
+            ("admin1", "admin"),
+            ("acct1", "accountant"),
+            ("mgr1", "manager"),
+            ("viewer1", "viewer"),
+        ] {
+            conn.execute(
+                "INSERT INTO users(username, full_name, password_hash, salt, role, active, must_change_password) VALUES(?1,?2,'x','y',?3,1,0)",
+                rusqlite::params![name, name, role],
+            )
+            .unwrap();
+        }
+        (db_path, conn)
+    }
+
+    fn cleanup(db_path: &std::path::Path) {
+        let _ = std::fs::remove_file(db_path);
+        let _ = std::fs::remove_file(db_path.with_extension("db-shm"));
+        let _ = std::fs::remove_file(db_path.with_extension("db-wal"));
+    }
+
+    fn user_id(conn: &rusqlite::Connection, username: &str) -> i64 {
+        conn.query_row("SELECT id FROM users WHERE username=?1", [username], |r| r.get(0)).unwrap()
+    }
+
+    #[test]
+    fn require_role_grants_and_denies() {
+        let (db_path, conn) = setup_with_users();
+        let allowed = ["admin", "accountant", "manager"];
+
+        let admin = user_id(&conn, "admin1");
+        let acct = user_id(&conn, "acct1");
+        let mgr = user_id(&conn, "mgr1");
+        let viewer = user_id(&conn, "viewer1");
+
+        // Admin always passes regardless of the allowed list.
+        require_role(&conn, admin, &["accountant"]).expect("admin bypasses role checks");
+        require_role(&conn, admin, &allowed).expect("admin passes");
+
+        // Allowed roles pass.
+        require_role(&conn, acct, &allowed).expect("accountant allowed");
+        require_role(&conn, mgr, &allowed).expect("manager allowed");
+
+        // Disallowed roles fail with a permission error.
+        let err = require_role(&conn, mgr, &["accountant"]).unwrap_err();
+        assert!(err.to_string().contains("Access denied"), "err = {}", err);
+        let err = require_role(&conn, viewer, &allowed).unwrap_err();
+        assert!(err.to_string().contains("Access denied"), "err = {}", err);
+
+        // Unknown user -> not found.
+        let err = require_role(&conn, 9999, &allowed).unwrap_err();
+        assert!(err.to_string().contains("المستخدم غير موجود"), "err = {}", err);
+        cleanup(&db_path);
+    }
+}

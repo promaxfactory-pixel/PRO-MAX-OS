@@ -144,7 +144,7 @@ export default function InvoicePrintTemplate({ data }: Props) {
             <th style={{ ...S.th, textAlign: "right" }}>المنتج</th>
             <th style={S.th}>الكراتين</th>
             <th style={S.th}>كوب/كرتون</th>
-            <th style={S.th}>الإجمالي</th>
+            <th style={S.th}>إجمالي الأكواب</th>
             <th style={S.th}>السعر</th>
             <th style={S.th}>الصافي</th>
             <th style={{ ...S.th, borderRadius: "8px 0 0 0" }}>الضريبة</th>

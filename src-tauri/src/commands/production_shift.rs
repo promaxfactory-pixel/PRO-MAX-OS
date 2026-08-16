@@ -279,7 +279,7 @@ pub fn delete_production_line(state: State<'_, DbState>, user_id: i64, line_id: 
 pub fn get_live_dashboard(state: State<'_, DbState>) -> Result<LiveProductionSummary, AppError> {
     let conn = state.0.lock()?;
 
-    let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
 
     let today_total: f64 = conn.query_row(
         "SELECT COALESCE(SUM(psl.cartons_produced * psl.cups_per_carton), 0) as total
@@ -466,9 +466,9 @@ pub fn print_shift_report_thermal(
 
     let printer = printer_name.unwrap_or_default();
     let ps = format!(
-        r#"Get-Content -Path "{0}" -Encoding Byte | Out-Printer -Name "{1}" -Wait"#,
-        temp_file.to_str().unwrap_or(""),
-        printer
+        r#"Get-Content -Path {0} -Encoding Byte | Out-Printer -Name {1} -Wait"#,
+        crate::commands::device::ps_quote(temp_file.to_str().unwrap_or("")),
+        crate::commands::device::ps_quote(&printer)
     );
 
     let output = std::process::Command::new("powershell")

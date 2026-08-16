@@ -152,8 +152,9 @@ mod migrations {
             }
             15 => {
                 conn.execute_batch(
-                    "-- Add custom/duty price column for dual pricing (customs vs real)
-                    ALTER TABLE sales_invoice_lines ADD COLUMN customs_price_milli INTEGER NOT NULL DEFAULT 0;
+                    "-- Add custom/duty price column for dual pricing (customs vs real).
+                    -- Fresh installs already get this column from schema.sql, so guard it.
+                    ALTER TABLE sales_invoice_lines ADD COLUMN IF NOT EXISTS customs_price_milli INTEGER NOT NULL DEFAULT 0;
 
                     -- Add missing FK indexes for performance
                     CREATE INDEX IF NOT EXISTS idx_inv_items_supplier ON inventory_items(supplier_id);
@@ -403,13 +404,16 @@ mod migrations {
             21 => {
                 conn.execute_batch(
                     "-- Enhanced expenses: custody/personal tracking
-                    ALTER TABLE expenses ADD COLUMN paid_by_employee_id INTEGER;
-                    ALTER TABLE expenses ADD COLUMN paid_from_source TEXT DEFAULT 'company';
-                    ALTER TABLE expenses ADD COLUMN petty_id INTEGER;
-                    ALTER TABLE expenses ADD COLUMN custody_txn_id INTEGER;
-                    ALTER TABLE expenses ADD COLUMN reimbursement_status TEXT DEFAULT 'none';
-                    ALTER TABLE expenses ADD COLUMN reimbursement_date TEXT;
-                    ALTER TABLE expenses ADD COLUMN reimbursed_by TEXT;
+                    -- Fresh installs already get these columns from schema.sql, so each
+                    -- ALTER is guarded; if any ALTER were to fail the indexes below
+                    -- would be silently skipped, so they must stay independent.
+                    ALTER TABLE expenses ADD COLUMN IF NOT EXISTS paid_by_employee_id INTEGER;
+                    ALTER TABLE expenses ADD COLUMN IF NOT EXISTS paid_from_source TEXT DEFAULT 'company';
+                    ALTER TABLE expenses ADD COLUMN IF NOT EXISTS petty_id INTEGER;
+                    ALTER TABLE expenses ADD COLUMN IF NOT EXISTS custody_txn_id INTEGER;
+                    ALTER TABLE expenses ADD COLUMN IF NOT EXISTS reimbursement_status TEXT DEFAULT 'none';
+                    ALTER TABLE expenses ADD COLUMN IF NOT EXISTS reimbursement_date TEXT;
+                    ALTER TABLE expenses ADD COLUMN IF NOT EXISTS reimbursed_by TEXT;
                     CREATE INDEX IF NOT EXISTS idx_exp_paid_by ON expenses(paid_by_employee_id);
                     CREATE INDEX IF NOT EXISTS idx_exp_source ON expenses(paid_from_source);
                     CREATE INDEX IF NOT EXISTS idx_exp_petty ON expenses(petty_id);
@@ -740,8 +744,8 @@ mod migrations {
             }
             27 => {
                 conn.execute_batch(
-                    "ALTER TABLE users ADD COLUMN reset_token TEXT;
-                     ALTER TABLE users ADD COLUMN reset_token_expiry TEXT;"
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token TEXT;
+                     ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expiry TEXT;"
                 ).ok();
             }
             28 => {

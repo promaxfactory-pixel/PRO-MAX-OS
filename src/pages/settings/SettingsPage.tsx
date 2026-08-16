@@ -228,7 +228,7 @@ export default function SettingsPage() {
               )}
               <p className="text-xs text-gray-600 mt-2">
                 <button onClick={() => { const c = clickCount + 1; setClickCount(c); if (c >= 5) { setShowDevMode(true); setClickCount(0); } }} className="hover:text-gray-400 transition-colors">
-                  PRO MAX OS v2.4.0
+                  PRO MAX OS v2.6.2
                 </button>
               </p>
             </div>

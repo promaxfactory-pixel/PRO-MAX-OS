@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicholasoxford/tauri-v2-docs/main/schemas/tauri.conf.schema.json",
   "productName": "PRO MAX OS",
-  "version": "2.6.1",
+  "version": "2.6.2",
   "identifier": "com.promaxos.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",

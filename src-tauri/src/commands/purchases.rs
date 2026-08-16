@@ -178,7 +178,29 @@ pub fn get_purchase_lines(purchase_id: i64, state: State<'_, DbState>) -> Result
 pub fn create_purchase(input: CreatePurchaseInput, state: State<'_, DbState>, user_id: i64) -> Result<i64, AppError> {
     let mut conn = state.0.lock()?;
     rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
+    if input.lines.is_empty() {
+        return Err(AppError::validation("أدخل بنداً واحداً على الأقل"));
+    }
+    for line in &input.lines {
+        if line.qty <= 0.0 {
+            return Err(AppError::validation("الكمية يجب أن تكون أكبر من صفر"));
+        }
+        if line.unit_cost_milli < 0 {
+            return Err(AppError::validation("سعر التكلفة لا يمكن أن يكون سالباً"));
+        }
+        if let Some(v) = line.vat_pct {
+            if v < 0.0 {
+                return Err(AppError::validation("نسبة الضريبة لا يمكن أن تكون سالبة"));
+            }
+        }
+    }
     let tx = conn.transaction()?;
+
+    let supplier_exists: i64 = tx
+        .query_row("SELECT COUNT(*) FROM suppliers WHERE id=?1", [input.supplier_id], |r| r.get(0))?;
+    if supplier_exists == 0 {
+        return Err(AppError::not_found("المورد غير موجود"));
+    }
 
     let year: String = tx
         .query_row("SELECT substr(?1, 1, 4)", [&input.date], |row| row.get(0))?;
@@ -191,8 +213,8 @@ pub fn create_purchase(input: CreatePurchaseInput, state: State<'_, DbState>, us
     let mut net_milli: i64 = 0;
     let mut vat_milli: i64 = 0;
     for line in &input.lines {
-        let line_vat = ((line.unit_cost_milli as f64) * (line.qty) * (line.vat_pct.unwrap_or(0.0)) / 100.0) as i64;
-        let line_net = ((line.unit_cost_milli as f64) * (line.qty)) as i64;
+        let line_vat = ((line.unit_cost_milli as f64) * (line.qty) * (line.vat_pct.unwrap_or(0.0)) / 100.0).round() as i64;
+        let line_net = ((line.unit_cost_milli as f64) * (line.qty)).round() as i64;
         net_milli += line_net;
         vat_milli += line_vat;
     }
@@ -217,8 +239,8 @@ pub fn create_purchase(input: CreatePurchaseInput, state: State<'_, DbState>, us
     let purchase_id: i64 = tx.last_insert_rowid();
 
     for line in &input.lines {
-        let line_vat = ((line.unit_cost_milli as f64) * line.qty * (line.vat_pct.unwrap_or(0.0)) / 100.0) as i64;
-        let line_net = ((line.unit_cost_milli as f64) * line.qty) as i64;
+        let line_vat = ((line.unit_cost_milli as f64) * line.qty * (line.vat_pct.unwrap_or(0.0)) / 100.0).round() as i64;
+        let line_net = ((line.unit_cost_milli as f64) * line.qty).round() as i64;
 
         tx.execute(
             "INSERT INTO purchase_lines(purchase_id, item_id, qty, unit_cost_milli, line_net_milli, vat_pct, vat_milli)
@@ -371,7 +393,16 @@ pub fn list_suppliers_for_select(state: State<'_, DbState>) -> Result<Vec<serde_
 pub fn create_supplier_payment(input: CreateSupplierPaymentInput, state: State<'_, DbState>, user_id: i64) -> Result<i64, AppError> {
     let mut conn = state.0.lock()?;
     rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
+    if input.amount_milli <= 0 {
+        return Err(AppError::validation("المبلغ يجب أن يكون أكبر من صفر"));
+    }
     let tx = conn.transaction()?;
+
+    let supplier_exists: i64 = tx
+        .query_row("SELECT COUNT(*) FROM suppliers WHERE id=?1", [input.supplier_id], |r| r.get(0))?;
+    if supplier_exists == 0 {
+        return Err(AppError::not_found("المورد غير موجود"));
+    }
 
     let method = input.method.clone().unwrap_or_else(|| "cash".into());
     let year: String = tx

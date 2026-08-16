@@ -4,6 +4,38 @@ All notable changes to PRO MAX OS are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.2] - 2026-08-16
+
+### Fixed
+- **`duplicate_invoice` column mismatch.** The INSERT supplied 12 values for 11
+  columns, so the copy note was written into the `status` column instead of
+  `notes`. The duplication is now transactional and preserves `vat_enabled`,
+  `is_commercial`, `payment_type` and `customs_price_milli`. Regression test added.
+- **Credit-note reversal account.** Reversals now credit the exact account the
+  original invoice debited (1100 cash / 1101 cheque / 1200 credit sales) instead
+  of always using the receivables account. Tests added for cash and cheque.
+- **Credit-limit enforcement at posting.** Posting a credit invoice now rejects
+  the transaction when `balance + total` exceeds the customer's `credit_limit_milli`
+  (limit `<= 0` = unlimited). Tests added.
+- **Report accuracy.** Customer aging, VAT return, owner summary, margin report
+  and unpaid-invoices report now correctly net out credit notes and use
+  `net_milli`/real default prices.
+- **Fresh-install migrations.** Migrations 15/21/27 use `ADD COLUMN IF NOT EXISTS`
+  so fresh installs no longer abort the batch halfway and silently skip the
+  expense/sales/user indexes; `schema.sql` synced (customs price + quotations).
+- **Input validation.** Empty lines, non-positive quantities and negative prices
+  are rejected on factory commercial invoices, quotations, invoices, purchases,
+  supplier payments, expenses, customer payments and barter exchange, with the
+  whole document rolled back.
+- **PowerShell sanitization.** All print/scan command paths run through
+  `ps_quote()`; e-invoice BilledQuantity is formatted to 3 decimals.
+- **Frontend.** Commercial/quote line cartons default cleared, factory dashboard
+  ignores stale responses, commercial print header shows cup total, aria-labels
+  on factory icon buttons.
+
+### Changed
+- Version bumped to 2.6.2; 7 new regression tests (143 lib tests passing, clippy clean).
+
 ## [2.6.1] - 2026-08-15
 
 ### Fixed

@@ -139,10 +139,26 @@ pub fn get_invoice_lines(state: State<'_, DbState>, invoice_id: i64) -> Result<V
     Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
+pub(crate) fn validate_invoice_lines(lines: &[CreateInvoiceLineInput]) -> Result<(), AppError> {
+    if lines.is_empty() {
+        return Err(AppError::validation("أدخل بنداً واحداً على الأقل"));
+    }
+    for line in lines {
+        if line.cartons <= 0.0 {
+            return Err(AppError::validation("الكمية يجب أن تكون أكبر من صفر"));
+        }
+        if line.unit_price_milli < 0 {
+            return Err(AppError::validation("السعر لا يمكن أن يكون سالباً"));
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn create_invoice(state: State<'_, DbState>, user_id: i64, input: CreateInvoiceInput) -> Result<i64, AppError> {
     let mut conn = state.0.lock()?;
     rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
+    validate_invoice_lines(&input.lines)?;
     let tx = conn.transaction()?;
     let now = chrono::Utc::now().format("%Y-%m-%d").to_string();
     let year = chrono::Utc::now().format("%Y").to_string();
@@ -225,6 +241,26 @@ pub(crate) fn post_invoice_inner(conn: &mut rusqlite::Connection, user_id: i64, 
             |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?)),
         )
         .map_err(|e| format!("Invoice not found: {}", e))?;
+
+    // Enforce the customer's credit limit for credit sales: posting would raise
+    // the outstanding receivable, so reject when it would exceed the limit.
+    // A limit of 0 (or negative) means unlimited.
+    if payment_type == "credit" {
+        let (credit_limit, balance): (i64, i64) = tx
+            .query_row(
+                "SELECT COALESCE(credit_limit_milli, 0), COALESCE(balance_milli, 0) FROM customers WHERE id=?",
+                [customer_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .map_err(|_| AppError::not_found("العميل غير موجود"))?;
+        if credit_limit > 0 && balance + total_milli > credit_limit {
+            return Err(AppError::validation(format!(
+                "تجاوز الحد الائتماني للعميل (الحد: {}، الرصيد الحالي + الفاتورة: {})",
+                credit_limit,
+                balance + total_milli
+            )));
+        }
+    }
 
     let total_cogs = deduct_invoice_stock(&tx, id)?;
 
@@ -457,10 +493,15 @@ pub(crate) fn void_invoice_inner(conn: &mut rusqlite::Connection, user_id: i64, 
 
 #[tauri::command]
 pub fn duplicate_invoice(state: State<'_, DbState>, user_id: i64, id: i64) -> Result<i64, AppError> {
-    let conn = state.0.lock()?;
+    let mut conn = state.0.lock()?;
     rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
-    
-    let inv: SalesInvoice = conn.query_row(
+    duplicate_invoice_inner(&mut conn, user_id, id)
+}
+
+pub(crate) fn duplicate_invoice_inner(conn: &mut rusqlite::Connection, user_id: i64, id: i64) -> Result<i64, AppError> {
+    let tx = conn.transaction()?;
+
+    let inv: SalesInvoice = tx.query_row(
         "SELECT si.id, si.inv_no, si.date, si.customer_id, c.name, si.payment_type, si.vat_enabled, si.net_milli, si.vat_milli, si.discount_milli, si.total_milli, si.discount_reason, si.cogs_milli, si.paid_milli, si.status, si.notes, si.created_by, si.created_at, si.is_commercial FROM sales_invoices si LEFT JOIN customers c ON si.customer_id=c.id WHERE si.id=?",
         [id],
         |row| {
@@ -475,29 +516,29 @@ pub fn duplicate_invoice(state: State<'_, DbState>, user_id: i64, id: i64) -> Re
             })
         },
     ).map_err(|e| format!("Invoice not found: {}", e))?;
-    
-    let source_lines: Vec<(i64, f64, i64)> = {
-        let mut stmt = conn.prepare(
-            "SELECT product_id, cartons, unit_price_milli FROM sales_invoice_lines WHERE invoice_id=?"
+
+    let source_lines: Vec<(i64, f64, i64, i64)> = {
+        let mut stmt = tx.prepare(
+            "SELECT product_id, cartons, unit_price_milli, COALESCE(customs_price_milli, unit_price_milli) FROM sales_invoice_lines WHERE invoice_id=?"
         )?;
         let rows = stmt.query_map([id], |row| {
-            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
         })?;
         rows.collect::<Result<Vec<_>, _>>()?
     };
-    
+
     let now = chrono::Utc::now().format("%Y-%m-%d").to_string();
     let year = chrono::Utc::now().format("%Y").to_string();
-    
-    let seq = next_sequence(&conn, "INV", &year)?;
+
+    let seq = next_sequence(&tx, "INV", &year)?;
     let inv_no = format!("INV-{}-{:04}", year, seq);
-    
+
     let mut net: i64 = 0;
     let mut vat: i64 = 0;
-    let mut line_data: Vec<(i64, f64, i64, ProductInfo)> = Vec::new();
+    let mut line_data: Vec<(i64, f64, i64, ProductInfo, i64)> = Vec::new();
 
-    for (product_id, cartons, unit_price) in &source_lines {
-        let info: ProductInfo = conn.query_row(
+    for (product_id, cartons, unit_price, customs) in &source_lines {
+        let info: ProductInfo = tx.query_row(
             "SELECT cups_per_carton, vat_pct FROM products WHERE id=?",
             [*product_id],
             |row| Ok(ProductInfo {
@@ -509,29 +550,30 @@ pub fn duplicate_invoice(state: State<'_, DbState>, user_id: i64, id: i64) -> Re
         let line_vat = (line_net as f64 * info.vat_pct / 100.0).round() as i64;
         net += line_net;
         vat += line_vat;
-        line_data.push((*product_id, *cartons, *unit_price, info));
+        line_data.push((*product_id, *cartons, *unit_price, info, *customs));
     }
     let total = net + vat;
-    
+
     let note = format!("نسخة من {}", inv.inv_no.unwrap_or_default());
-    
-    conn.execute(
-        "INSERT INTO sales_invoices(inv_no, date, customer_id, payment_type, net_milli, vat_milli, total_milli, status, notes) VALUES(?,?,?,?,?,?,?,'Draft',?)",
-        rusqlite::params![inv_no, now, inv.customer_id, inv.payment_type.unwrap_or_else(|| "credit".into()), net, vat, total, note],
+
+    tx.execute(
+        "INSERT INTO sales_invoices(inv_no, date, customer_id, payment_type, vat_enabled, net_milli, vat_milli, total_milli, status, notes, is_commercial) VALUES(?,?,?,?,?,?,?,?,'Draft',?,?)",
+        rusqlite::params![inv_no, now, inv.customer_id, inv.payment_type.unwrap_or_else(|| "credit".into()), inv.vat_enabled, net, vat, total, note, inv.is_commercial],
     )?;
-    let new_id = conn.last_insert_rowid();
-    
-    for (product_id, cartons, unit_price, info) in &line_data {
+    let new_id = tx.last_insert_rowid();
+
+    for (product_id, cartons, unit_price, info, customs) in &line_data {
         let qty_cups = *cartons * info.cups_per_carton as f64;
         let line_net = (*cartons * *unit_price as f64).round() as i64;
         let line_vat = (line_net as f64 * info.vat_pct / 100.0).round() as i64;
-        conn.execute(
-            "INSERT INTO sales_invoice_lines(invoice_id, product_id, cartons, cups_per_carton, qty_cups, unit_price_milli, line_net_milli, vat_pct, vat_milli) VALUES(?,?,?,?,?,?,?,?,?)",
-            rusqlite::params![new_id, product_id, cartons, info.cups_per_carton, qty_cups, unit_price, line_net, info.vat_pct, line_vat],
+        tx.execute(
+            "INSERT INTO sales_invoice_lines(invoice_id, product_id, cartons, cups_per_carton, qty_cups, unit_price_milli, customs_price_milli, line_net_milli, vat_pct, vat_milli) VALUES(?,?,?,?,?,?,?,?,?,?)",
+            rusqlite::params![new_id, product_id, cartons, info.cups_per_carton, qty_cups, unit_price, customs, line_net, info.vat_pct, line_vat],
         )?;
     }
-    
-    let _ = rbac::log_audit(&conn, Some(user_id), None, "duplicate_invoice", "sales_invoices", Some(new_id), None, Some(&format!("source_id={}", id)), None);
+
+    let _ = rbac::log_audit(&tx, Some(user_id), None, "duplicate_invoice", "sales_invoices", Some(new_id), None, Some(&format!("source_id={}", id)), None);
+    tx.commit()?;
     Ok(new_id)
 }
 
@@ -700,13 +742,19 @@ pub(crate) fn create_credit_note_inner(conn: &mut rusqlite::Connection, user_id:
         }
     }
 
-    // Reverse the posted invoice journal exactly (mirror of post_invoice).
+    // Reverse the posted invoice journal exactly (mirror of post_invoice),
+    // crediting the same account the original invoice debited.
     let mut lines: Vec<(String, i64, i64, Option<String>)> = Vec::new();
     lines.push(("4100".to_string(), net, 0, Some("إشعار خصم مبيعات".to_string())));
     if vat > 0 {
         lines.push(("2100".to_string(), vat, 0, None));
     }
-    lines.push(("1200".to_string(), 0, total, None));
+    let reversal_account = match payment_type.as_str() {
+        "cash" => "1100",
+        "cheque" => "1101",
+        _ => "1200",
+    };
+    lines.push((reversal_account.to_string(), 0, total, None));
     if cogs > 0 {
         lines.push(("1400".to_string(), cogs, 0, None));
         lines.push(("5100".to_string(), 0, cogs, None));
@@ -1406,6 +1454,210 @@ mod tests {
         assert_eq!(data.supplier.vat_number.as_deref(), Some("OM123"));
         assert!(data.company.name.is_some());
 
+        cleanup(&db_path);
+    }
+
+    #[test]
+    fn validate_invoice_lines_rejects_empty_and_bad_quantities() {
+        assert!(validate_invoice_lines(&[]).is_err());
+
+        let bad_qty = CreateInvoiceLineInput { product_id: 1, cartons: 0.0, unit_price_milli: 1000, customs_price_milli: None };
+        let err = validate_invoice_lines(&[bad_qty]).unwrap_err();
+        assert!(err.to_string().contains("الكمية"), "err = {}", err);
+
+        let bad_qty = CreateInvoiceLineInput { product_id: 1, cartons: -5.0, unit_price_milli: 1000, customs_price_milli: None };
+        assert!(validate_invoice_lines(&[bad_qty]).is_err());
+
+        let bad_price = CreateInvoiceLineInput { product_id: 1, cartons: 10.0, unit_price_milli: -1, customs_price_milli: None };
+        let err = validate_invoice_lines(&[bad_price]).unwrap_err();
+        assert!(err.to_string().contains("السعر"), "err = {}", err);
+
+        let ok = CreateInvoiceLineInput { product_id: 1, cartons: 10.0, unit_price_milli: 1500, customs_price_milli: Some(2000) };
+        assert!(validate_invoice_lines(&[ok]).is_ok());
+    }
+
+    #[test]
+    fn duplicate_invoice_preserves_flags_payment_type_and_customs_price() {
+        let db_path = std::env::temp_dir().join(format!("promax_dup_{}.db", uuid::Uuid::new_v4()));
+        let mut conn = init_database(&db_path).expect("fresh db");
+        conn.execute("INSERT INTO company_settings(name, vat_number, default_vat_pct) VALUES('شركة','OM0000000000000',5.0)", []).unwrap();
+        conn.execute(
+            "INSERT INTO customers(code, name, ctype, contact, phone, email, address, vat_number, credit_limit_milli, payment_terms, payment_terms_days, notes) VALUES('C1','عميل','credit',NULL,'999',NULL,NULL,NULL,0,'net',30,NULL)",
+            [],
+        ).unwrap();
+        let cid = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO products(code, name_ar, name_en, cups_per_carton, default_price_milli, vat_pct) VALUES('P1','كوب','Cup',5,10000,5.0)",
+            [],
+        ).unwrap();
+        let pid = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO sales_invoices(inv_no, date, customer_id, payment_type, vat_enabled, net_milli, vat_milli, total_milli, status, is_commercial) VALUES('CINV-2026-0001','2026-08-13',?1,'cash',0,100000,0,100000,'Posted',1)",
+            [cid],
+        ).unwrap();
+        let iid = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO sales_invoice_lines(invoice_id, product_id, cartons, cups_per_carton, qty_cups, unit_price_milli, customs_price_milli, line_net_milli, vat_pct, vat_milli) VALUES(?1,?2,10,5,50,10000,20000,100000,0.0,0)",
+            rusqlite::params![iid, pid],
+        ).unwrap();
+
+        let new_id = duplicate_invoice_inner(&mut conn, 1, iid).expect("duplicate");
+        assert!(new_id != iid);
+
+        let (inv_no, payment_type, vat_enabled, is_commercial, status, note): (String, String, i64, i64, String, String) = conn
+            .query_row(
+                "SELECT inv_no, COALESCE(payment_type,'credit'), vat_enabled, is_commercial, status, notes FROM sales_invoices WHERE id=?",
+                [new_id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)),
+            )
+            .unwrap();
+        assert!(inv_no.starts_with("INV-2026-"), "inv_no = {}", inv_no);
+        assert_eq!(payment_type, "cash");
+        assert_eq!(vat_enabled, 0);
+        assert_eq!(is_commercial, 1);
+        assert_eq!(status, "Draft");
+        assert!(note.contains("نسخة من"), "note = {}", note);
+
+        let (cartons, unit, customs, line_net): (f64, i64, i64, i64) = conn
+            .query_row(
+                "SELECT cartons, unit_price_milli, customs_price_milli, line_net_milli FROM sales_invoice_lines WHERE invoice_id=?",
+                [new_id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )
+            .unwrap();
+        assert_eq!(cartons, 10.0);
+        assert_eq!(unit, 10000);
+        assert_eq!(customs, 20000, "customs price must be copied from the source line");
+        assert_eq!(line_net, 100000);
+        cleanup(&db_path);
+    }
+
+    #[test]
+    fn post_credit_invoice_enforces_credit_limit() {
+        let db_path = std::env::temp_dir().join(format!("promax_cl_{}.db", uuid::Uuid::new_v4()));
+        let mut conn = init_database(&db_path).expect("fresh db");
+        conn.execute("INSERT INTO company_settings(name, vat_number, default_vat_pct) VALUES('شركة','OM0000000000000',5.0)", []).unwrap();
+        conn.execute(
+            "INSERT INTO customers(code, name, ctype, credit_limit_milli, payment_terms, payment_terms_days) VALUES('C1','عميل','credit',10000,'net',30)",
+            [],
+        ).unwrap();
+        let cid = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO products(code, name_ar, name_en, cups_per_carton, default_price_milli, vat_pct) VALUES('P1','كوب','Cup',5,10000,5.0)",
+            [],
+        ).unwrap();
+        let pid = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO inventory_items(product_id, kind, qty_on_hand, avg_cost_milli) VALUES(?1,'main',1000,6000)",
+            [pid],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO sales_invoices(inv_no, date, customer_id, payment_type, net_milli, vat_milli, total_milli, status) VALUES('INV-2026-0001','2026-08-13',?1,'credit',100000,5000,105000,'Draft')",
+            [cid],
+        ).unwrap();
+        let iid = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO sales_invoice_lines(invoice_id, product_id, cartons, cups_per_carton, qty_cups, unit_price_milli, customs_price_milli, line_net_milli, vat_pct, vat_milli) VALUES(?1,?2,10,5,50,10000,10000,100000,5.0,5000)",
+            rusqlite::params![iid, pid],
+        ).unwrap();
+
+        // Limit 10000 < total 105000: posting must be rejected and nothing changed.
+        let err = post_invoice_inner(&mut conn, 1, iid).unwrap_err();
+        assert!(err.to_string().contains("الحد الائتماني"), "err = {}", err);
+        let status: String = conn.query_row("SELECT status FROM sales_invoices WHERE id=?", [iid], |r| r.get(0)).unwrap();
+        assert_eq!(status, "Draft", "rejected post must leave the invoice as Draft");
+
+        // Raising the limit above the total allows the post.
+        conn.execute("UPDATE customers SET credit_limit_milli=200000 WHERE id=?", [cid]).unwrap();
+        post_invoice_inner(&mut conn, 1, iid).expect("post with sufficient limit");
+        let status: String = conn.query_row("SELECT status FROM sales_invoices WHERE id=?", [iid], |r| r.get(0)).unwrap();
+        assert_eq!(status, "Posted");
+        let bal: i64 = conn.query_row("SELECT balance_milli FROM customers WHERE id=?", [cid], |r| r.get(0)).unwrap();
+        assert_eq!(bal, 105000);
+
+        // A limit of 0 means unlimited: a new invoice beyond the old limit posts.
+        conn.execute("UPDATE customers SET credit_limit_milli=0 WHERE id=?", [cid]).unwrap();
+        conn.execute(
+            "INSERT INTO sales_invoices(inv_no, date, customer_id, payment_type, net_milli, vat_milli, total_milli, status) VALUES('INV-2026-0002','2026-08-13',?1,'credit',5000000,0,5000000,'Draft')",
+            [cid],
+        ).unwrap();
+        let iid2 = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO sales_invoice_lines(invoice_id, product_id, cartons, cups_per_carton, qty_cups, unit_price_milli, customs_price_milli, line_net_milli, vat_pct, vat_milli) VALUES(?1,?2,500,5,2500,10000,10000,5000000,0.0,0)",
+            rusqlite::params![iid2, pid],
+        ).unwrap();
+        post_invoice_inner(&mut conn, 1, iid2).expect("limit 0 means unlimited");
+        let status: String = conn.query_row("SELECT status FROM sales_invoices WHERE id=?", [iid2], |r| r.get(0)).unwrap();
+        assert_eq!(status, "Posted");
+        cleanup(&db_path);
+    }
+
+    #[test]
+    fn credit_note_reversal_credits_the_invoice_payment_account() {
+        let db_path = std::env::temp_dir().join(format!("promax_cnacct_{}.db", uuid::Uuid::new_v4()));
+        let mut conn = init_database(&db_path).expect("fresh db");
+        conn.execute("INSERT INTO company_settings(name, vat_number, default_vat_pct) VALUES('شركة','OM0000000000000',5.0)", []).unwrap();
+        conn.execute(
+            "INSERT INTO customers(code, name, ctype, credit_limit_milli) VALUES('C1','عميل','credit',0)",
+            [],
+        ).unwrap();
+        let cid = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO products(code, name_ar, name_en, cups_per_carton, default_price_milli, vat_pct) VALUES('P1','كوب','Cup',5,10000,5.0)",
+            [],
+        ).unwrap();
+        let pid = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO inventory_items(product_id, kind, qty_on_hand, avg_cost_milli) VALUES(?1,'main',100,6000)",
+            [pid],
+        ).unwrap();
+
+        for (suffix, payment_type, expected_account) in [("A", "cash", "1100"), ("B", "cheque", "1101")] {
+            let inv_no = format!("INV-2026-{}", suffix);
+            conn.execute(
+                "INSERT INTO sales_invoices(inv_no, date, customer_id, payment_type, net_milli, vat_milli, total_milli, status) VALUES(?1,'2026-08-13',?2,?3,100000,5000,105000,'Posted')",
+                rusqlite::params![inv_no, cid, payment_type],
+            ).unwrap();
+            let iid = conn.last_insert_rowid();
+            conn.execute(
+                "INSERT INTO sales_invoice_lines(invoice_id, product_id, cartons, cups_per_carton, qty_cups, unit_price_milli, customs_price_milli, line_net_milli, vat_pct, vat_milli) VALUES(?1,?2,10,5,50,10000,10000,100000,5.0,5000)",
+                rusqlite::params![iid, pid],
+            ).unwrap();
+
+            let cn_id = create_credit_note_inner(&mut conn, 1, CreateCreditNoteInput {
+                invoice_id: iid,
+                date: Some("2026-08-14".to_string()),
+                reason: Some("مرتجع".to_string()),
+                notes: None,
+                lines: vec![CreateCreditNoteLineInput { product_id: pid, cartons: 10.0 }],
+            }).expect("credit note");
+
+            let jid: i64 = conn.query_row("SELECT journal_id FROM credit_notes WHERE id=?", [cn_id], |r| r.get(0)).unwrap();
+            let credited: i64 = conn
+                .query_row(
+                    "SELECT COALESCE(SUM(credit_milli),0) FROM journal_entry_lines WHERE entry_id=? AND account_code=?",
+                    rusqlite::params![jid, expected_account],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(credited, 105000, "{} invoice reversal must credit {}", payment_type, expected_account);
+            let wrong_account: i64 = conn
+                .query_row(
+                    "SELECT COALESCE(SUM(credit_milli),0) FROM journal_entry_lines WHERE entry_id=? AND account_code='1200'",
+                    [jid],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(wrong_account, 0, "credit-sales account must not be used for {} payment", payment_type);
+            let (d, c): (i64, i64) = conn
+                .query_row(
+                    "SELECT SUM(debit_milli), SUM(credit_milli) FROM journal_entry_lines WHERE entry_id=?",
+                    [jid],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+                .unwrap();
+            assert!(d > 0 && d == c);
+        }
         cleanup(&db_path);
     }
 }

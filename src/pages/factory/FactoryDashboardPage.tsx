@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Button from "@/components/ui/Button";
 import { StatCard } from "@/components/ui/Card";
 import DataTable, { Column } from "@/components/ui/DataTable";
@@ -56,6 +56,7 @@ export default function FactoryDashboardPage() {
   const [range, setRange] = useState<"week" | "month">("week");
   const [summaryFilter, setSummaryFilter] = useState<"" | "approved">("");
   const today = todayStr();
+  const summarySeq = useRef(0);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -78,12 +79,15 @@ export default function FactoryDashboardPage() {
   useEffect(() => { loadAll(); }, [loadAll]);
 
   const loadSummary = useCallback(async (r: "week" | "month", filter: "" | "approved") => {
+    const seq = ++summarySeq.current;
     const dateTo = todayStr();
     const dateFrom = r === "week" ? addDays(dateTo, -6) : `${dateTo.slice(0, 8)}01`;
     try {
       const res = await invoke<ExpenseSummary>("get_expense_summary", { dateFrom, dateTo, approvalStatus: filter || null });
+      if (seq !== summarySeq.current) return;
       setSummary(res);
     } catch (err) {
+      if (seq !== summarySeq.current) return;
       addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: String(err) });
     }
   }, [addNotification]);

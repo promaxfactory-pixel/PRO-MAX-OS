@@ -1,6 +1,6 @@
 # PRO MAX OS
 
-[![Version](https://img.shields.io/badge/Version-2.2.0-blue.svg)](https://github.com/promaxfactory-pixel/PRO-MAX-OS/releases/tag/v2.2.0)
+[![Version](https://img.shields.io/badge/Version-2.6.2-blue.svg)](https://github.com/promaxfactory-pixel/PRO-MAX-OS/releases/tag/v2.6.2)
 [![License](https://img.shields.io/badge/License-B2B%20Commercial-red.svg)](LICENSE)
 [![Tech Stack](https://img.shields.io/badge/Tech-Tauri%202%20%7C%20React%2019%20%7C%20TypeScript%20%7C%20SQLite-6366F1.svg)](https://github.com/promaxfactory-pixel/PRO-MAX-OS)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](https://github.com/promaxfactory-pixel/PRO-MAX-OS)
@@ -20,12 +20,12 @@ Built with **Tauri 2** (Rust backend + React 18/TypeScript frontend), PRO MAX OS
 
 | Attribute | Detail |
 |---|---|
-| **Version** | 2.2.0 |
+| **Version** | 2.6.2 |
 | **Target Industry** | Paper Cup & Carton Manufacturing |
 | **Region** | Oman (Omani Labor Law Compliant) |
 | **License** | B2B Commercial |
 | **Tech Stack** | Tauri 2.11, Rust, React 18, TypeScript, Tailwind CSS, SQLite (WAL), Recharts, Framer Motion |
-| **Database** | SQLite (WAL mode, 29 migrations, 100 tables, 195+ indexes) |
+| **Database** | SQLite (WAL mode, 36 migrations, 109 tables, 248 indexes) |
 | **Authentication** | Argon2id + AES-256-GCM + JWT with RBAC |
 | **Auto-Updater** | Tauri updater plugin with minisign signing |
 | **3 Binaries** | `promax-os` (GUI), `promax-mcp` (MCP stdio), `promax-api` (Actix-Web REST) |
@@ -213,8 +213,8 @@ D:\PRO MAX OS\
 │   │   │   ├── ai_providers.rs  Provider catalog, config, test
 │   │   │   ├── ai_file_import.rs AI any-file extraction & commit
 │   │   │   ├── ...          40+ more modules
-│   │   ├── db.rs            Database (SCHEMA_VERSION=29, 29 migrations)
-│   │   ├── schema.sql       100 tables, 195+ indexes, 71 FK constraints
+│   │   ├── db.rs            Database (SCHEMA_VERSION=36, 36 migrations)
+│   │   ├── schema.sql       109 tables, 248 indexes, 121 FK constraints
 │   │   ├── lib.rs           All 304+ commands registered
 │   │   ├── main.rs          Desktop binary entrypoint
 │   │   ├── bin/
@@ -342,11 +342,11 @@ On first launch, the system auto-generates a unique developer PIN tied to the ma
 | Attribute | Detail |
 |---|---|
 | **Engine** | SQLite (rusqlite 0.31, bundled) |
-| **Schema Version** | 29 |
-| **Migration Files** | 29 (applied sequentially on startup) |
-| **Tables** | 100 |
-| **Indexes** | 195+ (including 71 FK indexes + composite reporting indexes) |
-| **Foreign Keys** | 71 REFERENCES clauses across 39 tables |
+| **Schema Version** | 36 |
+| **Migration Files** | 36 (applied sequentially on startup) |
+| **Tables** | 109 |
+| **Indexes** | 248 (including FK indexes + composite reporting indexes) |
+| **Foreign Keys** | 121 REFERENCES clauses across 39 tables |
 | **Journal Mode** | WAL (Write-Ahead Logging) |
 | **Busy Timeout** | 5 seconds |
 | **Monetary Unit** | Milli (1/1000 OMR) — stored as `INTEGER` |
@@ -364,17 +364,35 @@ All monetary values are stored in **milli** units (1/1000 of an OMR) as `INTEGER
 
 Conversion to display format divides by 1000 and formats to 3 decimal places.
 
-### Migrations (29 total)
+### Migrations (36 total)
 
 | # | Purpose |
 |---|---------|
-| 1-23 | Base schema, production, inventory, HR, accounting, reporting, operating advances (from v2.0.0) |
-| 24 | PK fix for `login_attempts`, FK indexes on `created_by` columns |
-| 25 | 18 missing indexes (accounts, settings, document tables, roles, employees, payroll, stock, docflow, quality, closings); column name fixes |
-| 26 | `import_history` table to managed schema; removed runtime `CREATE TABLE` |
-| 27 | `reset_token` + `reset_token_expiry` on `users` for password reset |
+| 1-12 | No-ops (base schema lives in `schema.sql`) |
+| 13 | `overtime_records` table + indexes |
+| 14 | `production_shift_lines` table + indexes |
+| 15 | `sales_invoice_lines.customs_price_milli` (dual pricing) + FK indexes |
+| 16 | `machine_temp_logs` table + indexes |
+| 17 | Government entities / integrations / report templates / submissions |
+| 18 | Multi-company: `companies`, `fiscal_years`, `tax_rates`, `currencies`, `exchange_rates` + customer/supplier contact fields |
+| 19 | E-Invoice settings, queue + `e_invoices` cancellation columns |
+| 20 | `password_change_attempts` table |
+| 21 | Expense custody/personal tracking columns + indexes |
+| 22 | Factory ERP enhancement: product specs, employee salaries, production/import/installment/supplier/customer fields + 8 new tables |
+| 23 | Missing FK indexes + composite reporting indexes |
+| 24 | `login_attempts` PK fix + `created_by` indexes |
+| 25 | 18 missing indexes |
+| 26 | `import_history` table to managed schema |
+| 27 | `users.reset_token` + `reset_token_expiry` (password reset) |
 | 28 | `avg_cost_milli` converted from `REAL` to `INTEGER` (money precision) |
 | 29 | `ai_extractions` table + indexes (AI any-file import) |
+| 30 | Seeded chart of accounts for automatic journal posting |
+| 31 | `customers.payment_terms_days` (guarded) |
+| 32 | `suppliers.vat_number` (guarded) |
+| 33 | `shift_inventory_snapshots.ts` + `credit_notes.notes` (guarded) |
+| 34 | `branches`, `offline_sync_queue`, `zatca_settings`, `qayd_filings` + `e_invoices` Phase-2 columns (guarded) |
+| 35 | Company profile columns on `company_settings` (guarded) |
+| 36 | `quotations` + `quotation_lines` + `sales_invoices.is_commercial` (guarded) |
 
 Migrations are embedded in `src-tauri/src/db.rs` and applied automatically on application startup with proper error propagation.
 
@@ -464,8 +482,8 @@ Production builds produce the following artifacts in `src-tauri/target/release/b
 
 | Format | File | Size |
 |---|---|---|
-| **MSI** | `PRO MAX OS_2.2.0_x64_en-US.msi` | ~15 MB |
-| **NSIS** | `PRO MAX OS_2.2.0_x64-setup.exe` | ~9.2 MB |
+| **MSI** | `PRO MAX OS_2.6.2_x64_en-US.msi` | ~15 MB |
+| **NSIS** | `PRO MAX OS_2.6.2_x64-setup.exe` | ~9.2 MB |
 | **Portable** | `promax-os.exe` | Optimized release binary |
 
 Build with signing:
@@ -570,7 +588,24 @@ For technical support, feature requests, or licensing inquiries:
 
 ## Changelog
 
-### v2.2.0 (Current) — AI Any-File Import, Mobile PWA, REST API v3
+### v2.6.2 (Current) — Precision & Verification Pass
+- Backend input validation + transactional writes across factory, invoices, purchases, supplier payments, expenses, customer payments, and barter exchange (no orphan headers, negative quantities/prices rejected)
+- `duplicate_invoice` made transactional and preserves `vat_enabled`, `is_commercial`, `payment_type`, and `customs_price_milli`; fixed a column-mismatch bug that wrote the note into the invoice `status` field
+- Credit-note reversals credit the exact account the original invoice debited (1100 cash / 1101 cheque / 1200 credit sales); credit limits enforced at posting time (0 = unlimited)
+- Report fixes: customer aging, VAT return, owner summary, margin report, and unpaid invoices now correctly net out credit notes / use `net_milli`
+- PowerShell command sanitization (`ps_quote`) on all print/scan call sites; e-invoice `BilledQuantity` formatting; removed dead net/vat override in AI file import
+- Guarded migrations 15/21/27 (`ADD COLUMN IF NOT EXISTS`) so fresh installs no longer abort the batch and skip indexes; `schema.sql` synced (customs price + quotations tables)
+- Frontend: commercial/quote cartons default cleared, dashboard stale-response guard, factory print header totals, aria-labels on icon buttons
+- 7 new regression tests (validation rejections, RBAC enforcement, commercial create→post→journal→stock, credit-limit, credit-note account, duplicate flags) — 143 lib tests passing, clippy clean
+
+### v2.6.1 — Commercial Invoice Totals & Factory Fixes
+- Fixed `line_net_milli` on commercial invoices: stored as `cartons × unit price` instead of the bare unit price (corrupted printed line totals, invoice detail and product-sales reports)
+- Quotation print validity now shows the actual expiry date (`date + validity days`)
+- `create_quotation` / `create_commercial_invoice` are transactional (no orphan headers on failure); unknown products fail loudly instead of defaulting to 1,000 cups
+- Factory expense summary gains an approval-status filter + per-row status badges
+- Fresh-install schema sync (`custody_txn_id`, `reimbursement_status`, `is_commercial`) with guarded migrations; version strings synced to 2.6.1
+
+### v2.2.0 — AI Any-File Import, Mobile PWA, REST API v3
 - AI-powered any-file import (PDF, images, Excel, Word) with provider-level configuration
 - New AI command modules: `ai_providers.rs`, `ai_file_import.rs`; extended `ai_assistant.rs`
 - New `ai_extractions` database table (migration 29) with commit, review, and duplicate-detection workflow

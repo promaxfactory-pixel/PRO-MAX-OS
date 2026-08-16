@@ -64,14 +64,18 @@ pub fn low_stock_report(state: State<'_, DbState>) -> Result<Vec<LowStockItem>, 
 pub fn customers_aging(state: State<'_, DbState>) -> Result<Vec<CustomerAgingItem>, AppError> {
     let conn = state.0.lock()?;
     let mut stmt = conn.prepare(
-        "SELECT c.id, c.name, COALESCE(SUM(si.total_milli - si.paid_milli), 0),
+        "SELECT c.id, c.name,
+                COALESCE(SUM(si.total_milli - si.paid_milli), 0)
+                    - COALESCE((SELECT SUM(cn.total_milli) FROM credit_notes cn WHERE cn.customer_id = c.id AND cn.status != 'Void'), 0),
                 CAST(julianday('now') - julianday(MAX(si.date)) AS INTEGER)
          FROM customers c
          LEFT JOIN sales_invoices si ON si.customer_id = c.id AND si.status IN ('Posted', 'Issued') AND si.total_milli > si.paid_milli
          WHERE c.active = 1
          GROUP BY c.id
-         HAVING COALESCE(SUM(si.total_milli - si.paid_milli), 0) > 0
-         ORDER BY SUM(si.total_milli - si.paid_milli) DESC"
+         HAVING COALESCE(SUM(si.total_milli - si.paid_milli), 0)
+                    - COALESCE((SELECT SUM(cn.total_milli) FROM credit_notes cn WHERE cn.customer_id = c.id AND cn.status != 'Void'), 0) > 0
+         ORDER BY (COALESCE(SUM(si.total_milli - si.paid_milli), 0)
+                    - COALESCE((SELECT SUM(cn.total_milli) FROM credit_notes cn WHERE cn.customer_id = c.id AND cn.status != 'Void'), 0)) DESC"
     )?;
     let items = stmt.query_map([], |r| {
         Ok(CustomerAgingItem {
@@ -136,10 +140,16 @@ pub fn production_report(state: State<'_, DbState>, date_from: String, date_to: 
 pub fn vat_return(state: State<'_, DbState>, year: i32, month: i32) -> Result<VatReturnData, AppError> {
     let conn = state.0.lock()?;
     let prefix = format!("{}-{:02}", year, month);
-    let sales_vat: i64 = conn.query_row(
+    let mut sales_vat: i64 = conn.query_row(
         "SELECT COALESCE(SUM(vat_milli), 0) FROM sales_invoices WHERE date LIKE ?1 AND status IN ('Posted', 'Issued')",
         params![format!("{}%", prefix)], |r| r.get(0),
     ).unwrap_or(0);
+    // Sales credit notes reduce the VAT payable for the period.
+    let credit_vat: i64 = conn.query_row(
+        "SELECT COALESCE(SUM(vat_milli), 0) FROM credit_notes WHERE date LIKE ?1 AND status != 'Void'",
+        params![format!("{}%", prefix)], |r| r.get(0),
+    ).unwrap_or(0);
+    sales_vat = (sales_vat - credit_vat).max(0);
     let purchase_vat: i64 = conn.query_row(
         "SELECT COALESCE(SUM(vat_milli), 0) FROM purchases WHERE date LIKE ?1 AND status = 'Posted'",
         params![format!("{}%", prefix)], |r| r.get(0),
@@ -160,8 +170,10 @@ pub fn daily_factory_closing(state: State<'_, DbState>, date: String) -> Result<
 #[tauri::command]
 pub fn owner_summary(state: State<'_, DbState>, date_from: String, date_to: String) -> Result<serde_json::Value, AppError> {
     let conn = state.0.lock()?;
+    // Revenue and expenses are both VAT-exclusive so the profit figure is
+    // consistent (VAT collected is remitted to the tax authority, not profit).
     let revenue: i64 = conn.query_row(
-        "SELECT COALESCE(SUM(total_milli), 0) FROM sales_invoices WHERE date >= ?1 AND date <= ?2 AND status IN ('Posted', 'Issued')",
+        "SELECT COALESCE(SUM(net_milli), 0) FROM sales_invoices WHERE date >= ?1 AND date <= ?2 AND status IN ('Posted', 'Issued')",
         params![date_from, date_to], |r| r.get(0),
     ).unwrap_or(0);
     let expenses: i64 = conn.query_row(
@@ -186,17 +198,20 @@ pub fn owner_summary(state: State<'_, DbState>, date_from: String, date_to: Stri
 pub fn inventory_margin_report(state: State<'_, DbState>) -> Result<serde_json::Value, AppError> {
     let conn = state.0.lock()?;
     let total_value: i64 = conn.query_row(
-        "SELECT COALESCE(SUM(CAST(qty_on_hand * avg_cost_milli AS INTEGER)), 0) FROM inventory_items",
+        "SELECT COALESCE(SUM(CAST(ii.qty_on_hand * COALESCE(ii.avg_cost_milli, 0) AS INTEGER)), 0) FROM inventory_items ii",
         [], |r| r.get(0),
     ).unwrap_or(0);
+    // Potential sales value uses each product's default selling price, falling
+    // back to the average cost when no selling price is configured.
     let total_sales_value: i64 = conn.query_row(
-        "SELECT COALESCE(SUM(CAST(qty_on_hand * avg_cost_milli AS INTEGER)), 0) FROM inventory_items",
+        "SELECT COALESCE(SUM(CAST(ii.qty_on_hand * COALESCE(p.default_price_milli, ii.avg_cost_milli, 0) AS INTEGER)), 0)
+         FROM inventory_items ii LEFT JOIN products p ON p.id = ii.product_id",
         [], |r| r.get(0),
     ).unwrap_or(0);
     Ok(serde_json::json!({
         "inventory_cost_milli": total_value,
         "inventory_sales_value_milli": total_sales_value,
-        "potential_margin_milli": total_sales_value - total_value,
+        "potential_margin_milli": (total_sales_value - total_value).max(0),
     }))
 }
 
@@ -226,10 +241,14 @@ pub fn sales_by_customer_report(state: State<'_, DbState>, date_from: String, da
 pub fn unpaid_invoices_report(state: State<'_, DbState>) -> Result<serde_json::Value, AppError> {
     let conn = state.0.lock()?;
     let mut stmt = conn.prepare(
-        "SELECT si.id, si.inv_no, c.name, si.date, si.total_milli, si.paid_milli, si.total_milli - si.paid_milli
+        "SELECT si.id, si.inv_no, c.name, si.date, si.total_milli, si.paid_milli,
+                si.total_milli - si.paid_milli
+                    - COALESCE((SELECT SUM(cn.total_milli) FROM credit_notes cn WHERE cn.invoice_id = si.id AND cn.status != 'Void'), 0)
          FROM sales_invoices si
          JOIN customers c ON c.id = si.customer_id
          WHERE si.total_milli > si.paid_milli AND si.status IN ('Posted', 'Issued')
+           AND si.total_milli - si.paid_milli
+                    - COALESCE((SELECT SUM(cn.total_milli) FROM credit_notes cn WHERE cn.invoice_id = si.id AND cn.status != 'Void'), 0) > 0
          ORDER BY si.date ASC"
     )?;
     let data: Vec<serde_json::Value> = stmt.query_map([], |r| {

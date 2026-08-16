@@ -253,7 +253,8 @@ CREATE TABLE IF NOT EXISTS sales_invoice_lines (
     discount_reason TEXT,
     line_net_milli INTEGER NOT NULL DEFAULT 0,
     vat_pct REAL NOT NULL DEFAULT 5.0,
-    vat_milli INTEGER NOT NULL DEFAULT 0
+    vat_milli INTEGER NOT NULL DEFAULT 0,
+    customs_price_milli INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS customer_payments (
@@ -1167,3 +1168,45 @@ CREATE INDEX IF NOT EXISTS idx_att_entity ON attachments(entity_type, entity_id)
 CREATE INDEX IF NOT EXISTS idx_mw_code ON multi_warehouse(code);
 CREATE INDEX IF NOT EXISTS idx_pf_code ON product_families(code);
 CREATE INDEX IF NOT EXISTS idx_wst_name ON worker_sheet_templates(name);
+
+-- Professional quotations (قوائم أسعار / عروض) with free-form client details
+-- and per-line cup specs, and commercial (non-tax) factory invoices
+CREATE TABLE IF NOT EXISTS quotations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    quote_no TEXT,
+    date TEXT NOT NULL,
+    customer_id INTEGER,
+    client_name TEXT,
+    client_contact TEXT,
+    client_phone TEXT,
+    client_email TEXT,
+    client_address TEXT,
+    title TEXT,
+    notes TEXT,
+    terms TEXT,
+    validity_days INTEGER DEFAULT 7,
+    net_milli INTEGER DEFAULT 0,
+    discount_milli INTEGER DEFAULT 0,
+    total_milli INTEGER DEFAULT 0,
+    currency TEXT DEFAULT 'OMR',
+    status TEXT DEFAULT 'Draft',
+    created_by TEXT,
+    created_at TEXT,
+    updated_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS quotation_lines (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    quote_id INTEGER NOT NULL REFERENCES quotations(id) ON DELETE CASCADE,
+    product_id INTEGER,
+    item_name TEXT,
+    cup_size TEXT,
+    cups_per_carton INTEGER DEFAULT 1000,
+    cartons REAL DEFAULT 0,
+    unit_price_milli INTEGER DEFAULT 0,
+    line_total_milli INTEGER DEFAULT 0,
+    notes TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_quotation_lines_quote ON quotation_lines(quote_id);
+CREATE INDEX IF NOT EXISTS idx_quotations_date ON quotations(date);

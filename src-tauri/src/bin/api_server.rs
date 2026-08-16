@@ -1222,7 +1222,7 @@ async fn serve_static(state: web::Data<AppState>, req: HttpRequest) -> HttpRespo
 async fn api_health() -> HttpResponse {
     HttpResponse::Ok().json(serde_json::json!({
         "status": "ok",
-        "version": "3.0.0",
+        "version": env!("CARGO_PKG_VERSION"),
         "name": "PRO MAX OS API",
         "timestamp": chrono::Utc::now().to_rfc3339(),
     }))
@@ -1247,7 +1247,7 @@ async fn main() -> std::io::Result<()> {
             "--expose" => { host = "0.0.0.0".to_string(); }
             "--mobile-dir" => { i += 1; if i < args.len() { mobile_dir = args[i].clone(); } }
             "--help" => {
-                println!("PRO MAX OS API Server v3.0.0");
+                println!("PRO MAX OS API Server v{}", env!("CARGO_PKG_VERSION"));
                 println!("Usage: promax-api [OPTIONS]");
                 println!("  --port, -p PORT     Port (default: 8080)");
                 println!("  --db-path PATH      Database path");
@@ -1273,7 +1273,7 @@ async fn main() -> std::io::Result<()> {
     let is_local = host == "127.0.0.1";
     let bind_addr = format!("{}:{}", host, port);
 
-    println!("PRO MAX OS API Server v3.0.0");
+    println!("PRO MAX OS API Server v{}", env!("CARGO_PKG_VERSION"));
     println!("Database: {}", db_path);
     println!("Listening on: http://{}", bind_addr);
     println!("Mobile PWA: {}", Path::new(&mobile_dir).canonicalize().unwrap_or_else(|_| PathBuf::from(&mobile_dir)).display());

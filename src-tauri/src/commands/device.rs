@@ -13,6 +13,14 @@ pub struct ScannerInfo {
     pub name: String,
 }
 
+/// Renders a value as a PowerShell single-quoted string literal. Single quotes
+/// are doubled (the PowerShell escape inside a single-quoted string), so the
+/// value can never break out of the literal — this is what makes the
+/// `-Command` interpolation below immune to command injection.
+pub(crate) fn ps_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "''"))
+}
+
 #[tauri::command]
 pub fn list_printers() -> Result<Vec<PrinterInfo>, AppError> {
     let ps = r#"
@@ -58,13 +66,14 @@ pub fn print_html(html: String, printer_name: Option<String>) -> Result<String, 
 
     let ps = match printer_name {
         Some(name) => format!(
-            r#"Start-Process -FilePath "msedge" -ArgumentList "--print-to-printer='{0}','{1}'" -NoNewWindow -Wait"#,
-            name.replace("'", "''"),
-            html_path.to_str().unwrap_or("")
+            r#"Start-Process -FilePath "msedge" -ArgumentList "--print-to-printer={0},{1}" -NoNewWindow -Wait"#,
+            ps_quote(&name),
+            ps_quote(html_path.to_str().unwrap_or(""))
         ),
         None => format!(
-            r#"Start-Process -FilePath "msedge" -ArgumentList "--print-to-printer='','{0}'" -NoNewWindow -Wait"#,
-            html_path.to_str().unwrap_or("")
+            r#"Start-Process -FilePath "msedge" -ArgumentList "--print-to-printer={0},{1}" -NoNewWindow -Wait"#,
+            ps_quote(""),
+            ps_quote(html_path.to_str().unwrap_or(""))
         ),
     };
 
@@ -104,9 +113,9 @@ pub fn print_thermal(
 
     let printer = printer_name.unwrap_or_default();
     let ps = format!(
-        r#"Get-Content -Path "{0}" -Encoding Byte | Out-Printer -Name "{1}" -Wait"#,
-        temp_file.to_str().unwrap_or(""),
-        printer
+        r#"Get-Content -Path {0} -Encoding Byte | Out-Printer -Name {1} -Wait"#,
+        ps_quote(temp_file.to_str().unwrap_or("")),
+        ps_quote(&printer)
     );
 
     Command::new("powershell")
@@ -181,13 +190,13 @@ pub fn scan_document(scanner_name: Option<String>, output_path: Option<String>) 
     });
 
     let name_filter = match &scanner_name {
-        Some(n) => format!("if ($deviceName -eq '{}') {{", n.replace("'", "''")),
+        Some(n) => format!("if ($deviceName -eq {}) {{", ps_quote(n)),
         None => "{".to_string(),
     };
 
     let ps = format!(
         r#"
-$outPath = '{0}'
+$outPath = {0}
 $wia = New-Object -ComObject WIA.DeviceManager 2>$null
 if (-not $wia) {{ Write-Error "لا يوجد ماسح ضوئي متصل"; exit 1 }}
 $found = $false
@@ -209,7 +218,7 @@ for ($i = 1; $i -le $wia.DeviceInfos.Count; $i++) {{
 if (-not $found) {{ Write-Error "لم يتم العثور على ماسح ضوئي"; exit 1 }}
 Write-Output "OK:$outPath"
 "#,
-        out_path.replace("'", "''"),
+        ps_quote(&out_path),
         name_filter,
     );
 

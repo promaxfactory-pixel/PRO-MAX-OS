@@ -103,8 +103,11 @@ pub fn create_barter_exchange(
     let carton_val = input.carton_value_milli.unwrap_or(0);
     let bags = input.bags_received.unwrap_or(0.0);
     let bag_val = input.bag_value_milli.unwrap_or(0);
-    let carton_total = (cartons * carton_val as f64) as i64;
-    let bag_total = (bags * bag_val as f64) as i64;
+    if cartons < 0.0 || carton_val < 0 || bags < 0.0 || bag_val < 0 {
+        return Err(AppError::validation("لا يمكن إدخال كميات أو قيم سالبة في المقايضة"));
+    }
+    let carton_total = (cartons * carton_val as f64).round() as i64;
+    let bag_total = (bags * bag_val as f64).round() as i64;
     let net_value = carton_total - bag_total;
 
     conn.execute(

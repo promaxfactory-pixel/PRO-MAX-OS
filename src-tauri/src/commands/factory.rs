@@ -177,6 +177,12 @@ fn quote_line_defaults(conn: &rusqlite::Connection, line: &CreateQuotationLineIn
 
 fn insert_quote_lines(conn: &rusqlite::Connection, quote_id: i64, lines: &[CreateQuotationLineInput]) -> Result<(), AppError> {
     for line in lines {
+        if line.cartons <= 0.0 {
+            return Err(AppError::validation("الكمية يجب أن تكون أكبر من صفر"));
+        }
+        if line.unit_price_milli < 0 {
+            return Err(AppError::validation("السعر لا يمكن أن يكون سالباً"));
+        }
         let (default_cpc, default_name) = quote_line_defaults(conn, line)?;
         let cpc = line.cups_per_carton.unwrap_or(default_cpc);
         let item_name = line.item_name.clone().unwrap_or(default_name);
@@ -401,6 +407,17 @@ pub fn create_commercial_invoice(state: State<'_, DbState>, user_id: i64, input:
 }
 
 pub(crate) fn create_commercial_invoice_inner(conn: &mut rusqlite::Connection, user_id: i64, input: &CreateCommercialInvoiceInput) -> Result<i64, AppError> {
+    if input.lines.is_empty() {
+        return Err(AppError::validation("أدخل بنداً واحداً على الأقل"));
+    }
+    for line in &input.lines {
+        if line.cartons <= 0.0 {
+            return Err(AppError::validation("الكمية يجب أن تكون أكبر من صفر"));
+        }
+        if line.unit_price_milli < 0 {
+            return Err(AppError::validation("السعر لا يمكن أن يكون سالباً"));
+        }
+    }
     let tx = conn.transaction()?;
     let now = chrono::Utc::now().format("%Y-%m-%d").to_string();
     let year = chrono::Utc::now().format("%Y").to_string();
@@ -887,5 +904,162 @@ mod tests {
             .unwrap();
         assert_eq!(queued, 0, "commercial invoices must never be enqueued for e-invoicing");
         cleanup(&db_path)
+    }
+
+    #[test]
+    fn commercial_invoice_validation_rejects_bad_input() {
+        let (db_path, mut conn) = setup();
+
+        let empty = CreateCommercialInvoiceInput {
+            customer_id: 1,
+            payment_type: None,
+            date: None,
+            notes: None,
+            lines: vec![],
+        };
+        let err = create_commercial_invoice_inner(&mut conn, 1, &empty).unwrap_err();
+        assert!(err.to_string().contains("بنداً واحداً"), "err = {}", err);
+
+        let zero_cartons = CreateCommercialInvoiceInput {
+            customer_id: 1,
+            payment_type: None,
+            date: None,
+            notes: None,
+            lines: vec![CreateCommercialInvoiceLineInput { product_id: 1, cartons: 0.0, unit_price_milli: 15000 }],
+        };
+        let err = create_commercial_invoice_inner(&mut conn, 1, &zero_cartons).unwrap_err();
+        assert!(err.to_string().contains("الكمية"), "err = {}", err);
+
+        let negative_cartons = CreateCommercialInvoiceInput {
+            customer_id: 1,
+            payment_type: None,
+            date: None,
+            notes: None,
+            lines: vec![CreateCommercialInvoiceLineInput { product_id: 1, cartons: -3.0, unit_price_milli: 15000 }],
+        };
+        let err = create_commercial_invoice_inner(&mut conn, 1, &negative_cartons).unwrap_err();
+        assert!(err.to_string().contains("الكمية"), "err = {}", err);
+
+        let negative_price = CreateCommercialInvoiceInput {
+            customer_id: 1,
+            payment_type: None,
+            date: None,
+            notes: None,
+            lines: vec![CreateCommercialInvoiceLineInput { product_id: 1, cartons: 10.0, unit_price_milli: -100 }],
+        };
+        let err = create_commercial_invoice_inner(&mut conn, 1, &negative_price).unwrap_err();
+        assert!(err.to_string().contains("السعر"), "err = {}", err);
+
+        assert!(list_commercial_invoices_inner(&conn).unwrap().is_empty(), "no invoice may be created by rejected input");
+        cleanup(&db_path);
+    }
+
+    #[test]
+    fn commercial_invoice_post_journal_and_stock_integration() {
+        let (db_path, mut conn) = setup();
+        conn.execute(
+            "INSERT INTO inventory_items(product_id, kind, qty_on_hand, avg_cost_milli) VALUES(?1,'main',1000,8000)",
+            [1],
+        )
+        .unwrap();
+
+        let input = CreateCommercialInvoiceInput {
+            customer_id: 1,
+            payment_type: Some("credit".to_string()),
+            date: Some("2026-08-16".to_string()),
+            notes: Some("فاتورة تجارية".to_string()),
+            lines: vec![CreateCommercialInvoiceLineInput { product_id: 1, cartons: 250.0, unit_price_milli: 15000 }],
+        };
+        let inv_id = create_commercial_invoice_inner(&mut conn, 1, &input).unwrap();
+        crate::commands::invoices::post_invoice_inner(&mut conn, 1, inv_id).expect("post commercial invoice");
+
+        let (status, net, vat, total, cogs, vat_enabled): (String, i64, i64, i64, i64, i64) = conn
+            .query_row(
+                "SELECT status, net_milli, vat_milli, total_milli, cogs_milli, vat_enabled FROM sales_invoices WHERE id=?1",
+                params![inv_id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)),
+            )
+            .unwrap();
+        assert_eq!(status, "Posted");
+        assert_eq!(vat_enabled, 0, "commercial invoices are non-VAT");
+        assert_eq!(net, 3_750_000);
+        assert_eq!(vat, 0);
+        assert_eq!(total, 3_750_000);
+        assert_eq!(cogs, 2_000_000, "250 cartons * 8000 avg cost");
+
+        // Journal: balanced, debits AR 1200 for total, credits revenue 4100 for net,
+        // moves inventory 5100/1400 for COGS, and has no VAT line.
+        let jid: i64 = conn.query_row("SELECT journal_id FROM sales_invoices WHERE id=?1", params![inv_id], |r| r.get(0)).unwrap();
+        let (d, c): (i64, i64) = conn
+            .query_row(
+                "SELECT SUM(debit_milli), SUM(credit_milli) FROM journal_entry_lines WHERE entry_id=?1",
+                params![jid],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert!(d > 0 && d == c, "journal must be balanced");
+        let ar_debit: i64 = conn
+            .query_row(
+                "SELECT SUM(debit_milli) FROM journal_entry_lines WHERE entry_id=?1 AND account_code='1200'",
+                params![jid],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(ar_debit, 3_750_000);
+        let revenue_credit: i64 = conn
+            .query_row(
+                "SELECT SUM(credit_milli) FROM journal_entry_lines WHERE entry_id=?1 AND account_code='4100'",
+                params![jid],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(revenue_credit, 3_750_000);
+        let vat_line: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM journal_entry_lines WHERE entry_id=?1 AND account_code='2100'",
+                params![jid],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(vat_line, 0);
+        let cogs_debit: i64 = conn
+            .query_row(
+                "SELECT SUM(debit_milli) FROM journal_entry_lines WHERE entry_id=?1 AND account_code='5100'",
+                params![jid],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(cogs_debit, 2_000_000);
+        let inv_credit: i64 = conn
+            .query_row(
+                "SELECT SUM(credit_milli) FROM journal_entry_lines WHERE entry_id=?1 AND account_code='1400'",
+                params![jid],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(inv_credit, 2_000_000);
+
+        // Customer AR balance raised (credit sale).
+        let bal: i64 = conn.query_row("SELECT balance_milli FROM customers WHERE id=?1", params![1], |r| r.get(0)).unwrap();
+        assert_eq!(bal, 3_750_000);
+
+        // Stock deducted and movement recorded.
+        let qty: f64 = conn.query_row("SELECT qty_on_hand FROM inventory_items WHERE product_id=?1", params![1], |r| r.get(0)).unwrap();
+        assert_eq!(qty, 750.0);
+        let sale_moves: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM inventory_movements WHERE ref_type='invoice' AND ref_id=?1",
+                params![inv_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(sale_moves, 1);
+
+        // Still not e-invoiced.
+        let queued: i64 = conn
+            .query_row("SELECT COUNT(*) FROM einvoice_queue WHERE invoice_id=?1", params![inv_id], |r| r.get(0))
+            .unwrap();
+        assert_eq!(queued, 0);
+        cleanup(&db_path);
     }
 }

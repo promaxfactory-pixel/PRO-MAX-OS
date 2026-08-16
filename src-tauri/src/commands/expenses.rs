@@ -133,11 +133,18 @@ pub(crate) fn expense_rows_in_range(
 
 #[tauri::command]
 pub fn create_expense(input: CreateExpenseInput, state: State<'_, DbState>, user_id: i64) -> Result<i64, AppError> {
-    let conn = state.0.lock()?;
+    let mut conn = state.0.lock()?;
     rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
-    let year: String = conn
+    if input.amount_milli <= 0 {
+        return Err(AppError::validation("المبلغ يجب أن يكون أكبر من صفر"));
+    }
+    if input.vat_milli.unwrap_or(0) < 0 {
+        return Err(AppError::validation("قيمة الضريبة لا يمكن أن تكون سالبة"));
+    }
+    let tx = conn.transaction()?;
+    let year: String = tx
         .query_row("SELECT substr(?1, 1, 4)", [&input.date], |row| row.get(0))?;
-    let next_num = next_sequence(&conn, "EXP", &year)?;
+    let next_num = next_sequence(&tx, "EXP", &year)?;
     let exp_no = format!("EXP-{}-{:04}", year, next_num);
 
     let source = input.paid_from_source.unwrap_or_else(|| "company".to_string());
@@ -147,7 +154,7 @@ pub fn create_expense(input: CreateExpenseInput, state: State<'_, DbState>, user
     // If paid from custody, create custody transaction and deduct balance
     if source == "custody" {
         if let Some(pid) = petty_id_val {
-        let current_balance: i64 = conn.query_row(
+        let current_balance: i64 = tx.query_row(
             "SELECT balance_milli FROM petty_cash_accounts WHERE id = ?1",
             [pid],
             |row| row.get(0),
@@ -156,13 +163,13 @@ pub fn create_expense(input: CreateExpenseInput, state: State<'_, DbState>, user
             return Err(AppError::validation("رصيد العهده غير كافٍ"));
         }
         let new_balance = current_balance - input.amount_milli;
-        conn.execute("UPDATE petty_cash_accounts SET balance_milli = ?1 WHERE id = ?2", [new_balance, pid])?;
-        conn.execute(
+        tx.execute("UPDATE petty_cash_accounts SET balance_milli = ?1 WHERE id = ?2", [new_balance, pid])?;
+        tx.execute(
             "INSERT INTO petty_cash_transactions (ts, petty_id, ttype, debit_milli, credit_milli, balance_milli, category, reference, notes)
              VALUES (datetime('now'), ?1, 'Spend', 0, ?2, ?3, ?4, ?5, ?6)",
             rusqlite::params![pid, input.amount_milli, new_balance, input.category, input.reference, input.notes],
         )?;
-        let _ = rbac::log_audit(&conn, None, None, "custody_spend_for_expense", "petty_cash_accounts", Some(pid), None, Some(&format!("expense amount:{}", input.amount_milli)), None);
+        let _ = rbac::log_audit(&tx, None, None, "custody_spend_for_expense", "petty_cash_accounts", Some(pid), None, Some(&format!("expense amount:{}", input.amount_milli)), None);
         }
     }
 
@@ -171,7 +178,7 @@ pub fn create_expense(input: CreateExpenseInput, state: State<'_, DbState>, user
         reimbursement = "pending".to_string();
     }
 
-    conn.execute(
+    tx.execute(
         "INSERT INTO expenses(exp_no, date, category, account_code, amount_milli, vat_milli, method, vendor, reference, notes, approval_status,
          paid_by_employee_id, paid_from_source, petty_id, reimbursement_status)
          VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'pending', ?11, ?12, ?13, ?14)",
@@ -181,8 +188,9 @@ pub fn create_expense(input: CreateExpenseInput, state: State<'_, DbState>, user
             input.paid_by_employee_id, source, petty_id_val, reimbursement,
         ],
     )?;
-    let exp_id = conn.last_insert_rowid();
-    let _ = rbac::log_audit(&conn, None, None, "create_expense", "expenses", Some(exp_id), None, Some(&input.notes.unwrap_or_default()), None);
+    let exp_id = tx.last_insert_rowid();
+    let _ = rbac::log_audit(&tx, None, None, "create_expense", "expenses", Some(exp_id), None, Some(&input.notes.unwrap_or_default()), None);
+    tx.commit()?;
     Ok(exp_id)
 }
 

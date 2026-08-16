@@ -24,7 +24,7 @@ interface LineForm {
 }
 
 const emptyLine = (key: number): LineForm => ({
-  key, product_id: null, item_name: "", cup_size: "", cups_per_carton: "", cartons: "100", unit_price_milli: 0,
+  key, product_id: null, item_name: "", cup_size: "", cups_per_carton: "", cartons: "", unit_price_milli: 0,
 });
 
 const STATUSES = ["Draft", "Sent", "Accepted", "Rejected"];
@@ -238,9 +238,9 @@ export default function QuotationsPage() {
     { key: "created_by", header: "المعد", render: (r) => r.created_by || "—" },
     { key: "actions", header: "إجراءات", align: "center", render: (r) => (
       <div className="flex items-center justify-center gap-1">
-        <button onClick={(e) => { e.stopPropagation(); handlePrint(r); }} disabled={printLoading} className="p-1.5 rounded-lg text-surface-400 hover:text-brand-300 hover:bg-surface-800/50 transition-all" title="طباعة"><Printer className="w-4 h-4" /></button>
-        <button onClick={(e) => { e.stopPropagation(); openEdit(r); }} className="p-1.5 rounded-lg text-surface-400 hover:text-amber-300 hover:bg-surface-800/50 transition-all" title="تعديل"><Pencil className="w-4 h-4" /></button>
-        <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(r); }} className="p-1.5 rounded-lg text-surface-400 hover:text-red-400 hover:bg-surface-800/50 transition-all" title="حذف"><Trash2 className="w-4 h-4" /></button>
+        <button onClick={(e) => { e.stopPropagation(); handlePrint(r); }} disabled={printLoading} aria-label="طباعة" className="p-1.5 rounded-lg text-surface-400 hover:text-brand-300 hover:bg-surface-800/50 transition-all" title="طباعة"><Printer className="w-4 h-4" /></button>
+        <button onClick={(e) => { e.stopPropagation(); openEdit(r); }} aria-label="تعديل" className="p-1.5 rounded-lg text-surface-400 hover:text-amber-300 hover:bg-surface-800/50 transition-all" title="تعديل"><Pencil className="w-4 h-4" /></button>
+        <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(r); }} aria-label="حذف" className="p-1.5 rounded-lg text-surface-400 hover:text-red-400 hover:bg-surface-800/50 transition-all" title="حذف"><Trash2 className="w-4 h-4" /></button>
       </div>
     )},
   ], [printLoading]);
@@ -350,7 +350,7 @@ export default function QuotationsPage() {
                       <td className="px-2 py-2 text-center"><input type="number" min={0} step={0.001} className="input-field text-sm w-28 text-center" value={l.unit_price_milli ? (l.unit_price_milli / 1000) : ""} onChange={(e) => updateLine(l.key, { unit_price_milli: omrToMilli(Number(e.target.value) || 0) })} placeholder="0.000" aria-label="سعر الكرتون بالريال" /></td>
                       <td className="px-2 py-2 text-center font-mono font-bold text-gold-400">{formatOMR((Number(l.cartons) || 0) * (l.unit_price_milli || 0))}</td>
                       <td className="px-2 py-2 text-center">
-                        <button onClick={() => removeLine(l.key)} className="p-1.5 rounded-lg text-surface-400 hover:text-red-400 transition-all" title="حذف البند"><Trash2 className="w-4 h-4" /></button>
+                        <button onClick={() => removeLine(l.key)} aria-label="حذف البند" className="p-1.5 rounded-lg text-surface-400 hover:text-red-400 transition-all" title="حذف البند"><Trash2 className="w-4 h-4" /></button>
                       </td>
                     </tr>
                   ))}

@@ -120,6 +120,19 @@ fn xml_escape(s: &str) -> String {
         .replace('\'', "&apos;")
 }
 
+/// Renders a billed quantity with up to 3 decimal places, trimming trailing
+/// zeros (2.0 -> "2", 2.5 -> "2.5") so fractional cartons are not silently
+/// rounded away in the e-invoice XML.
+fn format_quantity(qty: f64) -> String {
+    let s = format!("{:.3}", qty);
+    let s = s.trim_end_matches('0').trim_end_matches('.');
+    if s.is_empty() || s == "-0" {
+        "0".to_string()
+    } else {
+        s.to_string()
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn generate_pint_om_xml(
     inv_no: &str,
@@ -198,7 +211,7 @@ pub(crate) fn generate_pint_om_xml(
         xml.push_str(&format!("        <ram:NetPriceAmount currencyID=\"{}\">{:.3}</ram:NetPriceAmount>\n", xml_escape(currency), price));
         xml.push_str("      </ram:SpecifiedLineTradeAgreement>\n");
         xml.push_str("      <ram:SpecifiedLineTradeDelivery>\n");
-        xml.push_str(&format!("        <ram:BilledQuantity unitCode=\"C62\">{:.0}</ram:BilledQuantity>\n", qty));
+        xml.push_str(&format!("        <ram:BilledQuantity unitCode=\"C62\">{}</ram:BilledQuantity>\n", format_quantity(*qty)));
         xml.push_str("      </ram:SpecifiedLineTradeDelivery>\n");
         xml.push_str("      <ram:SpecifiedLineTradeSettlement>\n");
         xml.push_str("        <ram:ApplicableTradeTax>\n");

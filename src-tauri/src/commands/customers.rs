@@ -182,7 +182,16 @@ pub fn create_customer_payment(
 ) -> Result<i64, AppError> {
     let mut conn = state.0.lock()?;
     rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
+    if input.amount_milli <= 0 {
+        return Err(AppError::validation("المبلغ يجب أن يكون أكبر من صفر"));
+    }
     let tx = conn.transaction()?;
+
+    let customer_exists: i64 = tx
+        .query_row("SELECT COUNT(*) FROM customers WHERE id=?1", [customer_id], |r| r.get(0))?;
+    if customer_exists == 0 {
+        return Err(AppError::not_found("العميل غير موجود"));
+    }
 
     let year = chrono::Utc::now().format("%Y").to_string();
     let seq = next_sequence(&tx, "RCP", &year)?;

@@ -578,10 +578,6 @@ fn commit_invoice(conn: &rusqlite::Connection, parsed: &Value) -> Result<AiCommi
         let vat_amt = num_field(it, "vat").unwrap_or(0.0);
         vat += (vat_amt * 1000.0).round() as i64;
     }
-    let fields_total = milli_from(num_field(&fields, "total"));
-    let fields_vat = milli_from(num_field(&fields, "vat"));
-    if fields_total > 0 { net = net.saturating_sub(fields_vat); }
-    if fields_total > 0 { net = fields_total.saturating_sub(vat); }
 
     conn.execute(
         "INSERT INTO sales_invoices(inv_no, date, customer_id, payment_type, vat_enabled, net_milli, vat_milli, total_milli, status, notes, created_by)

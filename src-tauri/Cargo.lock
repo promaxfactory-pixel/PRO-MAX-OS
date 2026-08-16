@@ -3833,7 +3833,7 @@ dependencies = [
 
 [[package]]
 name = "promax-os"
-version = "2.6.1"
+version = "2.6.2"
 dependencies = [
  "actix-cors",
  "actix-rt",
