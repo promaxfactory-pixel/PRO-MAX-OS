@@ -22,7 +22,7 @@ param(
   [switch]$SkipUpload
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $tauriDir = Join-Path $root "src-tauri"
 $envFile = Join-Path $PSScriptRoot ".env.release.local"
@@ -52,9 +52,9 @@ Write-Host "Signing key loaded (rsign, minisign-compatible pubkey)."
 # ---- 2. Version consistency ------------------------------------------------
 Step "2/9 Version consistency"
 $check = @{
-  package.json    = ((Get-Content (Join-Path $root "package.json") -Raw | ConvertFrom-Json).version)
-  Cargo.toml      = (Select-String (Join-Path $tauriDir "Cargo.toml") "^version\s*=\s*`"([^`"]+)`"").Matches[0].Groups[1].Value
-  tauri.conf.json = (Get-Content (Join-Path $tauriDir "tauri.conf.json") -Raw | ConvertFrom-Json).version
+  "package.json"    = ((Get-Content (Join-Path $root "package.json") -Raw | ConvertFrom-Json).version)
+  "Cargo.toml"      = (Select-String -Path (Join-Path $tauriDir "Cargo.toml") -Pattern "^version\s*=\s*`"([^`"]+)`"").Matches[0].Groups[1].Value
+  "tauri.conf.json" = (Get-Content (Join-Path $tauriDir "tauri.conf.json") -Raw | ConvertFrom-Json).version
 }
 foreach ($k in $check.Keys) { if ($check[$k] -ne $Version) { Die "Version mismatch: $k is $($check[$k]), expected $Version" } }
 Write-Host "Versions consistent ($Version)."
@@ -101,7 +101,7 @@ Step "5/9 Verify updater signatures"
 Push-Location $tauriDir
 try {
   foreach ($pair in @(@($setup, $setupSig), @($msi, $msiSig))) {
-    $out = cargo run --example verify_updater_sig -- $pair[0] $pair[1] $pubKeyPath 2>&1
+    $out = cargo run --example verify_updater_sig -- $pair[0] $pair[1] $pubKeyPath 2>&1 | Out-String
     if ($out -notmatch "SIG_VERIFY_OK") { Die "Signature verification failed for $($pair[1])" }
     Write-Host "OK $($pair[1])"
   }

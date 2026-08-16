@@ -1,0 +1,11 @@
+﻿{
+    "platforms":  {
+                      "windows-x86_64":  {
+                                             "signature":  "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTd1E5MGNWQy9HQXl5MTVUVSswVXpyNzh2ek5QcnJJK2Rxc3djblBUZnd3dzVmaGRxUlRaZ2VnbXZkZnBEdUp1Vm8zTVptMTUyOVdwaXRPOFE5MXRCcmVaV0Jad3o2RHdjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg2ODkxNzY3CWZpbGU6UFJPIE1BWCBPU18yLjYuNF94NjQtc2V0dXAuZXhlCkQzb0tGbndmdVl4ZFZHYTZMd1c0TU5HNFVNaXFYREtlWjdVTUhBVjI5K1ZxaUlBY3A2TEYyZ0U3em93R3NJMEFWVzl6RVBBTUYyR1J3anlpdWhtUkN3PT0K",
+                                             "url":  "https://github.com/promaxfactory-pixel/PRO-MAX-OS/releases/download/v2.6.4/PRO.MAX.OS_2.6.4_x64-setup.exe"
+                                         }
+                  },
+    "pub_date":  "2026-08-16T14:55:01Z",
+    "version":  "2.6.4",
+    "notes":  "PRO MAX OS 2.6.4 - see CHANGELOG.md for details."
+}
