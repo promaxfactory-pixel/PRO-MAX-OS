@@ -1,6 +1,7 @@
 use crate::commands::rbac;
 use crate::db::{next_sequence, DbState};
 use crate::error::AppError;
+use chrono::{Datelike, NaiveDate};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -61,6 +62,28 @@ pub struct IncomeStatementRow {
     pub balance_milli: i64,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BalanceSheet {
+    pub assets: Vec<BalanceSheetRow>,
+    pub liabilities: Vec<BalanceSheetRow>,
+    pub equity: Vec<BalanceSheetRow>,
+    pub current_period_earnings_milli: i64,
+    pub total_assets_milli: i64,
+    pub total_liabilities_milli: i64,
+    pub total_equity_milli: i64,
+    pub total_liabilities_equity_milli: i64,
+    pub out_of_balance_milli: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct IncomeStatement {
+    pub revenue: Vec<IncomeStatementRow>,
+    pub expenses: Vec<IncomeStatementRow>,
+    pub total_revenue_milli: i64,
+    pub total_expenses_milli: i64,
+    pub net_income_milli: i64,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct CreateAccountInput {
     pub code: String,
@@ -68,7 +91,8 @@ pub struct CreateAccountInput {
     pub name_en: Option<String>,
     pub r#type: String,
     pub parent: Option<String>,
-    pub is_system: Option<i64>,
+    #[serde(rename = "is_system")]
+    pub _is_system: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -131,19 +155,45 @@ pub fn get_account(state: State<'_, DbState>, code: String) -> Result<Account, A
 pub fn create_account(state: State<'_, DbState>, user_id: i64, input: CreateAccountInput) -> Result<String, AppError> {
     let conn = state.0.lock()?;
     rbac::require_role(&conn, user_id, &["admin", "accountant"])?;
+    let code = input.code.trim().to_string();
+    if code.is_empty() || code.len() > 30 || !code.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')) {
+        return Err(AppError::validation("رمز الحساب غير صالح"));
+    }
+    if input.name_ar.as_deref().unwrap_or_default().trim().is_empty()
+        && input.name_en.as_deref().unwrap_or_default().trim().is_empty()
+    {
+        return Err(AppError::validation("اسم الحساب مطلوب"));
+    }
+    let account_type = input.r#type.trim().to_ascii_lowercase();
+    if !matches!(account_type.as_str(), "asset" | "liability" | "equity" | "revenue" | "expense") {
+        return Err(AppError::validation("نوع الحساب المحاسبي غير صالح"));
+    }
+    if let Some(parent) = input.parent.as_deref().map(str::trim).filter(|p| !p.is_empty()) {
+        if parent == code.as_str() {
+            return Err(AppError::validation("لا يمكن أن يكون الحساب أصلًا لنفسه"));
+        }
+        let parent_exists: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM accounts WHERE code=?1",
+            [parent],
+            |row| row.get(0),
+        )?;
+        if parent_exists == 0 {
+            return Err(AppError::validation("الحساب الأب غير موجود"));
+        }
+    }
     conn.execute(
         "INSERT INTO accounts(code, name_ar, name_en, type, parent, is_system) VALUES(?,?,?,?,?,?)",
         rusqlite::params![
-            input.code,
+            code,
             input.name_ar,
             input.name_en,
-            input.r#type,
+            account_type,
             input.parent,
-            input.is_system.unwrap_or(0),
+            0,
         ],
     )?;
-    let _ = rbac::log_audit(&conn, Some(user_id), None, "create_account", "accounts", None, None, Some(&input.code), None);
-    Ok(input.code)
+    let _ = rbac::log_audit(&conn, Some(user_id), None, "create_account", "accounts", None, None, Some(&code), None);
+    Ok(code)
 }
 
 #[tauri::command]
@@ -219,13 +269,42 @@ pub(crate) fn post_to_journal(
     lines: &[(String, i64, i64, Option<String>)],
     created_by: &str,
 ) -> Result<i64, AppError> {
-    let year = chrono::Utc::now().format("%Y").to_string();
+    let date_part = date
+        .get(..10)
+        .ok_or_else(|| AppError::validation("تاريخ القيد يجب أن يكون تاريخًا صحيحًا بصيغة YYYY-MM-DD"))?;
+    let document_date = NaiveDate::parse_from_str(date_part, "%Y-%m-%d")
+        .map_err(|_| AppError::validation("تاريخ القيد يجب أن يكون تاريخًا صحيحًا بصيغة YYYY-MM-DD"))?;
+    let journal_date = document_date.format("%Y-%m-%d").to_string();
+    let year = document_date.year().to_string();
 
-    let seq = next_sequence(conn, "JE", &year)?;
-    let entry_no = format!("JE-{}-{:04}", year, seq);
+    if ref_type.trim().is_empty() {
+        return Err(AppError::validation("نوع مرجع القيد مطلوب"));
+    }
+    if lines.len() < 2 {
+        return Err(AppError::validation("يجب أن يحتوي القيد على سطرين محاسبيين على الأقل"));
+    }
 
-    let total_debit: i64 = lines.iter().map(|l| l.1).sum();
-    let total_credit: i64 = lines.iter().map(|l| l.2).sum();
+    let mut total_debit = 0_i64;
+    let mut total_credit = 0_i64;
+    for (account_code, debit_milli, credit_milli, _) in lines {
+        if account_code.trim().is_empty() {
+            return Err(AppError::validation("رمز الحساب مطلوب لكل سطر قيد"));
+        }
+        if *debit_milli < 0 || *credit_milli < 0 {
+            return Err(AppError::validation("لا يسمح بقيم سالبة في سطور القيود"));
+        }
+        if (*debit_milli > 0) == (*credit_milli > 0) {
+            return Err(AppError::validation(
+                "يجب أن يكون كل سطر مدينًا أو دائنًا فقط وبقيمة أكبر من صفر",
+            ));
+        }
+        total_debit = total_debit
+            .checked_add(*debit_milli)
+            .ok_or_else(|| AppError::validation("إجمالي المدين يتجاوز الحد المسموح"))?;
+        total_credit = total_credit
+            .checked_add(*credit_milli)
+            .ok_or_else(|| AppError::validation("إجمالي الدائن يتجاوز الحد المسموح"))?;
+    }
     if total_debit != total_credit {
         return Err(AppError::validation("يجب أن يتساوى مجموع المدين مع مجموع الدائن"));
     }
@@ -242,20 +321,42 @@ pub(crate) fn post_to_journal(
         }
     }
 
-    conn.execute(
-        "INSERT INTO journal_entries(entry_no, date, memo, ref_type, ref_id, created_by) VALUES(?,?,?,?,?,?)",
-        rusqlite::params![entry_no, date, memo, ref_type, ref_id, created_by],
-    )?;
-    let entry_id = conn.last_insert_rowid();
-
-    for (account_code, debit_milli, credit_milli, line_memo) in lines {
+    // SAVEPOINT works both on a bare connection and inside a caller-owned
+    // transaction. Sequence allocation, header and every line therefore form
+    // one atomic unit without committing the caller's wider business document.
+    let savepoint = format!("journal_{}", uuid::Uuid::new_v4().simple());
+    conn.execute_batch(&format!("SAVEPOINT {savepoint}"))?;
+    let result = (|| -> Result<i64, AppError> {
+        let seq = next_sequence(conn, "JE", &year)?;
+        let entry_no = format!("JE-{}-{:04}", year, seq);
         conn.execute(
-            "INSERT INTO journal_entry_lines(entry_id, account_code, debit_milli, credit_milli, memo) VALUES(?,?,?,?,?)",
-            rusqlite::params![entry_id, account_code, debit_milli, credit_milli, line_memo],
+            "INSERT INTO journal_entries(entry_no, date, memo, ref_type, ref_id, created_by) VALUES(?,?,?,?,?,?)",
+            rusqlite::params![entry_no, journal_date, memo, ref_type, ref_id, created_by],
         )?;
-    }
+        let entry_id = conn.last_insert_rowid();
 
-    Ok(entry_id)
+        for (account_code, debit_milli, credit_milli, line_memo) in lines {
+            conn.execute(
+                "INSERT INTO journal_entry_lines(entry_id, account_code, debit_milli, credit_milli, memo) VALUES(?,?,?,?,?)",
+                rusqlite::params![entry_id, account_code, debit_milli, credit_milli, line_memo],
+            )?;
+        }
+
+        Ok(entry_id)
+    })();
+
+    match result {
+        Ok(entry_id) => {
+            conn.execute_batch(&format!("RELEASE SAVEPOINT {savepoint}"))?;
+            Ok(entry_id)
+        }
+        Err(error) => {
+            let _ = conn.execute_batch(&format!(
+                "ROLLBACK TO SAVEPOINT {savepoint}; RELEASE SAVEPOINT {savepoint};"
+            ));
+            Err(error)
+        }
+    }
 }
 
 pub(crate) fn resolve_cash_account(
@@ -295,7 +396,7 @@ pub(crate) fn resolve_cash_account(
 pub fn get_trial_balance(state: State<'_, DbState>) -> Result<Vec<TrialBalanceRow>, AppError> {
     let conn = state.0.lock()?;
     let mut stmt = conn.prepare(
-        "SELECT a.code, a.name_ar, COALESCE(SUM(jel.debit_milli),0) as total_debit, COALESCE(SUM(jel.credit_milli),0) as total_credit FROM accounts a LEFT JOIN journal_entry_lines jel ON a.code=jel.account_code GROUP BY a.code HAVING total_debit != 0 OR total_credit != 0 ORDER BY a.code",
+        "SELECT a.code, COALESCE(a.name_ar, a.name_en, a.code), COALESCE(SUM(jel.debit_milli),0) as total_debit, COALESCE(SUM(jel.credit_milli),0) as total_credit FROM accounts a LEFT JOIN journal_entry_lines jel ON a.code=jel.account_code GROUP BY a.code HAVING total_debit != 0 OR total_credit != 0 ORDER BY a.code",
     )?;
     let rows = stmt.query_map([], |row| {
         Ok(TrialBalanceRow {
@@ -308,11 +409,23 @@ pub fn get_trial_balance(state: State<'_, DbState>) -> Result<Vec<TrialBalanceRo
     rows.collect::<Result<Vec<_>, _>>().map_err(AppError::from)
 }
 
-#[tauri::command]
-pub fn get_balance_sheet(state: State<'_, DbState>) -> Result<Vec<BalanceSheetRow>, AppError> {
-    let conn = state.0.lock()?;
+pub(crate) fn build_balance_sheet(conn: &rusqlite::Connection) -> Result<BalanceSheet, AppError> {
     let mut stmt = conn.prepare(
-        "SELECT a.type, a.code, a.name_ar, COALESCE(SUM(jel.debit_milli),0) - COALESCE(SUM(jel.credit_milli),0) as balance FROM accounts a LEFT JOIN journal_entry_lines jel ON a.code=jel.account_code WHERE a.type IN ('Asset','Liability','Equity') GROUP BY a.code ORDER BY a.type, a.code",
+        "SELECT CASE LOWER(a.type)
+                    WHEN 'asset' THEN 'Asset'
+                    WHEN 'liability' THEN 'Liability'
+                    ELSE 'Equity'
+                END,
+                a.code, COALESCE(a.name_ar, a.name_en, a.code),
+                CASE WHEN LOWER(a.type) = 'asset'
+                     THEN COALESCE(SUM(jel.debit_milli),0) - COALESCE(SUM(jel.credit_milli),0)
+                     ELSE COALESCE(SUM(jel.credit_milli),0) - COALESCE(SUM(jel.debit_milli),0)
+                END AS balance
+         FROM accounts a
+         LEFT JOIN journal_entry_lines jel ON a.code=jel.account_code
+         WHERE LOWER(a.type) IN ('asset','liability','equity')
+         GROUP BY a.type, a.code
+         ORDER BY a.type, a.code",
     )?;
     let rows = stmt.query_map([], |row| {
         Ok(BalanceSheetRow {
@@ -322,14 +435,62 @@ pub fn get_balance_sheet(state: State<'_, DbState>) -> Result<Vec<BalanceSheetRo
             balance_milli: row.get(3)?,
         })
     })?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(AppError::from)
+    let rows = rows.collect::<Result<Vec<_>, _>>()?;
+    let mut assets = Vec::new();
+    let mut liabilities = Vec::new();
+    let mut equity = Vec::new();
+    for row in rows {
+        match row.r#type.as_str() {
+            "Asset" => assets.push(row),
+            "Liability" => liabilities.push(row),
+            "Equity" => equity.push(row),
+            _ => {}
+        }
+    }
+
+    let income = build_income_statement(conn)?;
+    let current_period_earnings_milli = income.net_income_milli;
+    let total_assets_milli = assets.iter().map(|r| r.balance_milli).sum();
+    let total_liabilities_milli = liabilities.iter().map(|r| r.balance_milli).sum();
+    let total_equity_milli = equity.iter().map(|r| r.balance_milli).sum::<i64>()
+        + current_period_earnings_milli;
+    let total_liabilities_equity_milli = total_liabilities_milli + total_equity_milli;
+
+    Ok(BalanceSheet {
+        assets,
+        liabilities,
+        equity,
+        current_period_earnings_milli,
+        total_assets_milli,
+        total_liabilities_milli,
+        total_equity_milli,
+        total_liabilities_equity_milli,
+        out_of_balance_milli: total_assets_milli - total_liabilities_equity_milli,
+    })
 }
 
 #[tauri::command]
-pub fn get_income_statement(state: State<'_, DbState>) -> Result<Vec<IncomeStatementRow>, AppError> {
+pub fn get_balance_sheet(state: State<'_, DbState>) -> Result<BalanceSheet, AppError> {
     let conn = state.0.lock()?;
+    build_balance_sheet(&conn)
+}
+
+pub(crate) fn build_income_statement(conn: &rusqlite::Connection) -> Result<IncomeStatement, AppError> {
     let mut stmt = conn.prepare(
-        "SELECT a.type, a.code, a.name_ar, COALESCE(SUM(jel.credit_milli),0) - COALESCE(SUM(jel.debit_milli),0) as balance FROM accounts a LEFT JOIN journal_entry_lines jel ON a.code=jel.account_code WHERE a.type IN ('Revenue','Expense') GROUP BY a.code ORDER BY a.type, a.code",
+        "SELECT CASE LOWER(a.type)
+                    WHEN 'revenue' THEN 'Revenue'
+                    ELSE 'Expense'
+                END,
+                a.code, COALESCE(a.name_ar, a.name_en, a.code),
+                CASE WHEN LOWER(a.type) = 'revenue'
+                     THEN COALESCE(SUM(jel.credit_milli),0) - COALESCE(SUM(jel.debit_milli),0)
+                     ELSE COALESCE(SUM(jel.debit_milli),0) - COALESCE(SUM(jel.credit_milli),0)
+                END AS balance
+         FROM accounts a
+         LEFT JOIN journal_entry_lines jel ON a.code=jel.account_code
+         WHERE LOWER(a.type) IN ('revenue','expense')
+         GROUP BY a.type, a.code
+         ORDER BY a.type, a.code",
     )?;
     let rows = stmt.query_map([], |row| {
         Ok(IncomeStatementRow {
@@ -339,5 +500,227 @@ pub fn get_income_statement(state: State<'_, DbState>) -> Result<Vec<IncomeState
             balance_milli: row.get(3)?,
         })
     })?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(AppError::from)
+    let rows = rows.collect::<Result<Vec<_>, _>>()?;
+    let mut revenue = Vec::new();
+    let mut expenses = Vec::new();
+    for row in rows {
+        match row.r#type.as_str() {
+            "Revenue" => revenue.push(row),
+            "Expense" => expenses.push(row),
+            _ => {}
+        }
+    }
+    let total_revenue_milli = revenue.iter().map(|r| r.balance_milli).sum();
+    let total_expenses_milli = expenses.iter().map(|r| r.balance_milli).sum();
+    Ok(IncomeStatement {
+        revenue,
+        expenses,
+        total_revenue_milli,
+        total_expenses_milli,
+        net_income_milli: total_revenue_milli - total_expenses_milli,
+    })
+}
+
+#[tauri::command]
+pub fn get_income_statement(state: State<'_, DbState>) -> Result<IncomeStatement, AppError> {
+    let conn = state.0.lock()?;
+    build_income_statement(&conn)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::Connection;
+
+    fn accounting_connection() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "PRAGMA foreign_keys = ON;
+             CREATE TABLE doc_sequences (
+                doc_type TEXT NOT NULL,
+                year INTEGER NOT NULL,
+                last_number INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (doc_type, year)
+             );
+             CREATE TABLE accounts (
+                code TEXT PRIMARY KEY,
+                name_ar TEXT,
+                name_en TEXT,
+                type TEXT NOT NULL,
+                parent TEXT,
+                is_system INTEGER NOT NULL DEFAULT 0
+             );
+             CREATE TABLE journal_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                entry_no TEXT,
+                date TEXT NOT NULL,
+                memo TEXT,
+                ref_type TEXT,
+                ref_id INTEGER,
+                created_by TEXT,
+                created_at TEXT,
+                reversed_by INTEGER
+             );
+             CREATE TABLE journal_entry_lines (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                entry_id INTEGER NOT NULL REFERENCES journal_entries(id),
+                account_code TEXT NOT NULL REFERENCES accounts(code),
+                debit_milli INTEGER NOT NULL DEFAULT 0,
+                credit_milli INTEGER NOT NULL DEFAULT 0,
+                memo TEXT
+             );
+             INSERT INTO accounts(code, name_ar, name_en, type) VALUES
+                ('1100', 'النقدية', 'Cash', 'Asset'),
+                ('3000', 'رأس المال', 'Capital', 'Equity'),
+                ('4100', 'المبيعات', 'Sales', 'Revenue'),
+                ('5200', 'المصروفات', 'Expenses', 'Expense');",
+        )
+        .unwrap();
+        conn
+    }
+
+    #[test]
+    fn journal_number_uses_document_date_year() {
+        let conn = accounting_connection();
+        let lines = vec![
+            ("1100".to_string(), 1_000, 0, None),
+            ("3000".to_string(), 0, 1_000, None),
+        ];
+        let id = post_to_journal(
+            &conn,
+            "opening_balance",
+            1,
+            "2031-01-02",
+            "Opening balance",
+            &lines,
+            "test",
+        )
+        .unwrap();
+        let entry_no: String = conn
+            .query_row(
+                "SELECT entry_no FROM journal_entries WHERE id=?1",
+                [id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(entry_no, "JE-2031-0001");
+    }
+
+    #[test]
+    fn journal_header_sequence_and_lines_roll_back_together() {
+        let conn = accounting_connection();
+        conn.execute_batch(
+            "CREATE TRIGGER fail_capital_line
+             BEFORE INSERT ON journal_entry_lines
+             WHEN NEW.account_code = '3000'
+             BEGIN
+               SELECT RAISE(ABORT, 'simulated line failure');
+             END;",
+        )
+        .unwrap();
+        let lines = vec![
+            ("1100".to_string(), 1_000, 0, None),
+            ("3000".to_string(), 0, 1_000, None),
+        ];
+
+        assert!(post_to_journal(
+            &conn,
+            "test_atomicity",
+            9,
+            "2029-06-01",
+            "Must roll back",
+            &lines,
+            "test",
+        )
+        .is_err());
+
+        let entries: i64 = conn
+            .query_row("SELECT COUNT(*) FROM journal_entries", [], |row| row.get(0))
+            .unwrap();
+        let lines: i64 = conn
+            .query_row("SELECT COUNT(*) FROM journal_entry_lines", [], |row| row.get(0))
+            .unwrap();
+        let sequences: i64 = conn
+            .query_row("SELECT COUNT(*) FROM doc_sequences", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!((entries, lines, sequences), (0, 0, 0));
+    }
+
+    #[test]
+    fn journal_rejects_invalid_line_shapes() {
+        let conn = accounting_connection();
+        let both_sides = vec![
+            ("1100".to_string(), 1_000, 1_000, None),
+            ("3000".to_string(), 1_000, 1_000, None),
+        ];
+        assert!(post_to_journal(
+            &conn,
+            "manual",
+            0,
+            "2029-06-01",
+            "Invalid",
+            &both_sides,
+            "test",
+        )
+        .is_err());
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM journal_entries", [], |row| row.get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
+    }
+
+    #[test]
+    fn statements_use_normal_account_signs_and_include_current_earnings() {
+        let conn = accounting_connection();
+        for (ref_type, ref_id, lines) in [
+            (
+                "capital",
+                1,
+                vec![
+                    ("1100".to_string(), 100_000, 0, None),
+                    ("3000".to_string(), 0, 100_000, None),
+                ],
+            ),
+            (
+                "sale",
+                2,
+                vec![
+                    ("1100".to_string(), 50_000, 0, None),
+                    ("4100".to_string(), 0, 50_000, None),
+                ],
+            ),
+            (
+                "expense",
+                3,
+                vec![
+                    ("5200".to_string(), 20_000, 0, None),
+                    ("1100".to_string(), 0, 20_000, None),
+                ],
+            ),
+        ] {
+            post_to_journal(
+                &conn,
+                ref_type,
+                ref_id,
+                "2029-06-01",
+                ref_type,
+                &lines,
+                "test",
+            )
+            .unwrap();
+        }
+
+        let income = build_income_statement(&conn).unwrap();
+        assert_eq!(income.total_revenue_milli, 50_000);
+        assert_eq!(income.total_expenses_milli, 20_000);
+        assert_eq!(income.net_income_milli, 30_000);
+
+        let balance = build_balance_sheet(&conn).unwrap();
+        assert_eq!(balance.total_assets_milli, 130_000);
+        assert_eq!(balance.total_liabilities_milli, 0);
+        assert_eq!(balance.total_equity_milli, 130_000);
+        assert_eq!(balance.total_liabilities_equity_milli, 130_000);
+        assert_eq!(balance.out_of_balance_milli, 0);
+    }
 }

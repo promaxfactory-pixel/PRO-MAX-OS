@@ -1,10 +1,11 @@
 import { Suspense, lazy, useState, useEffect } from "react";
-import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "./stores/authStore";
 import LicenseGate from "./components/layout/LicenseGate";
 import AppLayout from "./components/layout/AppLayout";
 import LoadingSpinner from "./components/ui/LoadingSpinner";
 import ErrorBoundary from "./components/ui/ErrorBoundary";
+import { canAccessPath } from "./lib/roleAccess";
 
 const LoginPage = lazy(() => import("./pages/auth/LoginPage"));
 const DashboardPage = lazy(() => import("./pages/dashboard/DashboardPage"));
@@ -97,9 +98,10 @@ const QuotationsPage = lazy(() => import("./pages/factory/QuotationsPage"));
 const CommercialInvoicesPage = lazy(() => import("./pages/factory/CommercialInvoicesPage"));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, validateToken } = useAuthStore();
+  const { isAuthenticated, validateToken, user } = useAuthStore();
   const [tokenValid, setTokenValid] = useState(true);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -118,6 +120,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }, [isAuthenticated, validateToken, navigate]);
 
   if (!isAuthenticated || !tokenValid) return <Navigate to="/login" replace />;
+  if (!canAccessPath(user?.role, location.pathname)) return <Navigate to="/403" replace />;
   return <AppLayout>{children}</AppLayout>;
 }
 

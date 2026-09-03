@@ -177,15 +177,6 @@ fn gen_advance_no(conn: &rusqlite::Connection) -> Result<String, AppError> {
     Ok(format!("ADV-{}-{:04}", chrono::Utc::now().format("%Y%m%d"), count + 1))
 }
 
-fn generate_journal_no(conn: &rusqlite::Connection) -> Result<String, AppError> {
-    let count: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM journal_entries WHERE date = date('now')",
-        [],
-        |r| r.get(0),
-    )?;
-    Ok(format!("JE-{}-{:04}", chrono::Utc::now().format("%Y%m%d"), count + 1))
-}
-
 fn row_to_advance(row: &rusqlite::Row) -> Result<OperatingAdvance, rusqlite::Error> {
     Ok(OperatingAdvance {
         id: row.get(0)?, advance_no: row.get(1)?, date: row.get(2)?,
@@ -354,26 +345,39 @@ pub fn disburse_advance(
     let mut conn = state.0.lock()?;
     rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     let tx = conn.transaction()?;
-    let (a_amount, a_gl): (i64, String) = tx.query_row(
-        "SELECT amount_milli, advance_gl_account_code FROM operating_advances WHERE id = ?1 AND status = 'approved'",
+    let (amount_milli, a_gl, advance_date): (i64, String, String) = tx.query_row(
+        "SELECT amount_milli, advance_gl_account_code, date
+         FROM operating_advances WHERE id = ?1 AND status = 'approved'",
         params![input.advance_id],
-        |r| Ok((r.get(0)?, r.get(1)?)),
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
     )?;
-    let amount_milli = a_amount;
-    let je_no = generate_journal_no(&tx)?;
+    if amount_milli <= 0 {
+        return Err(AppError::validation("قيمة العهدة يجب أن تكون أكبر من صفر"));
+    }
     let source_code = input.source_account_code.clone();
-    tx.execute(
-        "INSERT INTO journal_entries (entry_no, date, memo, ref_type, ref_id, created_by)
-         VALUES (?1,date('now'),?2,'advance_disburse',?3,?4)",
-        params![je_no, format!("Disbursement advance {}", input.advance_id), input.advance_id, user_id],
+    let journal_lines = vec![
+        (
+            a_gl,
+            amount_milli,
+            0,
+            Some(format!("Advance to employee {}", input.advance_id)),
+        ),
+        (
+            source_code.clone(),
+            0,
+            amount_milli,
+            Some(format!("Funded from {}", source_code)),
+        ),
+    ];
+    let je_id = crate::commands::accounting::post_to_journal(
+        &tx,
+        "advance_disburse",
+        input.advance_id,
+        &advance_date,
+        &format!("Disbursement advance {}", input.advance_id),
+        &journal_lines,
+        &user_id.to_string(),
     )?;
-    let je_id = tx.last_insert_rowid();
-    // Disbursing cash to an employee creates an advance receivable:
-    // Debit the advance (asset) account, credit the funding account.
-    tx.execute("INSERT INTO journal_entry_lines (entry_id,account_code,debit_milli,credit_milli,memo) VALUES (?1,?2,?3,0,?4)",
-        params![je_id, a_gl, amount_milli, format!("Advance to employee {}", input.advance_id)])?;
-    tx.execute("INSERT INTO journal_entry_lines (entry_id,account_code,debit_milli,credit_milli,memo) VALUES (?1,?2,0,?3,?4)",
-        params![je_id, source_code, amount_milli, format!("Funded from {}", source_code)])?;
     let adv_no = format!("ADV-{}", input.advance_id);
     tx.execute(
         "UPDATE operating_advances SET status = 'disbursed', disbursed_by = ?1, disbursed_at = datetime('now'),
@@ -401,10 +405,14 @@ pub fn record_advance_spend(
     let mut conn = state.0.lock()?;
     rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     let tx = conn.transaction()?;
-    let (a_balance, a_status, a_gl): (i64, String, String) = tx.query_row(
-        "SELECT balance_milli, status, advance_gl_account_code FROM operating_advances WHERE id = ?1",
+    if input.amount_milli <= 0 {
+        return Err(AppError::validation("قيمة الصرف يجب أن تكون أكبر من صفر"));
+    }
+    let (a_balance, a_status, a_gl, default_expense): (i64, String, String, Option<String>) = tx.query_row(
+        "SELECT balance_milli, status, advance_gl_account_code, default_expense_account_code
+         FROM operating_advances WHERE id = ?1",
         params![input.advance_id],
-        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
     )?;
     if a_status != "disbursed" && a_status != "partially_spent" {
         return Err(AppError::validation("يجب صرف السلفة قبل الصرف منها"));
@@ -413,7 +421,16 @@ pub fn record_advance_spend(
         return Err(AppError::validation("رصيد السلفة غير كافٍ"));
     }
     let new_balance = a_balance - input.amount_milli;
-    let acct_code = input.account_code.clone().unwrap_or_else(|| a_gl.clone());
+    let acct_code = input
+        .account_code
+        .clone()
+        .or(default_expense)
+        .unwrap_or_else(|| "5200".to_string());
+    if acct_code == a_gl {
+        return Err(AppError::validation(
+            "لا يمكن استخدام حساب العهدة نفسه كحساب مصروف",
+        ));
+    }
     let receipt_no = format!("RCP-{}", chrono::Utc::now().format("%Y%m%d%H%M%S"));
     tx.execute(
         "INSERT INTO advance_transactions (advance_id,ts,ttype,amount_milli,balance_after_milli,account_code,category,vendor_name,invoice_no,invoice_date,reference,notes,created_by)
@@ -494,29 +511,95 @@ pub fn approve_receipt(
     let mut conn = state.0.lock()?;
     rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     let tx = conn.transaction()?;
-    let (r_advance_id, r_net): (i64, i64) = tx.query_row(
-        "SELECT advance_id, net_milli FROM advance_receipts WHERE id = ?1 AND status = 'submitted'",
-        params![receipt_id], |r| Ok((r.get(0)?, r.get(1)?)),
+    let (r_advance_id, r_net, transaction_id, receipt_date): (i64, i64, Option<i64>, String) = tx.query_row(
+        "SELECT advance_id, net_milli, transaction_id, date
+         FROM advance_receipts WHERE id = ?1 AND status = 'submitted'",
+        params![receipt_id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
     )?;
+    if r_net <= 0 {
+        return Err(AppError::validation("صافي قيمة الإيصال يجب أن يكون أكبر من صفر"));
+    }
     let (expense_code, a_gl): (String, String) = tx.query_row(
-        "SELECT COALESCE(ar.account_code, oa.default_expense_account_code), oa.advance_gl_account_code FROM advance_receipts ar
+        "SELECT COALESCE(ar.account_code, oa.default_expense_account_code, '5200'), oa.advance_gl_account_code FROM advance_receipts ar
          JOIN operating_advances oa ON oa.id = ar.advance_id WHERE ar.id = ?1",
         params![receipt_id], |r| Ok((r.get(0)?, r.get(1)?)),
     )?;
-    let je_no = generate_journal_no(&tx)?;
-    tx.execute("INSERT INTO journal_entries (entry_no,date,memo,ref_type,ref_id,created_by) VALUES (?1,date('now'),?2,'advance_receipt',?3,?4)",
-        params![je_no, format!("Receipt {} approved", receipt_id), receipt_id, user_id])?;
-    let je_id = tx.last_insert_rowid();
-    tx.execute("INSERT INTO journal_entry_lines (entry_id,account_code,debit_milli,credit_milli,memo) VALUES (?1,?2,?3,0,?4)",
-        params![je_id, expense_code, r_net, format!("Expense receipt {} approved", receipt_id)])?;
-    tx.execute("INSERT INTO journal_entry_lines (entry_id,account_code,debit_milli,credit_milli,memo) VALUES (?1,?2,0,?3,?4)",
-        params![je_id, a_gl, r_net, format!("Advance account reduced for receipt {}", receipt_id)])?;
+    if expense_code == a_gl {
+        return Err(AppError::validation(
+            "حساب المصروف لا يمكن أن يساوي حساب العهدة",
+        ));
+    }
+    let journal_lines = vec![
+        (
+            expense_code.clone(),
+            r_net,
+            0,
+            Some(format!("Expense receipt {} approved", receipt_id)),
+        ),
+        (
+            a_gl,
+            0,
+            r_net,
+            Some(format!("Advance account reduced for receipt {}", receipt_id)),
+        ),
+    ];
+    let je_id = crate::commands::accounting::post_to_journal(
+        &tx,
+        "advance_receipt",
+        receipt_id,
+        &receipt_date,
+        &format!("Receipt {} approved", receipt_id),
+        &journal_lines,
+        &user_id.to_string(),
+    )?;
     tx.execute("UPDATE advance_receipts SET status = 'approved', approved_by = ?1, approved_at = datetime('now'), journal_id = ?2 WHERE id = ?3",
         params![user_id, je_id, receipt_id])?;
-    tx.execute("UPDATE operating_advances SET total_spent_milli = total_spent_milli + ?1, balance_milli = balance_milli - ?1, updated_at = datetime('now') WHERE id = ?2",
-        params![r_net, r_advance_id])?;
-    tx.execute("UPDATE operating_advances SET status = CASE WHEN balance_milli = 0 THEN 'reconciled' ELSE 'partially_spent' END WHERE id = ?1",
-        params![r_advance_id])?;
+    if let Some(existing_transaction_id) = transaction_id {
+        // record_advance_spend already reduced the sub-ledger balance. Approval
+        // posts the GL only; applying the operational movement again would
+        // double-count both spend and the employee's outstanding balance.
+        tx.execute(
+            "UPDATE advance_transactions SET journal_id=?1 WHERE id=?2 AND advance_id=?3",
+            params![je_id, existing_transaction_id, r_advance_id],
+        )?;
+    } else {
+        let (current_balance, status): (i64, String) = tx.query_row(
+            "SELECT balance_milli, status FROM operating_advances WHERE id=?1",
+            [r_advance_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        if status != "disbursed" && status != "partially_spent" {
+            return Err(AppError::validation("حالة العهدة لا تسمح باعتماد مصروف جديد"));
+        }
+        if current_balance < r_net {
+            return Err(AppError::validation("قيمة الإيصال تتجاوز رصيد العهدة المتاح"));
+        }
+        let new_balance = current_balance - r_net;
+        tx.execute(
+            "UPDATE operating_advances
+             SET total_spent_milli=total_spent_milli+?1, balance_milli=?2,
+                 status=CASE WHEN ?2=0 THEN 'reconciled' ELSE 'partially_spent' END,
+                 updated_at=datetime('now')
+             WHERE id=?3",
+            params![r_net, new_balance, r_advance_id],
+        )?;
+        tx.execute(
+            "INSERT INTO advance_transactions
+                (advance_id,ts,ttype,amount_milli,balance_after_milli,account_code,reference,notes,journal_id,created_by)
+             VALUES (?1,?2,'spend',?3,?4,?5,?6,?7,?8,?9)",
+            params![
+                r_advance_id,
+                receipt_date,
+                r_net,
+                new_balance,
+                expense_code,
+                format!("Receipt {}", receipt_id),
+                "Approved standalone receipt",
+                je_id,
+                user_id.to_string(),
+            ],
+        )?;
+    }
     tx.commit()?;
     let _ = rbac::log_audit(&conn, None, None, "approve_receipt", "advance_receipts", Some(receipt_id), None, None, None);
     drop(conn);
@@ -547,6 +630,9 @@ pub fn return_advance(
 ) -> Result<AdvanceTransaction, AppError> {
     let mut conn = state.0.lock()?;
     rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
+    if input.amount_milli <= 0 {
+        return Err(AppError::validation("قيمة المبلغ المرتجع يجب أن تكون أكبر من صفر"));
+    }
     let tx = conn.transaction()?;
     let advance_balance: i64 = tx.query_row(
         "SELECT balance_milli FROM operating_advances WHERE id = ?1",
@@ -559,14 +645,35 @@ pub fn return_advance(
         "SELECT advance_gl_account_code FROM operating_advances WHERE id = ?1",
         params![input.advance_id], |r| r.get(0),
     )?;
-    let je_no = generate_journal_no(&tx)?;
-    tx.execute("INSERT INTO journal_entries (entry_no,date,memo,ref_type,ref_id,created_by) VALUES (?1,date('now'),?2,'advance_return',?3,?4)",
-        params![je_no, format!("Employee returned advance {}", input.advance_id), input.advance_id, user_id.to_string()])?;
-    let je_id = tx.last_insert_rowid();
-    tx.execute("INSERT INTO journal_entry_lines (entry_id,account_code,debit_milli,credit_milli,memo) VALUES (?1,?2,?3,0,?4)",
-        params![je_id, input.source_account_code, input.amount_milli, format!("Cash received back {}", input.advance_id)])?;
-    tx.execute("INSERT INTO journal_entry_lines (entry_id,account_code,debit_milli,credit_milli,memo) VALUES (?1,?2,0,?3,?4)",
-        params![je_id, a_gl, input.amount_milli, format!("Advance account reduced {}", input.advance_id)])?;
+    if input.source_account_code == a_gl {
+        return Err(AppError::validation(
+            "حساب استلام المبلغ لا يمكن أن يساوي حساب العهدة",
+        ));
+    }
+    let posting_date = chrono::Utc::now().format("%Y-%m-%d").to_string();
+    let journal_lines = vec![
+        (
+            input.source_account_code.clone(),
+            input.amount_milli,
+            0,
+            Some(format!("Cash received back {}", input.advance_id)),
+        ),
+        (
+            a_gl,
+            0,
+            input.amount_milli,
+            Some(format!("Advance account reduced {}", input.advance_id)),
+        ),
+    ];
+    let je_id = crate::commands::accounting::post_to_journal(
+        &tx,
+        "advance_return",
+        input.advance_id,
+        &posting_date,
+        &format!("Employee returned advance {}", input.advance_id),
+        &journal_lines,
+        &user_id.to_string(),
+    )?;
     let new_balance = advance_balance - input.amount_milli;
     tx.execute(
         "UPDATE operating_advances SET total_returned_milli = total_returned_milli + ?1, balance_milli = ?2,
@@ -609,33 +716,70 @@ pub fn reconcile_advance(
 ) -> Result<OperatingAdvance, AppError> {
     let mut conn = state.0.lock()?;
     rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
+    if input.physical_amount_milli < 0 {
+        return Err(AppError::validation("الرصيد النقدي الفعلي لا يمكن أن يكون سالبًا"));
+    }
     let tx = conn.transaction()?;
-    let (_a_balance, a_spent): (i64, i64) = tx.query_row(
-        "SELECT balance_milli, total_spent_milli FROM operating_advances WHERE id = ?1",
-        params![input.advance_id], |r| Ok((r.get(0)?, r.get(1)?)),
+    let (book_balance, a_gl, status): (i64, String, String) = tx.query_row(
+        "SELECT balance_milli, advance_gl_account_code, status
+         FROM operating_advances WHERE id = ?1",
+        params![input.advance_id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
     )?;
-    let variance = input.physical_amount_milli - a_spent;
+    if status != "disbursed" && status != "partially_spent" {
+        return Err(AppError::validation("حالة العهدة لا تسمح بإجراء المطابقة"));
+    }
+    // Physical cash must be compared with the book balance still held by the
+    // employee, not with cumulative spend.
+    let variance = input.physical_amount_milli - book_balance;
     if variance != 0 {
-        let je_no = generate_journal_no(&tx)?;
-        tx.execute("INSERT INTO journal_entries (entry_no,date,memo,ref_type,ref_id,created_by) VALUES (?1,date('now'),?2,'advance_reconciliation',?3,?4)",
-            params![je_no, format!("Reconciliation variance {} OMR", variance as f64 / 1000.0), input.advance_id, user_id.to_string()])?;
-        let je_id = tx.last_insert_rowid();
-        if variance > 0 {
-            tx.execute("INSERT INTO journal_entry_lines (entry_id,account_code,debit_milli,credit_milli,memo) VALUES (?1,'2000',?2,0,?3)",
-                params![je_id, variance, "Cash surplus detected"])?;
-            tx.execute("INSERT INTO journal_entry_lines (entry_id,account_code,debit_milli,credit_milli,memo) VALUES (?1,'5100',0,?2,?3)",
-                params![je_id, variance, "Credit surplus account"])?;
+        let amount = variance
+            .checked_abs()
+            .ok_or_else(|| AppError::validation("قيمة فرق المطابقة تتجاوز الحد المسموح"))?;
+        let lines = if variance > 0 {
+            vec![
+                (a_gl.clone(), amount, 0, Some("Cash surplus detected".to_string())),
+                ("4200".to_string(), 0, amount, Some("Advance reconciliation surplus".to_string())),
+            ]
         } else {
-            let abs_v = -variance;
-            tx.execute("INSERT INTO journal_entry_lines (entry_id,account_code,debit_milli,credit_milli,memo) VALUES (?1,'2000',0,?2,?3)",
-                params![je_id, abs_v, format!("Cash shortage {} OMR", abs_v as f64 / 1000.0)])?;
-            tx.execute("INSERT INTO journal_entry_lines (entry_id,account_code,debit_milli,credit_milli,memo) VALUES (?1,'5200',?2,0,?3)",
-                params![je_id, abs_v, "Debit shortage overhead"])?;
-        }
+            vec![
+                ("5200".to_string(), amount, 0, Some("Advance reconciliation shortage".to_string())),
+                (a_gl, 0, amount, Some("Cash shortage detected".to_string())),
+            ]
+        };
+        let posting_date = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        let je_id = crate::commands::accounting::post_to_journal(
+            &tx,
+            "advance_reconciliation",
+            input.advance_id,
+            &posting_date,
+            &format!("Advance reconciliation variance {} OMR", variance as f64 / 1000.0),
+            &lines,
+            &user_id.to_string(),
+        )?;
+        tx.execute(
+            "INSERT INTO advance_transactions
+                (advance_id,ts,ttype,amount_milli,balance_after_milli,account_code,reference,notes,journal_id,created_by)
+             VALUES (?1,datetime('now'),'reconciliation_adjustment',?2,?3,?4,?5,?6,?7,?8)",
+            params![
+                input.advance_id,
+                amount,
+                input.physical_amount_milli,
+                lines[0].0.clone(),
+                format!("Variance {}", variance),
+                input.notes.clone(),
+                je_id,
+                user_id.to_string(),
+            ],
+        )?;
     }
     tx.execute(
-        "UPDATE operating_advances SET status = 'reconciled', actual_return_date = date('now'), updated_at = datetime('now'), notes = ?1 WHERE id = ?2",
-        params![input.notes, input.advance_id],
+        "UPDATE operating_advances
+         SET balance_milli=?1,
+             status=CASE WHEN ?1=0 THEN 'reconciled' ELSE 'partially_spent' END,
+             actual_return_date=CASE WHEN ?1=0 THEN date('now') ELSE actual_return_date END,
+             updated_at=datetime('now'), notes=?2
+         WHERE id=?3",
+        params![input.physical_amount_milli, input.notes, input.advance_id],
     )?;
     tx.commit()?;
     let _ = rbac::log_audit(&conn, Some(user_id), None, "reconcile_advance", "operating_advances", Some(input.advance_id), None, None, None);
