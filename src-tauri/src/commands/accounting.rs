@@ -91,7 +91,8 @@ pub struct CreateAccountInput {
     pub name_en: Option<String>,
     pub r#type: String,
     pub parent: Option<String>,
-    pub is_system: Option<i64>,
+    #[serde(rename = "is_system")]
+    pub _is_system: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
