@@ -5,7 +5,7 @@ import App from "./App";
 import "./index.css";
 import "./i18n";
 
-const savedTheme = localStorage.getItem("promax-theme") || "dark";
+const savedTheme = localStorage.getItem("promax-theme") || "light";
 document.documentElement.setAttribute("data-theme", savedTheme);
 const savedMode = localStorage.getItem("promax-work-mode") || "professional";
 document.documentElement.setAttribute("data-mode", savedMode);

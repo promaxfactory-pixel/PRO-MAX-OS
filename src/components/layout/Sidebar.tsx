@@ -13,6 +13,8 @@ import {
   Ship, ArrowLeftRight, Sun, Moon, Sparkles, Undo2
 } from "lucide-react";
 import LanguageSwitcher from "./LanguageSwitcher";
+import { useAuthStore } from "../../stores/authStore";
+import { canAccessPath } from "@/lib/roleAccess";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -165,6 +167,7 @@ const menuSections = (t: (key: string) => string) => [
 const Sidebar = memo(function Sidebar({ collapsed, onToggle, currentPath }: SidebarProps) {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
+  const role = useAuthStore((state) => state.user?.role);
   const isDark = document.documentElement.getAttribute("data-theme") !== "light";
   const isRtl = i18n.language === "ar" || i18n.language === "ur";
 
@@ -233,85 +236,91 @@ const Sidebar = memo(function Sidebar({ collapsed, onToggle, currentPath }: Side
       </div>
 
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1" aria-label="التنقل">
-        {menuSections(t).map((section) => {
-          const color = sectionColors[section.title] || "#8b5cf6";
-          const SectionIcon = sectionIcons[section.title];
-          const hasActive = section.items.some(i => isActive(i.path));
+        {menuSections(t)
+          .map((section) => ({
+            ...section,
+            items: section.items.filter((item) => canAccessPath(role, item.path)),
+          }))
+          .filter((section) => section.items.length > 0)
+          .map((section) => {
+            const color = sectionColors[section.title] || "#8b5cf6";
+            const SectionIcon = sectionIcons[section.title];
+            const hasActive = section.items.some(i => isActive(i.path));
 
-          return (
-            <div key={section.title} role="group" aria-label={section.title}>
-              {!collapsed && (
-                <div
-                  className="sidebar-section-title flex items-center gap-2"
-                  style={{ opacity: hasActive ? 1 : 0.6 }}
-                >
-                  {SectionIcon && (
-                    <SectionIcon className="w-3 h-3" style={{ color }} />
-                  )}
-                  <span>{section.title}</span>
-                </div>
-              )}
-              {section.items.map((item) => {
-                const active = isActive(item.path);
-                const Icon = item.icon;
-
-                if (collapsed) {
-                  return (
-                    <div key={item.path} className="relative group">
-                      <button
-                        onClick={() => navigate(item.path)}
-                        aria-current={active ? "page" : undefined}
-                        aria-label={item.label}
-                        className="sidebar-link w-full justify-center px-0 py-2.5"
-                        style={{
-                          color: active ? "var(--brand-500)" : "var(--text-muted)",
-                          background: active ? "color-mix(in srgb, var(--brand-500) 12%, transparent)" : "transparent",
-                        }}
-                      >
-                        <Icon className="w-[18px] h-[18px] flex-shrink-0" aria-hidden="true" />
-                      </button>
-                      <div
-                        className={`absolute top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-lg text-xs whitespace-nowrap pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50 ${isRtl ? "right-full mr-2" : "left-full ml-2"}`}
-                        style={{
-                          background: "var(--surface-elevated)",
-                          color: "var(--text-primary)",
-                          border: "1px solid var(--border)",
-                          boxShadow: "var(--shadow-elevated)",
-                        }}
-                      >
-                        {item.label}
-                      </div>
-                    </div>
-                  );
-                }
-
-                return (
-                  <button
-                    key={item.path}
-                    onClick={() => navigate(item.path)}
-                    aria-current={active ? "page" : undefined}
-                    aria-label={item.label}
-                    className="sidebar-link w-full"
-                    style={{
-                      color: active ? "var(--brand-500)" : "var(--text-muted)",
-                      background: active ? "color-mix(in srgb, var(--brand-500) 12%, transparent)" : "transparent",
-                      fontWeight: active ? 600 : 500,
-                    }}
+            return (
+              <div key={section.title} role="group" aria-label={section.title}>
+                {!collapsed && (
+                  <div
+                    className="sidebar-section-title flex items-center gap-2"
+                    style={{ opacity: hasActive ? 1 : 0.6 }}
                   >
-                    <Icon className="w-[18px] h-[18px] flex-shrink-0" aria-hidden="true" />
-                    <span className="truncate">{item.label}</span>
-                    {active && (
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full ${isRtl ? "mr-auto" : "ml-auto"}`}
-                        style={{ background: "var(--brand-500)", boxShadow: "0 0 6px var(--brand-500)" }}
-                      />
+                    {SectionIcon && (
+                      <SectionIcon className="w-3 h-3" style={{ color }} />
                     )}
-                  </button>
-                );
-              })}
-            </div>
-          );
-        })}
+                    <span>{section.title}</span>
+                  </div>
+                )}
+                {section.items.map((item) => {
+                  const active = isActive(item.path);
+                  const Icon = item.icon;
+
+                  if (collapsed) {
+                    return (
+                      <div key={item.path} className="relative group">
+                        <button
+                          onClick={() => navigate(item.path)}
+                          aria-current={active ? "page" : undefined}
+                          aria-label={item.label}
+                          className="sidebar-link w-full justify-center px-0 py-2.5"
+                          style={{
+                            color: active ? "var(--brand-500)" : "var(--text-muted)",
+                            background: active ? "color-mix(in srgb, var(--brand-500) 12%, transparent)" : "transparent",
+                          }}
+                        >
+                          <Icon className="w-[18px] h-[18px] flex-shrink-0" aria-hidden="true" />
+                        </button>
+                        <div
+                          className={`absolute top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-lg text-xs whitespace-nowrap pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50 ${isRtl ? "right-full mr-2" : "left-full ml-2"}`}
+                          style={{
+                            background: "var(--surface-elevated)",
+                            color: "var(--text-primary)",
+                            border: "1px solid var(--border)",
+                            boxShadow: "var(--shadow-elevated)",
+                          }}
+                        >
+                          {item.label}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <button
+                      key={item.path}
+                      onClick={() => navigate(item.path)}
+                      aria-current={active ? "page" : undefined}
+                      aria-label={item.label}
+                      className="sidebar-link w-full"
+                      style={{
+                        color: active ? "var(--brand-500)" : "var(--text-muted)",
+                        background: active ? "color-mix(in srgb, var(--brand-500) 12%, transparent)" : "transparent",
+                        fontWeight: active ? 600 : 500,
+                      }}
+                    >
+                      <Icon className="w-[18px] h-[18px] flex-shrink-0" aria-hidden="true" />
+                      <span className="truncate">{item.label}</span>
+                      {active && (
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${isRtl ? "mr-auto" : "ml-auto"}`}
+                          style={{ background: "var(--brand-500)", boxShadow: "0 0 6px var(--brand-500)" }}
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
       </nav>
 
       <div
