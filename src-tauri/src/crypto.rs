@@ -111,7 +111,28 @@ fn try_read_secrets(path: &Path) -> Option<AppSecrets> {
         return None;
     }
     let content = std::fs::read_to_string(path).ok()?;
-    serde_json::from_str::<AppSecrets>(&content).ok()
+    let secrets = serde_json::from_str::<AppSecrets>(&content).ok()?;
+    if !secrets_are_production_safe(&secrets) {
+        eprintln!("Warning: Ignoring an invalid or placeholder secrets file.");
+        return None;
+    }
+    Some(secrets)
+}
+
+fn secrets_are_production_safe(secrets: &AppSecrets) -> bool {
+    fn strong_secret(value: &str) -> bool {
+        let trimmed = value.trim();
+        let upper = trimmed.to_ascii_uppercase();
+        trimmed.len() >= 32
+            && !upper.contains("REPLACE_WITH")
+            && !upper.contains("CHANGE_ME")
+            && !upper.contains("CHANGEME")
+    }
+
+    strong_secret(&secrets.jwt_secret)
+        && strong_secret(&secrets.licensing_secret)
+        && strong_secret(&secrets.encryption_key)
+        && secrets.developer_pin_hash.starts_with("$argon2")
 }
 
 pub fn get_secrets() -> AppSecrets {
@@ -388,6 +409,28 @@ mod tests {
         let hash = hash_developer_pin(pin);
         assert!(verify_password(pin, &hash).unwrap());
         assert!(!verify_password("9999", &hash).unwrap());
+    }
+
+    #[test]
+    fn placeholder_secret_bundle_is_rejected() {
+        let placeholders = AppSecrets {
+            jwt_secret: "REPLACE_WITH_RANDOM_STRING".into(),
+            licensing_secret: "REPLACE_WITH_RANDOM_STRING".into(),
+            developer_pin_hash: "REPLACE_WITH_ARGON2_HASH".into(),
+            encryption_key: "REPLACE_WITH_RANDOM_STRING".into(),
+        };
+        assert!(!secrets_are_production_safe(&placeholders));
+    }
+
+    #[test]
+    fn generated_secret_bundle_passes_validation() {
+        let generated = AppSecrets {
+            jwt_secret: generate_machine_secret(),
+            licensing_secret: generate_machine_secret(),
+            developer_pin_hash: hash_developer_pin("842731"),
+            encryption_key: generate_machine_secret(),
+        };
+        assert!(secrets_are_production_safe(&generated));
     }
 
     #[test]
