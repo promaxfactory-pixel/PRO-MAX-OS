@@ -2,6 +2,7 @@ use crate::commands::rbac;
 use crate::db::{next_sequence, DbState};
 use crate::error::AppError;
 use chrono::{Datelike, NaiveDate};
+use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -36,6 +37,23 @@ pub struct JournalLine {
     pub debit_milli: i64,
     pub credit_milli: i64,
     pub memo: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AccountingPeriod {
+    pub id: i64,
+    pub name: String,
+    pub start_date: String,
+    pub end_date: String,
+    pub status: String,
+    pub created_by: Option<i64>,
+    pub created_at: String,
+    pub closed_by: Option<i64>,
+    pub closed_at: Option<String>,
+    pub close_reason: Option<String>,
+    pub reopened_by: Option<i64>,
+    pub reopened_at: Option<String>,
+    pub reopen_reason: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -110,6 +128,260 @@ pub struct CreateJournalLineInput {
     pub debit_milli: i64,
     pub credit_milli: i64,
     pub memo: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateAccountingPeriodInput {
+    pub name: String,
+    pub start_date: String,
+    pub end_date: String,
+}
+
+fn normalized_iso_date(value: &str, field_name: &str) -> Result<String, AppError> {
+    let trimmed = value.trim();
+    let parsed = NaiveDate::parse_from_str(trimmed, "%Y-%m-%d")
+        .map_err(|_| AppError::validation(format!("{} يجب أن يكون بصيغة YYYY-MM-DD", field_name)))?;
+    Ok(parsed.format("%Y-%m-%d").to_string())
+}
+
+fn ensure_posting_period_open(conn: &rusqlite::Connection, journal_date: &str) -> Result<(), AppError> {
+    let periods_table_exists: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='accounting_periods'",
+        [],
+        |row| row.get(0),
+    )?;
+    if periods_table_exists == 0 {
+        return Ok(());
+    }
+
+    let locked: Option<(i64, String)> = conn
+        .query_row(
+            "SELECT id, name FROM accounting_periods
+             WHERE status='closed' AND ?1 BETWEEN start_date AND end_date
+             ORDER BY start_date DESC LIMIT 1",
+            [journal_date],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?;
+    if let Some((period_id, period_name)) = locked {
+        return Err(AppError::business(format!(
+            "لا يمكن ترحيل القيد بتاريخ {} لأن الفترة المالية مغلقة: {} (#{}). أعد فتحها بصلاحية المدير مع تسجيل السبب أولًا",
+            journal_date, period_name, period_id
+        )));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn list_accounting_periods(
+    state: State<'_, DbState>,
+    user_id: i64,
+) -> Result<Vec<AccountingPeriod>, AppError> {
+    let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager", "viewer"])?;
+    let mut stmt = conn.prepare(
+        "SELECT id, name, start_date, end_date, status, created_by, created_at,
+                closed_by, closed_at, close_reason, reopened_by, reopened_at, reopen_reason
+         FROM accounting_periods ORDER BY start_date DESC, id DESC",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(AccountingPeriod {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            start_date: row.get(2)?,
+            end_date: row.get(3)?,
+            status: row.get(4)?,
+            created_by: row.get(5)?,
+            created_at: row.get(6)?,
+            closed_by: row.get(7)?,
+            closed_at: row.get(8)?,
+            close_reason: row.get(9)?,
+            reopened_by: row.get(10)?,
+            reopened_at: row.get(11)?,
+            reopen_reason: row.get(12)?,
+        })
+    })?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(AppError::from)
+}
+
+#[tauri::command]
+pub fn create_accounting_period(
+    state: State<'_, DbState>,
+    user_id: i64,
+    input: CreateAccountingPeriodInput,
+) -> Result<i64, AppError> {
+    let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant"])?;
+    let name = input.name.trim();
+    if name.is_empty() || name.chars().count() > 100 {
+        return Err(AppError::validation("اسم الفترة المالية مطلوب وبحد أقصى 100 حرف"));
+    }
+    let start_date = normalized_iso_date(&input.start_date, "تاريخ بداية الفترة")?;
+    let end_date = normalized_iso_date(&input.end_date, "تاريخ نهاية الفترة")?;
+    if start_date > end_date {
+        return Err(AppError::validation("تاريخ بداية الفترة يجب ألا يتجاوز تاريخ نهايتها"));
+    }
+    let overlap_count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM accounting_periods
+         WHERE NOT (end_date < ?1 OR start_date > ?2)",
+        rusqlite::params![start_date, end_date],
+        |row| row.get(0),
+    )?;
+    if overlap_count > 0 {
+        return Err(AppError::validation("تتداخل الفترة المالية مع فترة موجودة"));
+    }
+
+    let tx = conn.unchecked_transaction()?;
+    tx.execute(
+        "INSERT INTO accounting_periods(name, start_date, end_date, created_by)
+         VALUES(?1, ?2, ?3, ?4)",
+        rusqlite::params![name, start_date, end_date, user_id],
+    )?;
+    let period_id = tx.last_insert_rowid();
+    rbac::log_audit(
+        &tx,
+        Some(user_id),
+        None,
+        "create_accounting_period",
+        "accounting_periods",
+        Some(period_id),
+        None,
+        Some(&format!("{}:{}..{}", name, start_date, end_date)),
+        None,
+    )?;
+    tx.commit()?;
+    Ok(period_id)
+}
+
+#[tauri::command]
+pub fn close_accounting_period(
+    state: State<'_, DbState>,
+    user_id: i64,
+    period_id: i64,
+    reason: String,
+) -> Result<(), AppError> {
+    let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant"])?;
+    let reason = reason.trim();
+    if reason.chars().count() < 3 || reason.chars().count() > 500 {
+        return Err(AppError::validation("سبب إغلاق الفترة مطلوب من 3 إلى 500 حرف"));
+    }
+    let period: Option<(String, String, String)> = conn
+        .query_row(
+            "SELECT start_date, end_date, status FROM accounting_periods WHERE id=?1",
+            [period_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .optional()?;
+    let (start_date, end_date, status) =
+        period.ok_or_else(|| AppError::not_found("الفترة المالية غير موجودة"))?;
+    if status == "closed" {
+        return Err(AppError::business("الفترة المالية مغلقة بالفعل"));
+    }
+
+    let invalid_entries: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM (
+            SELECT je.id
+            FROM journal_entries je
+            LEFT JOIN journal_entry_lines jel ON jel.entry_id=je.id
+            WHERE substr(je.date, 1, 10) BETWEEN ?1 AND ?2
+            GROUP BY je.id
+            HAVING COUNT(jel.id) < 2
+                OR COALESCE(SUM(jel.debit_milli), 0) != COALESCE(SUM(jel.credit_milli), 0)
+                OR COALESCE(SUM(jel.debit_milli), 0) <= 0
+                OR COALESCE(SUM(CASE
+                    WHEN COALESCE(jel.debit_milli, 0) < 0 OR COALESCE(jel.credit_milli, 0) < 0
+                      OR (COALESCE(jel.debit_milli, 0) > 0 AND COALESCE(jel.credit_milli, 0) > 0)
+                      OR (COALESCE(jel.debit_milli, 0) = 0 AND COALESCE(jel.credit_milli, 0) = 0)
+                    THEN 1 ELSE 0 END), 0) > 0
+        )",
+        rusqlite::params![start_date, end_date],
+        |row| row.get(0),
+    )?;
+    if invalid_entries > 0 {
+        return Err(AppError::business(format!(
+            "لا يمكن إغلاق الفترة؛ يوجد {} قيد غير متوازن أو غير صالح داخلها",
+            invalid_entries
+        )));
+    }
+
+    let tx = conn.unchecked_transaction()?;
+    let changed = tx.execute(
+        "UPDATE accounting_periods
+         SET status='closed', closed_by=?1, closed_at=datetime('now'), close_reason=?2,
+             reopened_by=NULL, reopened_at=NULL, reopen_reason=NULL, updated_at=datetime('now')
+         WHERE id=?3 AND status='open'",
+        rusqlite::params![user_id, reason, period_id],
+    )?;
+    if changed != 1 {
+        return Err(AppError::business("تعذر إغلاق الفترة بسبب تغير حالتها؛ أعد المحاولة"));
+    }
+    rbac::log_audit(
+        &tx,
+        Some(user_id),
+        None,
+        "close_accounting_period",
+        "accounting_periods",
+        Some(period_id),
+        Some("status=open"),
+        Some("status=closed"),
+        Some(reason),
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn reopen_accounting_period(
+    state: State<'_, DbState>,
+    user_id: i64,
+    period_id: i64,
+    reason: String,
+) -> Result<(), AppError> {
+    let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin"])?;
+    let reason = reason.trim();
+    if reason.chars().count() < 3 || reason.chars().count() > 500 {
+        return Err(AppError::validation("سبب إعادة فتح الفترة مطلوب من 3 إلى 500 حرف"));
+    }
+    let status: Option<String> = conn
+        .query_row(
+            "SELECT status FROM accounting_periods WHERE id=?1",
+            [period_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    match status.as_deref() {
+        None => return Err(AppError::not_found("الفترة المالية غير موجودة")),
+        Some("open") => return Err(AppError::business("الفترة المالية مفتوحة بالفعل")),
+        Some("closed") => {}
+        _ => return Err(AppError::business("حالة الفترة المالية غير صالحة")),
+    }
+
+    let tx = conn.unchecked_transaction()?;
+    let changed = tx.execute(
+        "UPDATE accounting_periods
+         SET status='open', reopened_by=?1, reopened_at=datetime('now'), reopen_reason=?2,
+             updated_at=datetime('now')
+         WHERE id=?3 AND status='closed'",
+        rusqlite::params![user_id, reason, period_id],
+    )?;
+    if changed != 1 {
+        return Err(AppError::business("تعذر إعادة فتح الفترة بسبب تغير حالتها؛ أعد المحاولة"));
+    }
+    rbac::log_audit(
+        &tx,
+        Some(user_id),
+        None,
+        "reopen_accounting_period",
+        "accounting_periods",
+        Some(period_id),
+        Some("status=closed"),
+        Some("status=open"),
+        Some(reason),
+    )?;
+    tx.commit()?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -311,6 +583,8 @@ pub(crate) fn post_to_journal(
     if total_debit == 0 {
         return Err(AppError::validation("يجب إدخال بند واحد على الأقل"));
     }
+
+    ensure_posting_period_open(conn, &journal_date)?;
 
     for (account_code, ..) in lines {
         let exists: i64 = conn
@@ -569,6 +843,23 @@ mod tests {
                 credit_milli INTEGER NOT NULL DEFAULT 0,
                 memo TEXT
              );
+             CREATE TABLE accounting_periods (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                start_date TEXT NOT NULL,
+                end_date TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'open'
+             );
+             CREATE TRIGGER trg_journal_period_closed_insert
+             BEFORE INSERT ON journal_entries
+             WHEN EXISTS (
+                SELECT 1 FROM accounting_periods ap
+                WHERE ap.status='closed'
+                  AND substr(NEW.date, 1, 10) BETWEEN ap.start_date AND ap.end_date
+             )
+             BEGIN
+                SELECT RAISE(ABORT, 'ACCOUNTING_PERIOD_CLOSED');
+             END;
              INSERT INTO accounts(code, name_ar, name_en, type) VALUES
                 ('1100', 'النقدية', 'Cash', 'Asset'),
                 ('3000', 'رأس المال', 'Capital', 'Equity'),
@@ -667,6 +958,97 @@ mod tests {
             conn.query_row("SELECT COUNT(*) FROM journal_entries", [], |row| row.get::<_, i64>(0))
                 .unwrap(),
             0
+        );
+    }
+
+    #[test]
+    fn closed_period_rejects_normal_journal_posting_without_allocating_sequence() {
+        let conn = accounting_connection();
+        conn.execute(
+            "INSERT INTO accounting_periods(name, start_date, end_date, status)
+             VALUES('June 2029', '2029-06-01', '2029-06-30', 'closed')",
+            [],
+        )
+        .unwrap();
+        let lines = vec![
+            ("1100".to_string(), 1_000, 0, None),
+            ("3000".to_string(), 0, 1_000, None),
+        ];
+
+        let error = post_to_journal(
+            &conn,
+            "manual",
+            0,
+            "2029-06-15",
+            "Backdated entry",
+            &lines,
+            "test",
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("الفترة المالية مغلقة"));
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM journal_entries", [], |row| row.get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM doc_sequences", [], |row| row.get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
+    }
+
+    #[test]
+    fn database_trigger_blocks_direct_import_into_closed_period() {
+        let conn = accounting_connection();
+        conn.execute(
+            "INSERT INTO accounting_periods(name, start_date, end_date, status)
+             VALUES('June 2029', '2029-06-01', '2029-06-30', 'closed')",
+            [],
+        )
+        .unwrap();
+
+        let error = conn
+            .execute(
+                "INSERT INTO journal_entries(entry_no, date, memo)
+                 VALUES('IMP-1', '2029-06-20', 'Direct import')",
+                [],
+            )
+            .unwrap_err();
+
+        assert!(error.to_string().contains("ACCOUNTING_PERIOD_CLOSED"));
+    }
+
+    #[test]
+    fn open_period_allows_journal_posting() {
+        let conn = accounting_connection();
+        conn.execute(
+            "INSERT INTO accounting_periods(name, start_date, end_date, status)
+             VALUES('July 2029', '2029-07-01', '2029-07-31', 'open')",
+            [],
+        )
+        .unwrap();
+        let lines = vec![
+            ("1100".to_string(), 1_000, 0, None),
+            ("3000".to_string(), 0, 1_000, None),
+        ];
+
+        post_to_journal(
+            &conn,
+            "manual",
+            0,
+            "2029-07-15",
+            "Allowed entry",
+            &lines,
+            "test",
+        )
+        .unwrap();
+
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM journal_entries", [], |row| row.get::<_, i64>(0))
+                .unwrap(),
+            1
         );
     }
 

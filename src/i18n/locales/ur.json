@@ -62,7 +62,7 @@
   "accounting": {
     "title": "اکاؤنٹنگ", "accounts": "اکاؤنٹس کا چارٹ", "journal": "جرنل اندراجات",
     "trialBalance": "آزمائشی بیلنس", "incomeStatement": "آمدنی کا بیان",
-    "balanceSheet": "بیلنس شیٹ", "accountCode": "اکاؤنٹ کوڈ",
+    "balanceSheet": "بیلنس شیٹ", "periods": "مالی ادوار", "accountCode": "اکاؤنٹ کوڈ",
     "debit": "ڈیبٹ", "credit": "کریڈٹ", "balance": "بیلنس"
   },
   "hr": {

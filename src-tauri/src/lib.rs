@@ -102,6 +102,10 @@ pub fn run() {
             commands::accounting::get_trial_balance,
             commands::accounting::get_balance_sheet,
             commands::accounting::get_income_statement,
+            commands::accounting::list_accounting_periods,
+            commands::accounting::create_accounting_period,
+            commands::accounting::close_accounting_period,
+            commands::accounting::reopen_accounting_period,
             // Custody (petty cash legacy)
             commands::custody::list_custody_accounts,
             commands::custody::get_custody_account,

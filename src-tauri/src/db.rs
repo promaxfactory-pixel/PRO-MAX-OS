@@ -1,4 +1,5 @@
 use rusqlite::{Connection, Result};
+use rand::{rngs::OsRng, RngCore};
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -27,7 +28,7 @@ pub fn init_database(path: &Path) -> Result<Connection> {
     conn.execute_batch(include_str!("schema.sql"))?;
     
     // Ensure admin user exists with auto-generated password
-    ensure_admin_user(&conn)?;
+    let _ = ensure_admin_user(&conn)?;
     
     // Run migrations
     migrations::run(&conn)?;
@@ -35,7 +36,7 @@ pub fn init_database(path: &Path) -> Result<Connection> {
     Ok(conn)
 }
 
-fn ensure_admin_user(conn: &Connection) -> Result<()> {
+fn ensure_admin_user(conn: &Connection) -> Result<Option<String>> {
     let admin_exists: bool = conn
         .query_row(
             "SELECT COUNT(*) FROM users WHERE username='admin'",
@@ -45,11 +46,20 @@ fn ensure_admin_user(conn: &Connection) -> Result<()> {
         .unwrap_or(0) > 0;
 
     if !admin_exists {
-        // Deterministic default so freshly installed copies can be logged into
-        // out of the box. The user is forced to change it on first login.
-        let temp_password = "Admin@2026".to_string();
+        // A unique bootstrap password is generated for each fresh database.
+        // Existing installations are untouched, and first login must still
+        // replace this credential immediately.
+        let mut random_bytes = [0_u8; 16];
+        OsRng.fill_bytes(&mut random_bytes);
+        let random_hex = random_bytes
+            .iter()
+            .map(|byte| format!("{:02x}", byte))
+            .collect::<String>();
+        let temp_password = format!("Pm!{}", random_hex);
         let hash = crate::crypto::hash_password(&temp_password)
-            .unwrap_or_else(|_| "argon2id$v=19$m=19456,t=2,p=1$FALLBACK".into());
+            .map_err(|_| rusqlite::Error::InvalidParameterName(
+                "failed to hash generated bootstrap password".into(),
+            ))?;
 
         conn.execute(
             "INSERT INTO users(username, full_name, password_hash, salt, role, active, must_change_password, created_at)
@@ -64,15 +74,16 @@ fn ensure_admin_user(conn: &Connection) -> Result<()> {
         eprintln!("  Admin password: {}", temp_password);
         eprintln!("  ** CHANGE THIS PASSWORD ON FIRST LOGIN **");
         eprintln!("========================================");
+        return Ok(Some(temp_password));
     }
 
-    Ok(())
+    Ok(None)
 }
 
 mod migrations {
     use rusqlite::{Connection, Result};
     
-    pub(crate) const SCHEMA_VERSION: i32 = 37;
+    pub(crate) const SCHEMA_VERSION: i32 = 38;
     
     pub fn run(conn: &Connection) -> Result<()> {
         let current: i32 = conn
@@ -1135,6 +1146,63 @@ mod migrations {
                     }
                 }
             }
+            38 => {
+                // Accounting periods are additive and default to open. Existing
+                // journals and business documents are never rewritten. The two
+                // triggers are a database-level backstop for import paths that
+                // insert journal headers without using post_to_journal().
+                conn.execute_batch(
+                    "CREATE TABLE IF NOT EXISTS accounting_periods (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL,
+                        start_date TEXT NOT NULL,
+                        end_date TEXT NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'open'
+                            CHECK(status IN ('open', 'closed')),
+                        created_by INTEGER REFERENCES users(id),
+                        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                        closed_by INTEGER REFERENCES users(id),
+                        closed_at TEXT,
+                        close_reason TEXT,
+                        reopened_by INTEGER REFERENCES users(id),
+                        reopened_at TEXT,
+                        reopen_reason TEXT,
+                        updated_at TEXT,
+                        CHECK(length(start_date) = 10 AND date(start_date) IS NOT NULL),
+                        CHECK(length(end_date) = 10 AND date(end_date) IS NOT NULL),
+                        CHECK(start_date <= end_date)
+                    );
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_accounting_periods_name
+                        ON accounting_periods(name);
+                    CREATE INDEX IF NOT EXISTS idx_accounting_periods_dates
+                        ON accounting_periods(start_date, end_date, status);
+
+                    CREATE TRIGGER IF NOT EXISTS trg_journal_period_closed_insert
+                    BEFORE INSERT ON journal_entries
+                    WHEN EXISTS (
+                        SELECT 1 FROM accounting_periods ap
+                        WHERE ap.status = 'closed'
+                          AND substr(NEW.date, 1, 10) BETWEEN ap.start_date AND ap.end_date
+                    )
+                    BEGIN
+                        SELECT RAISE(ABORT, 'ACCOUNTING_PERIOD_CLOSED');
+                    END;
+
+                    CREATE TRIGGER IF NOT EXISTS trg_journal_period_closed_update
+                    BEFORE UPDATE OF date ON journal_entries
+                    WHEN EXISTS (
+                        SELECT 1 FROM accounting_periods ap
+                        WHERE ap.status = 'closed'
+                          AND substr(NEW.date, 1, 10) BETWEEN ap.start_date AND ap.end_date
+                    )
+                    BEGIN
+                        SELECT RAISE(ABORT, 'ACCOUNTING_PERIOD_CLOSED');
+                    END;"
+                ).map_err(|e| {
+                    eprintln!("Migration 38 failed: {}", e);
+                    e
+                })?;
+            }
             _ => {}
         }
         Ok(())
@@ -1152,18 +1220,8 @@ mod tests {
         conn.execute_batch("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;").unwrap();
         conn.execute_batch(include_str!("schema.sql")).expect("Failed to apply schema");
 
-        // Ensure admin user exists (same as init_database)
-        crate::crypto::hash_password("test").ok(); // warm up crypto
-        let admin_exists: bool = conn
-            .query_row("SELECT COUNT(*) FROM users WHERE username='admin'", [], |r| r.get::<_, i64>(0))
-            .unwrap_or(0) > 0;
-        if !admin_exists {
-            let hash = crate::crypto::hash_password("temppass123").unwrap_or_else(|_| "fallback".into());
-            conn.execute(
-                "INSERT INTO users(username, full_name, password_hash, salt, role, active, must_change_password, created_at) VALUES('admin', 'Admin', ?, '', 'admin', 1, 1, datetime('now'))",
-                [&hash],
-            ).ok();
-        }
+        // Ensure admin user exists using the same random bootstrap path as production.
+        let _ = super::ensure_admin_user(&conn).expect("admin creation must succeed");
 
         migrations::run(&conn).expect("Migrations failed");
         conn
@@ -1177,9 +1235,13 @@ mod tests {
     }
 
     #[test]
-    fn fresh_install_admin_logs_in_with_default_password() {
+    fn fresh_install_admin_uses_unique_bootstrap_password() {
         let db_path = std::env::temp_dir().join(format!("promax_fresh_{}.db", uuid::Uuid::new_v4()));
-        let conn = super::init_database(&db_path).expect("fresh init_database must succeed");
+        let conn = Connection::open(&db_path).expect("fresh database must open");
+        conn.execute_batch(include_str!("schema.sql")).expect("schema must apply");
+        let bootstrap_password = super::ensure_admin_user(&conn)
+            .expect("admin creation must succeed")
+            .expect("fresh database must return a bootstrap password");
 
         let (hash, must_change): (String, i64) = conn
             .query_row(
@@ -1190,9 +1252,10 @@ mod tests {
             .unwrap();
 
         assert_eq!(must_change, 1, "fresh admin must be forced to change password");
+        assert!(bootstrap_password.len() >= 32);
         assert!(
-            crate::crypto::verify_password("Admin@2026", &hash).unwrap(),
-            "freshly installed admin must accept the documented default password"
+            crate::crypto::verify_password(&bootstrap_password, &hash).unwrap(),
+            "freshly installed admin must accept its generated bootstrap password"
         );
 
         cleanup_db(&db_path);
@@ -1489,7 +1552,7 @@ mod tests {
         let tables = [
             "approval_requests", "budgets", "budget_lines",
             "fixed_assets", "asset_maintenance_logs", "notifications",
-            "quotations", "quotation_lines",
+            "quotations", "quotation_lines", "accounting_periods",
         ];
         for table in &tables {
             let count: i64 = conn

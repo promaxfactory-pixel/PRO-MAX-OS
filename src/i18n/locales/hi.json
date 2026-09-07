@@ -62,7 +62,7 @@
   "accounting": {
     "title": "लेखांकन", "accounts": "खातों का चार्ट", "journal": "जर्नल प्रविष्टियां",
     "trialBalance": "परीक्षण शेष", "incomeStatement": "आय विवरण",
-    "balanceSheet": "बैलेंस शीट", "accountCode": "खाता कोड",
+    "balanceSheet": "बैलेंस शीट", "periods": "लेखा अवधि", "accountCode": "खाता कोड",
     "debit": "डेबिट", "credit": "क्रेडिट", "balance": "शेष"
   },
   "hr": {
