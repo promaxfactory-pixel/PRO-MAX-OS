@@ -29,7 +29,11 @@
     "rememberMe": "مجھے یاد رکھیں", "forgotPassword": "پاس ورڈ بھول گئے؟",
     "loginBtn": "سائن ان", "loggingIn": "سائن ان ہو رہا ہے...",
     "changePassword": "پاس ورڈ تبدیل کریں", "currentPassword": "موجودہ پاس ورڈ",
-    "newPassword": "نیا پاس ورڈ", "confirmPassword": "پاس ورڈ کی تصدیق کریں"
+    "newPassword": "نیا پاس ورڈ", "confirmPassword": "پاس ورڈ کی تصدیق کریں",
+    "firstSetupTitle": "پہلی بار ایڈمن سیٹ اپ",
+    "firstSetupDescription": "اس ڈیوائس کے لیے پاس ورڈ بنائیں۔ یہ GitHub پر نہیں بھیجا جائے گا۔",
+    "passwordRules": "کم از کم 12 حروف: بڑا، چھوٹا، نمبر اور علامت۔",
+    "completeSetup": "محفوظ کریں اور شروع کریں"
   },
   "dashboard": {
     "title": "ڈیش بورڈ", "dailyBrief": "یومیہ خلاصہ",

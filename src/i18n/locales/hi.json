@@ -29,7 +29,11 @@
     "rememberMe": "मुझे याद रखें", "forgotPassword": "पासवर्ड भूल गए?",
     "loginBtn": "साइन इन", "loggingIn": "साइन इन हो रहा है...",
     "changePassword": "पासवर्ड बदलें", "currentPassword": "वर्तमान पासवर्ड",
-    "newPassword": "नया पासवर्ड", "confirmPassword": "पासवर्ड की पुष्टि करें"
+    "newPassword": "नया पासवर्ड", "confirmPassword": "पासवर्ड की पुष्टि करें",
+    "firstSetupTitle": "पहली बार व्यवस्थापक सेटअप",
+    "firstSetupDescription": "इस डिवाइस के लिए पासवर्ड बनाएं। इसे GitHub पर नहीं भेजा जाएगा।",
+    "passwordRules": "कम से कम 12 अक्षर: बड़ा, छोटा, संख्या और प्रतीक।",
+    "completeSetup": "सहेजें और शुरू करें"
   },
   "dashboard": {
     "title": "डैशबोर्ड", "dailyBrief": "दैनिक सारांश",

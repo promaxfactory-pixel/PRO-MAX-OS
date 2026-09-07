@@ -41,6 +41,8 @@ pub fn run() {
             commands::auth::get_current_user,
             commands::auth::change_password,
             commands::auth::validate_token,
+            commands::auth::get_initial_setup_status,
+            commands::auth::complete_initial_admin_setup,
             // Dashboard
             commands::dashboard::get_dashboard_stats,
             commands::dashboard::get_daily_brief,

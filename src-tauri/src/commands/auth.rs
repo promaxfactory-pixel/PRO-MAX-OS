@@ -3,6 +3,7 @@ use crate::crypto;
 use crate::db::DbState;
 use crate::error::AppError;
 use crate::validation::Validator;
+use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -28,6 +29,12 @@ pub struct LoginResult {
     pub token: String,
 }
 
+#[derive(Debug, Serialize)]
+pub struct InitialSetupStatus {
+    pub required: bool,
+    pub username: String,
+}
+
 fn verify_password_stored(password: &str, hash: &str, salt: &str) -> bool {
     if hash.starts_with("$argon2") {
         crypto::verify_password(password, hash).unwrap_or(false)
@@ -41,16 +48,112 @@ fn verify_password_stored(password: &str, hash: &str, salt: &str) -> bool {
     }
 }
 
-fn hash_password_stored(password: &str) -> (String, String) {
-    let argon_hash = crypto::hash_password(password).unwrap_or_else(|_| {
-        use sha2::{Digest, Sha256};
-        let mut current = format!("{:x}", Sha256::digest(password.as_bytes()));
-        for _ in 0..9999 {
-            current = format!("{:x}", Sha256::digest(current.as_bytes()));
-        }
-        current
-    });
-    (argon_hash, String::new())
+fn hash_password_stored(password: &str) -> Result<String, AppError> {
+    crypto::hash_password(password)
+}
+
+fn validate_new_password(password: &str, confirmation: &str) -> Result<(), AppError> {
+    Validator::min_length("new_password", password, 12)?;
+    Validator::max_length("new_password", password, 128)?;
+    if password != confirmation {
+        return Err(AppError::validation("كلمتا المرور غير متطابقتين"));
+    }
+    let has_upper = password.chars().any(char::is_uppercase);
+    let has_lower = password.chars().any(char::is_lowercase);
+    let has_digit = password.chars().any(|value| value.is_ascii_digit());
+    let has_symbol = password.chars().any(|value| !value.is_alphanumeric());
+    if !(has_upper && has_lower && has_digit && has_symbol) {
+        return Err(AppError::validation(
+            "كلمة المرور يجب أن تحتوي حرفًا كبيرًا وصغيرًا ورقمًا ورمزًا",
+        ));
+    }
+    Ok(())
+}
+
+fn initial_setup_is_required(conn: &rusqlite::Connection) -> Result<bool, AppError> {
+    let value: Option<String> = conn
+        .query_row(
+            "SELECT value FROM app_settings WHERE key='initial_admin_setup_required'",
+            [],
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(value.as_deref() == Some("1"))
+}
+
+fn complete_initial_admin_setup_inner(
+    conn: &rusqlite::Connection,
+    new_password: &str,
+    confirm_password: &str,
+) -> Result<(), AppError> {
+    validate_new_password(new_password, confirm_password)?;
+    if !initial_setup_is_required(conn)? {
+        return Err(AppError::permission("تهيئة المدير الأولية غير متاحة"));
+    }
+
+    let admin_id: i64 = conn
+        .query_row(
+            "SELECT id FROM users
+             WHERE username='admin' AND role='admin' AND active=1 AND must_change_password=1",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|_| AppError::auth("حساب المدير الأولي غير صالح"))?;
+    let password_hash = hash_password_stored(new_password)?;
+
+    let tx = conn.unchecked_transaction()?;
+    let flag_changed = tx.execute(
+        "UPDATE app_settings SET value='0'
+         WHERE key='initial_admin_setup_required' AND value='1'",
+        [],
+    )?;
+    if flag_changed != 1 {
+        return Err(AppError::permission("تمت تهيئة المدير بالفعل"));
+    }
+    let admin_changed = tx.execute(
+        "UPDATE users
+         SET password_hash=?1, salt='', must_change_password=0
+         WHERE id=?2 AND must_change_password=1",
+        rusqlite::params![password_hash, admin_id],
+    )?;
+    if admin_changed != 1 {
+        return Err(AppError::auth("تعذر تهيئة حساب المدير"));
+    }
+    rbac::log_audit(
+        &tx,
+        Some(admin_id),
+        Some("admin"),
+        "complete_initial_admin_setup",
+        "users",
+        Some(admin_id),
+        Some("must_change_password=1"),
+        Some("must_change_password=0"),
+        Some("first_run"),
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_initial_setup_status(
+    state: State<'_, DbState>,
+) -> Result<InitialSetupStatus, AppError> {
+    let conn = state.0.lock()?;
+    Ok(InitialSetupStatus {
+        required: initial_setup_is_required(&conn)?,
+        username: "admin".to_string(),
+    })
+}
+
+#[tauri::command]
+pub fn complete_initial_admin_setup(
+    state: State<'_, DbState>,
+    new_password: String,
+    confirm_password: String,
+) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
+    complete_initial_admin_setup_inner(&conn, &new_password, &confirm_password)?;
+    Ok("تم إعداد حساب المدير بنجاح".to_string())
 }
 
 fn is_rate_limited(conn: &rusqlite::Connection, username: &str) -> Result<bool, AppError> {
@@ -197,8 +300,7 @@ pub fn change_password(
         return Err(AppError::auth("تم حظر تغيير كلمة المرور مؤقتاً بسبب محاولات كثيرة. حاول مرة أخرى بعد 30 دقيقة"));
     }
 
-    Validator::min_length("new_password", &new_password, 8)?;
-    Validator::max_length("new_password", &new_password, 128)?;
+    validate_new_password(&new_password, &new_password)?;
 
     let current: (String, String) = conn
         .query_row(
@@ -216,7 +318,7 @@ pub fn change_password(
         return Err(AppError::auth("كلمة المرور القديمة غير صحيحة"));
     }
 
-    let (new_hash, _) = hash_password_stored(&new_password);
+    let new_hash = hash_password_stored(&new_password)?;
     conn.execute(
         "UPDATE users SET password_hash = ?, salt = '', must_change_password = 0 WHERE id = ?",
         rusqlite::params![new_hash, user_id],
@@ -258,4 +360,97 @@ pub fn validate_token(state: State<'_, DbState>, token: String) -> Result<User, 
         },
     )
     .map_err(|_| AppError::auth("Token invalid: user not found or inactive"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::Connection;
+
+    fn setup_connection() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "PRAGMA foreign_keys=ON;
+             CREATE TABLE app_settings(key TEXT PRIMARY KEY, value TEXT);
+             CREATE TABLE users(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                full_name TEXT,
+                password_hash TEXT NOT NULL,
+                salt TEXT NOT NULL,
+                role TEXT NOT NULL,
+                active INTEGER NOT NULL,
+                must_change_password INTEGER NOT NULL,
+                created_at TEXT
+             );
+             CREATE TABLE audit_logs(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts TEXT NOT NULL,
+                user_id INTEGER,
+                username TEXT,
+                action TEXT,
+                entity TEXT,
+                entity_id INTEGER,
+                old_value TEXT,
+                new_value TEXT,
+                reason TEXT
+             );
+             INSERT INTO users(username, full_name, password_hash, salt, role, active, must_change_password)
+             VALUES('admin', 'Admin', 'unusable-bootstrap-hash', '', 'admin', 1, 1);
+             INSERT INTO app_settings(key, value) VALUES('initial_admin_setup_required', '1');",
+        )
+        .unwrap();
+        conn
+    }
+
+    fn strong_test_password() -> String {
+        ["Factory", "#", "Secure", "2026"].concat()
+    }
+
+    #[test]
+    fn initial_setup_sets_argon_password_and_is_one_time_only() {
+        let conn = setup_connection();
+        let password = strong_test_password();
+
+        complete_initial_admin_setup_inner(&conn, &password, &password).unwrap();
+
+        let (hash, must_change): (String, i64) = conn
+            .query_row(
+                "SELECT password_hash, must_change_password FROM users WHERE username='admin'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert!(hash.starts_with("$argon2"));
+        assert!(verify_password_stored(&password, &hash, ""));
+        assert_eq!(must_change, 0);
+        assert!(!initial_setup_is_required(&conn).unwrap());
+        assert_eq!(
+            conn.query_row(
+                "SELECT COUNT(*) FROM audit_logs WHERE action='complete_initial_admin_setup'",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap(),
+            1
+        );
+        assert!(complete_initial_admin_setup_inner(&conn, &password, &password).is_err());
+    }
+
+    #[test]
+    fn initial_setup_rejects_weak_or_mismatched_passwords_without_mutation() {
+        let conn = setup_connection();
+        assert!(complete_initial_admin_setup_inner(&conn, "short", "short").is_err());
+        let password = strong_test_password();
+        assert!(complete_initial_admin_setup_inner(&conn, &password, "different").is_err());
+        assert!(initial_setup_is_required(&conn).unwrap());
+        let must_change: i64 = conn
+            .query_row(
+                "SELECT must_change_password FROM users WHERE username='admin'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(must_change, 1);
+    }
 }

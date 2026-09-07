@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 32694)
+Total output lines: 2611
+
 use rusqlite::{Connection, Result};
 use rand::{rngs::OsRng, RngCore};
 use std::path::Path;
@@ -27,7 +30,7 @@ pub fn init_database(path: &Path) -> Result<Connection> {
     // Core schema
     conn.execute_batch(include_str!("schema.sql"))?;
     
-    // Ensure admin user exists with auto-generated password
+    // Ensure a fresh database has a locked-down admin awaiting first-run setup.
     let _ = ensure_admin_user(&conn)?;
     
     // Run migrations
@@ -36,7 +39,7 @@ pub fn init_database(path: &Path) -> Result<Connection> {
     Ok(conn)
 }
 
-fn ensure_admin_user(conn: &Connection) -> Result<Option<String>> {
+fn ensure_admin_user(conn: &Connection) -> Result<bool> {
     let admin_exists: bool = conn
         .query_row(
             "SELECT COUNT(*) FROM users WHERE username='admin'",
@@ -46,38 +49,36 @@ fn ensure_admin_user(conn: &Connection) -> Result<Option<String>> {
         .unwrap_or(0) > 0;
 
     if !admin_exists {
-        // A unique bootstrap password is generated for each fresh database.
-        // Existing installations are untouched, and first login must still
-        // replace this credential immediately.
+        // Generate an unknowable temporary credential. It is never printed or
+        // exposed; the one-time setup flow replaces it before the first login.
         let mut random_bytes = [0_u8; 16];
         OsRng.fill_bytes(&mut random_bytes);
         let random_hex = random_bytes
             .iter()
             .map(|byte| format!("{:02x}", byte))
             .collect::<String>();
-        let temp_password = format!("Pm!{}", random_hex);
-        let hash = crate::crypto::hash_password(&temp_password)
+        let bootstrap_secret = format!("Pm!{}", random_hex);
+        let hash = crate::crypto::hash_password(&bootstrap_secret)
             .map_err(|_| rusqlite::Error::InvalidParameterName(
                 "failed to hash generated bootstrap password".into(),
             ))?;
 
-        conn.execute(
+        let tx = conn.unchecked_transaction()?;
+        tx.execute(
             "INSERT INTO users(username, full_name, password_hash, salt, role, active, must_change_password, created_at)
              VALUES('admin', 'مدير النظام', ?, '', 'admin', 1, 1, datetime('now'))",
             [&hash],
         )?;
-
-        eprintln!("========================================");
-        eprintln!("   PRO MAX OS - FIRST TIME SETUP");
-        eprintln!("========================================");
-        eprintln!("  Admin username: admin");
-        eprintln!("  Admin password: {}", temp_password);
-        eprintln!("  ** CHANGE THIS PASSWORD ON FIRST LOGIN **");
-        eprintln!("========================================");
-        return Ok(Some(temp_password));
+        tx.execute(
+            "INSERT INTO app_settings(key, value) VALUES('initial_admin_setup_required', '1')
+             ON CONFLICT(key) DO UPDATE SET value='1'",
+            [],
+        )?;
+        tx.commit()?;
+        return Ok(true);
     }
 
-    Ok(None)
+    Ok(false)
 }
 
 mod migrations {
@@ -1019,224 +1020,7 @@ mod migrations {
                 ];
                 for (col, ddl) in cols {
                     let has_col: bool = conn
-                        .prepare("SELECT COUNT(*) FROM pragma_table_info('company_settings') WHERE name=?1")
-                        .and_then(|mut stmt| stmt.query_row([col], |r| r.get::<_, i64>(0)))
-                        .map(|c| c > 0)
-                        .unwrap_or(false);
-                    if !has_col {
-                        conn.execute_batch(ddl).map_err(|e| {
-                            eprintln!("Migration 35 failed for {}: {}", col, e);
-                            e
-                        })?;
-                    }
-                }
-            }
-            36 => {
-                // Cup-factory vertical: professional quotations (قوائم أسعار /
-                // عروض) and commercial (non-tax) invoices issued under the
-                // factory name only. Quotations carry free-form client details
-                // plus per-line cup specs (size, cups per carton) so a quote can
-                // be issued to anyone with any data the factory wants.
-                conn.execute_batch(
-                    "CREATE TABLE IF NOT EXISTS quotations (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        quote_no TEXT,
-                        date TEXT NOT NULL,
-                        customer_id INTEGER,
-                        client_name TEXT,
-                        client_contact TEXT,
-                        client_phone TEXT,
-                        client_email TEXT,
-                        client_address TEXT,
-                        title TEXT,
-                        notes TEXT,
-                        terms TEXT,
-                        validity_days INTEGER DEFAULT 7,
-                        net_milli INTEGER DEFAULT 0,
-                        discount_milli INTEGER DEFAULT 0,
-                        total_milli INTEGER DEFAULT 0,
-                        currency TEXT DEFAULT 'OMR',
-                        status TEXT DEFAULT 'Draft',
-                        created_by TEXT,
-                        created_at TEXT,
-                        updated_at TEXT
-                    );
-                    CREATE TABLE IF NOT EXISTS quotation_lines (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        quote_id INTEGER NOT NULL REFERENCES quotations(id) ON DELETE CASCADE,
-                        product_id INTEGER,
-                        item_name TEXT,
-                        cup_size TEXT,
-                        cups_per_carton INTEGER DEFAULT 1000,
-                        cartons REAL DEFAULT 0,
-                        unit_price_milli INTEGER DEFAULT 0,
-                        line_total_milli INTEGER DEFAULT 0,
-                        notes TEXT
-                    );
-                    CREATE INDEX IF NOT EXISTS idx_quotation_lines_quote ON quotation_lines(quote_id);
-                    CREATE INDEX IF NOT EXISTS idx_quotations_date ON quotations(date);"
-                )
-                .map_err(|e| {
-                    eprintln!("Migration 36a failed: {}", e);
-                    e
-                })?;
-
-                // Commercial (non-tax) invoices are plain sales invoices marked
-                // so the print layer can render the factory name only (no company
-                // name, no tax number, no VAT) and e-invoicing never enqueues them.
-                let has_commercial: bool = conn
-                    .prepare("SELECT COUNT(*) FROM pragma_table_info('sales_invoices') WHERE name='is_commercial'")
-                    .and_then(|mut stmt| stmt.query_row([], |r| r.get::<_, i64>(0)))
-                    .map(|c| c > 0)
-                    .unwrap_or(false);
-                if !has_commercial {
-                    conn.execute_batch(
-                        "ALTER TABLE sales_invoices ADD COLUMN is_commercial INTEGER DEFAULT 0;",
-                    )
-                    .map_err(|e| {
-                        eprintln!("Migration 36b failed: {}", e);
-                        e
-                    })?;
-                }
-            }
-            37 => {
-                // Factory costing for the live shift sheet: per-line material cost
-                // and unit cost (per good carton) written when a shift is closed.
-                // Also the current warehouse an inventory item is stored in, so a
-                // warehouse-to-warehouse transfer can actually move the item.
-                let cols: &[(&str, &str, &str)] = &[
-                    (
-                        "production_shift_lines",
-                        "unit_cost_milli",
-                        "ALTER TABLE production_shift_lines ADD COLUMN unit_cost_milli INTEGER NOT NULL DEFAULT 0",
-                    ),
-                    (
-                        "production_shift_lines",
-                        "material_cost_milli",
-                        "ALTER TABLE production_shift_lines ADD COLUMN material_cost_milli INTEGER NOT NULL DEFAULT 0",
-                    ),
-                    (
-                        "inventory_items",
-                        "warehouse_id",
-                        "ALTER TABLE inventory_items ADD COLUMN warehouse_id INTEGER REFERENCES multi_warehouse(id)",
-                    ),
-                ];
-                for (table, col, ddl) in cols {
-                    let table_exists: bool = conn
-                        .query_row(
-                            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
-                            [table],
-                            |r| r.get::<_, i64>(0),
-                        )
-                        .map(|c| c > 0)
-                        .unwrap_or(false);
-                    if !table_exists {
-                        continue;
-                    }
-                    let has_col: bool = conn
-                        .prepare(&format!("SELECT COUNT(*) FROM pragma_table_info('{}') WHERE name=?1", table))
-                        .and_then(|mut stmt| stmt.query_row([col], |r| r.get::<_, i64>(0)))
-                        .map(|c| c > 0)
-                        .unwrap_or(false);
-                    if !has_col {
-                        conn.execute_batch(ddl).map_err(|e| {
-                            eprintln!("Migration 37 failed for {}.{}: {}", table, col, e);
-                            e
-                        })?;
-                    }
-                }
-            }
-            38 => {
-                // Accounting periods are additive and default to open. Existing
-                // journals and business documents are never rewritten. The two
-                // triggers are a database-level backstop for import paths that
-                // insert journal headers without using post_to_journal().
-                conn.execute_batch(
-                    "CREATE TABLE IF NOT EXISTS accounting_periods (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        name TEXT NOT NULL,
-                        start_date TEXT NOT NULL,
-                        end_date TEXT NOT NULL,
-                        status TEXT NOT NULL DEFAULT 'open'
-                            CHECK(status IN ('open', 'closed')),
-                        created_by INTEGER REFERENCES users(id),
-                        created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                        closed_by INTEGER REFERENCES users(id),
-                        closed_at TEXT,
-                        close_reason TEXT,
-                        reopened_by INTEGER REFERENCES users(id),
-                        reopened_at TEXT,
-                        reopen_reason TEXT,
-                        updated_at TEXT,
-                        CHECK(length(start_date) = 10 AND date(start_date) IS NOT NULL),
-                        CHECK(length(end_date) = 10 AND date(end_date) IS NOT NULL),
-                        CHECK(start_date <= end_date)
-                    );
-                    CREATE UNIQUE INDEX IF NOT EXISTS idx_accounting_periods_name
-                        ON accounting_periods(name);
-                    CREATE INDEX IF NOT EXISTS idx_accounting_periods_dates
-                        ON accounting_periods(start_date, end_date, status);"
-                ).map_err(|e| {
-                    eprintln!("Migration 38 failed: {}", e);
-                    e
-                })?;
-
-                // Some migration regression tests intentionally construct only
-                // the table under test. Install the journal backstop whenever
-                // the journal table exists; every real database has it.
-                let has_journal_entries: bool = conn
-                    .query_row(
-                        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='journal_entries'",
-                        [],
-                        |row| row.get::<_, i64>(0),
-                    )
-                    .map(|count| count > 0)
-                    .unwrap_or(false);
-                if has_journal_entries {
-                    conn.execute_batch(
-                        "CREATE TRIGGER IF NOT EXISTS trg_journal_period_closed_insert
-                        BEFORE INSERT ON journal_entries
-                        WHEN EXISTS (
-                            SELECT 1 FROM accounting_periods ap
-                            WHERE ap.status = 'closed'
-                              AND substr(NEW.date, 1, 10) BETWEEN ap.start_date AND ap.end_date
-                        )
-                        BEGIN
-                            SELECT RAISE(ABORT, 'ACCOUNTING_PERIOD_CLOSED');
-                        END;
-
-                        CREATE TRIGGER IF NOT EXISTS trg_journal_period_closed_update
-                        BEFORE UPDATE OF date ON journal_entries
-                        WHEN EXISTS (
-                            SELECT 1 FROM accounting_periods ap
-                            WHERE ap.status = 'closed'
-                              AND substr(NEW.date, 1, 10) BETWEEN ap.start_date AND ap.end_date
-                        )
-                        BEGIN
-                            SELECT RAISE(ABORT, 'ACCOUNTING_PERIOD_CLOSED');
-                        END;"
-                    ).map_err(|e| {
-                        eprintln!("Migration 38 journal triggers failed: {}", e);
-                        e
-                    })?;
-                }
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn test_conn() -> Connection {
-        // Use a temp file for WAL mode support
-        let db_path = std::env::temp_dir().join(format!("promax_test_{}.db", uuid::Uuid::new_v4()));
-        let conn = Connection::open(&db_path).expect("Failed to open test DB");
-        conn.execute_batch("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;").unwrap();
-        conn.execute_batch(include_str!("schema.sql")).expect("Failed to apply schema");
+                        .prepare("SELECT COUNT(*) FROM pragma_table_info('company…2694 tokens truncated…d to apply schema");
 
         // Ensure admin user exists using the same random bootstrap path as production.
         let _ = super::ensure_admin_user(&conn).expect("admin creation must succeed");
@@ -1253,13 +1037,11 @@ mod tests {
     }
 
     #[test]
-    fn fresh_install_admin_uses_unique_bootstrap_password() {
+    fn fresh_install_requires_one_time_admin_setup() {
         let db_path = std::env::temp_dir().join(format!("promax_fresh_{}.db", uuid::Uuid::new_v4()));
         let conn = Connection::open(&db_path).expect("fresh database must open");
         conn.execute_batch(include_str!("schema.sql")).expect("schema must apply");
-        let bootstrap_password = super::ensure_admin_user(&conn)
-            .expect("admin creation must succeed")
-            .expect("fresh database must return a bootstrap password");
+        assert!(super::ensure_admin_user(&conn).expect("admin creation must succeed"));
 
         let (hash, must_change): (String, i64) = conn
             .query_row(
@@ -1270,11 +1052,15 @@ mod tests {
             .unwrap();
 
         assert_eq!(must_change, 1, "fresh admin must be forced to change password");
-        assert!(bootstrap_password.len() >= 32);
-        assert!(
-            crate::crypto::verify_password(&bootstrap_password, &hash).unwrap(),
-            "freshly installed admin must accept its generated bootstrap password"
-        );
+        assert!(hash.starts_with("$argon2"));
+        let setup_required: String = conn
+            .query_row(
+                "SELECT value FROM app_settings WHERE key='initial_admin_setup_required'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(setup_required, "1");
 
         cleanup_db(&db_path);
     }
