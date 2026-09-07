@@ -1175,33 +1175,51 @@ mod migrations {
                     CREATE UNIQUE INDEX IF NOT EXISTS idx_accounting_periods_name
                         ON accounting_periods(name);
                     CREATE INDEX IF NOT EXISTS idx_accounting_periods_dates
-                        ON accounting_periods(start_date, end_date, status);
-
-                    CREATE TRIGGER IF NOT EXISTS trg_journal_period_closed_insert
-                    BEFORE INSERT ON journal_entries
-                    WHEN EXISTS (
-                        SELECT 1 FROM accounting_periods ap
-                        WHERE ap.status = 'closed'
-                          AND substr(NEW.date, 1, 10) BETWEEN ap.start_date AND ap.end_date
-                    )
-                    BEGIN
-                        SELECT RAISE(ABORT, 'ACCOUNTING_PERIOD_CLOSED');
-                    END;
-
-                    CREATE TRIGGER IF NOT EXISTS trg_journal_period_closed_update
-                    BEFORE UPDATE OF date ON journal_entries
-                    WHEN EXISTS (
-                        SELECT 1 FROM accounting_periods ap
-                        WHERE ap.status = 'closed'
-                          AND substr(NEW.date, 1, 10) BETWEEN ap.start_date AND ap.end_date
-                    )
-                    BEGIN
-                        SELECT RAISE(ABORT, 'ACCOUNTING_PERIOD_CLOSED');
-                    END;"
+                        ON accounting_periods(start_date, end_date, status);"
                 ).map_err(|e| {
                     eprintln!("Migration 38 failed: {}", e);
                     e
                 })?;
+
+                // Some migration regression tests intentionally construct only
+                // the table under test. Install the journal backstop whenever
+                // the journal table exists; every real database has it.
+                let has_journal_entries: bool = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='journal_entries'",
+                        [],
+                        |row| row.get::<_, i64>(0),
+                    )
+                    .map(|count| count > 0)
+                    .unwrap_or(false);
+                if has_journal_entries {
+                    conn.execute_batch(
+                        "CREATE TRIGGER IF NOT EXISTS trg_journal_period_closed_insert
+                        BEFORE INSERT ON journal_entries
+                        WHEN EXISTS (
+                            SELECT 1 FROM accounting_periods ap
+                            WHERE ap.status = 'closed'
+                              AND substr(NEW.date, 1, 10) BETWEEN ap.start_date AND ap.end_date
+                        )
+                        BEGIN
+                            SELECT RAISE(ABORT, 'ACCOUNTING_PERIOD_CLOSED');
+                        END;
+
+                        CREATE TRIGGER IF NOT EXISTS trg_journal_period_closed_update
+                        BEFORE UPDATE OF date ON journal_entries
+                        WHEN EXISTS (
+                            SELECT 1 FROM accounting_periods ap
+                            WHERE ap.status = 'closed'
+                              AND substr(NEW.date, 1, 10) BETWEEN ap.start_date AND ap.end_date
+                        )
+                        BEGIN
+                            SELECT RAISE(ABORT, 'ACCOUNTING_PERIOD_CLOSED');
+                        END;"
+                    ).map_err(|e| {
+                        eprintln!("Migration 38 journal triggers failed: {}", e);
+                        e
+                    })?;
+                }
             }
             _ => {}
         }
