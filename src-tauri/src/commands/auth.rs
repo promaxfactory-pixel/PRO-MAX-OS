@@ -49,7 +49,7 @@ fn verify_password_stored(password: &str, hash: &str, salt: &str) -> bool {
 }
 
 fn hash_password_stored(password: &str) -> Result<String, AppError> {
-    crypto::hash_password(password)
+    Ok(crypto::hash_password(password)?)
 }
 
 fn validate_new_password(password: &str, confirmation: &str) -> Result<(), AppError> {
