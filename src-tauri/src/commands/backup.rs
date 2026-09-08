@@ -109,6 +109,30 @@ fn get_backup_dir(conn: &rusqlite::Connection) -> Result<std::path::PathBuf, App
     Ok(dir)
 }
 
+/// Returns the age of the newest valid local backup in whole days. Kept
+/// separate from the UI so dashboard alerts reflect filesystem reality.
+pub(crate) fn latest_backup_age_days(conn: &rusqlite::Connection) -> Result<Option<i64>, AppError> {
+    let dir = get_backup_dir(conn)?;
+    let newest = fs::read_dir(dir)?
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let path = entry.path();
+            let name = path.file_name()?.to_str()?;
+            if !name.starts_with("backup_") || !name.ends_with(".db") || !is_valid_sqlite(&path) {
+                return None;
+            }
+            entry.metadata().ok()?.modified().ok()
+        })
+        .max();
+    Ok(newest.map(|modified| {
+        SystemTime::now()
+            .duration_since(modified)
+            .unwrap_or_default()
+            .as_secs()
+            .saturating_div(86_400) as i64
+    }))
+}
+
 fn is_valid_sqlite(path: &Path) -> bool {
     let mut file = match fs::File::open(path) {
         Ok(f) => f,

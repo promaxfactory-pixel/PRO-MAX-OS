@@ -165,5 +165,12 @@ pub fn get_daily_brief(state: State<'_, DbState>) -> Result<DailyBrief, AppError
         [], |r| r.get(0)
     ).unwrap_or(0);
     let waste_yesterday: i64 = conn.query_row("SELECT COALESCE(SUM(cartons_waste),0) FROM production_lines pl JOIN production_orders po ON pl.order_id=po.id WHERE po.date = date('now', '-1 day')", [], |r| r.get(0)).unwrap_or(0);
-    Ok(DailyBrief { unpaid_count, unpaid_total, overdue_total, waste_yesterday, last_backup_days: 0, backup_status: "amber".to_string() })
+    let last_backup_days = crate::commands::backup::latest_backup_age_days(&conn)?;
+    let (last_backup_days, backup_status) = match last_backup_days {
+        Some(days) if days <= 1 => (days, "green".to_string()),
+        Some(days) if days <= 7 => (days, "amber".to_string()),
+        Some(days) => (days, "red".to_string()),
+        None => (-1, "red".to_string()),
+    };
+    Ok(DailyBrief { unpaid_count, unpaid_total, overdue_total, waste_yesterday, last_backup_days, backup_status })
 }
