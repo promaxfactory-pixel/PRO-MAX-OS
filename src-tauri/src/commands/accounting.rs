@@ -683,6 +683,39 @@ pub fn get_trial_balance(state: State<'_, DbState>) -> Result<Vec<TrialBalanceRo
     rows.collect::<Result<Vec<_>, _>>().map_err(AppError::from)
 }
 
+/// Trial balance as at the inclusive reporting date. This is read-only and
+/// deliberately joins journal headers so future-dated entries cannot leak
+/// into a historical report.
+#[tauri::command]
+pub fn get_trial_balance_as_of(
+    state: State<'_, DbState>,
+    date_to: String,
+) -> Result<Vec<TrialBalanceRow>, AppError> {
+    let date_to = normalized_iso_date(&date_to, "تاريخ التقرير")?;
+    let conn = state.0.lock()?;
+    let mut stmt = conn.prepare(
+        "SELECT a.code, COALESCE(a.name_ar, a.name_en, a.code),
+                COALESCE(SUM(CASE WHEN je.date <= ?1 THEN jel.debit_milli ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN je.date <= ?1 THEN jel.credit_milli ELSE 0 END), 0)
+         FROM accounts a
+         LEFT JOIN journal_entry_lines jel ON a.code = jel.account_code
+         LEFT JOIN journal_entries je ON je.id = jel.entry_id
+         GROUP BY a.code
+         HAVING COALESCE(SUM(CASE WHEN je.date <= ?1 THEN jel.debit_milli ELSE 0 END), 0) != 0
+             OR COALESCE(SUM(CASE WHEN je.date <= ?1 THEN jel.credit_milli ELSE 0 END), 0) != 0
+         ORDER BY a.code",
+    )?;
+    let rows = stmt.query_map([date_to], |row| {
+        Ok(TrialBalanceRow {
+            account_code: row.get(0)?,
+            account_name: row.get(1)?,
+            debit_milli: row.get(2)?,
+            credit_milli: row.get(3)?,
+        })
+    })?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(AppError::from)
+}
+
 pub(crate) fn build_balance_sheet(conn: &rusqlite::Connection) -> Result<BalanceSheet, AppError> {
     let mut stmt = conn.prepare(
         "SELECT CASE LOWER(a.type)
