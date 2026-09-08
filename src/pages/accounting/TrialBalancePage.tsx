@@ -16,8 +16,9 @@ export default function TrialBalancePage() {
   const { addNotification } = useUIStore();
   const [data, setData] = useState<TrialBalanceRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
 
-  useEffect(() => { invoke("get_trial_balance").then((d: unknown) => setData(d as TrialBalanceRow[])).catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" })).finally(() => setLoading(false)); }, []);
+  useEffect(() => { setLoading(true); invoke("get_trial_balance_as_of", { dateTo }).then((d: unknown) => setData(d as TrialBalanceRow[])).catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" })).finally(() => setLoading(false)); }, [addNotification, dateTo]);
 
   const totalDebit = data.reduce((s, r) => s + (r.debit_milli || 0), 0);
   const totalCredit = data.reduce((s, r) => s + (r.credit_milli || 0), 0);
@@ -32,7 +33,8 @@ export default function TrialBalancePage() {
   return (
     <div className="space-y-6">
       <div className="page-header">
-        <div><h1 className="page-title">ميزان المراجعة</h1></div>
+        <div><h1 className="page-title">ميزان المراجعة</h1><p className="mt-1 text-sm text-surface-400">رصيد القيود حتى تاريخ التقرير المحدد</p></div>
+        <label className="text-sm text-surface-300">حتى تاريخ <input aria-label="تاريخ ميزان المراجعة" className="ms-2 rounded-lg border border-surface-600 bg-surface-800 px-3 py-2 text-white" type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} /></label>
       </div>
       <div className="grid grid-cols-2 gap-4 mb-6">
         <Card><div className="text-center"><p className="text-3xl font-bold gradient-text">{formatOMR(totalDebit)}</p><p className="text-xs text-surface-400">إجمالي المدين</p></div></Card>
