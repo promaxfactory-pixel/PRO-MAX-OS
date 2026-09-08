@@ -59,10 +59,10 @@ export default function DailyBriefPage() {
         </Card>
         <Card className="text-center">
           <Shield className={`w-8 h-8 mx-auto mb-2 ${brief?.backup_status === "green" ? "text-emerald-400" : brief?.backup_status === "amber" ? "text-amber-400" : "text-red-400"}`} />
-          <p className="text-3xl font-bold text-white">{brief?.last_backup_days ?? "—"}</p>
-          <p className="text-sm text-surface-400">أيام من آخر نسخة احتياطية</p>
+          <p className="text-3xl font-bold text-white">{brief && brief.last_backup_days >= 0 ? brief.last_backup_days : "—"}</p>
+          <p className="text-sm text-surface-400">{brief && brief.last_backup_days >= 0 ? "أيام من آخر نسخة احتياطية" : "لا توجد نسخة احتياطية"}</p>
           <Badge variant={brief?.backup_status === "green" ? "success" : brief?.backup_status === "amber" ? "warning" : "danger"}>
-            {brief?.backup_status === "green" ? "محدث" : brief?.backup_status === "amber" ? "يحتاج تحديث" : "متأخر"}
+            {brief?.backup_status === "green" ? "محدث" : brief?.backup_status === "amber" ? "يحتاج تحديث" : brief && brief.last_backup_days < 0 ? "مطلوب فورًا" : "متأخر"}
           </Badge>
         </Card>
       </div>
