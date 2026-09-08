@@ -470,7 +470,7 @@ pub fn excel_import_journal(
     let desc_col = find_column(&hmap, &["description", "الوصف", "desc", "memo", "التفاصيل"]);
     let debit_col = find_column(&hmap, &["debit", "المدين", "debit_amount", "مبلغ مدين"]);
     let credit_col = find_column(&hmap, &["credit", "الدائن", "credit_amount", "مبلغ دائن"]);
-    let ref_col = find_column(&hmap, &["reference", "المرجع", "ref", "doc_no"]);
+    let _ref_col = find_column(&hmap, &["reference", "المرجع", "ref", "doc_no"]);
     let _cost_center_col = find_column(&hmap, &["cost center", "مركز التكلفة", "cost_center"]);
 
     if debit_col.is_none() && credit_col.is_none() {
@@ -525,9 +525,13 @@ pub fn excel_import_journal(
     let conn = state.0.lock()?;
 
     for (date, indices) in &entry_groups {
-        let mut total_debit = 0.0f64;
-        let mut total_credit = 0.0f64;
-        let mut lines: Vec<(String, String, f64, f64, String)> = Vec::new(); // (account, desc, debit, credit, ref)
+        // Work in baisa/milli-units before comparing totals. Floating-point
+        // comparison at this point can create a balanced-looking spreadsheet
+        // that becomes unbalanced after it is written as integer amounts.
+        let mut total_debit = 0i64;
+        let mut total_credit = 0i64;
+        let mut lines: Vec<(String, i64, i64, Option<String>)> = Vec::new();
+        let mut group_invalid = false;
 
         for &idx in indices {
             let row = &data_rows[idx];
@@ -547,6 +551,7 @@ pub fn excel_import_journal(
                     suggestion: "Ensure each row has an account name or code.".into(),
                 });
                 skipped += 1;
+                group_invalid = true;
                 continue;
             }
 
@@ -565,12 +570,7 @@ pub fn excel_import_journal(
                 .and_then(cell_to_f64)
                 .unwrap_or(0.0);
 
-            let reference = ref_col
-                .and_then(|ci| row.get(ci))
-                .map(cell_to_string)
-                .unwrap_or_default();
-
-            if debit < 0.0 {
+            if !debit.is_finite() || debit < 0.0 {
                 errors.push(ImportError {
                     row: excel_row,
                     column: "debit".into(),
@@ -578,8 +578,11 @@ pub fn excel_import_journal(
                     error: "Debit cannot be negative".into(),
                     suggestion: "Use positive values for debit amounts.".into(),
                 });
+                skipped += 1;
+                group_invalid = true;
+                continue;
             }
-            if credit < 0.0 {
+            if !credit.is_finite() || credit < 0.0 {
                 errors.push(ImportError {
                     row: excel_row,
                     column: "credit".into(),
@@ -587,6 +590,9 @@ pub fn excel_import_journal(
                     error: "Credit cannot be negative".into(),
                     suggestion: "Use positive values for credit amounts.".into(),
                 });
+                skipped += 1;
+                group_invalid = true;
+                continue;
             }
             if debit == 0.0 && credit == 0.0 {
                 warnings.push(format!(
@@ -597,24 +603,80 @@ pub fn excel_import_journal(
                 continue;
             }
             if debit > 0.0 && credit > 0.0 {
-                warnings.push(format!(
-                    "Row {}: both debit and credit are non-zero. Treating as separate lines.",
-                    excel_row
-                ));
+                errors.push(ImportError {
+                    row: excel_row,
+                    column: "debit/credit".into(),
+                    value: format!("{}/{}", debit, credit),
+                    error: "A journal line must be debit or credit, not both".into(),
+                    suggestion: "Split this into two separate journal lines.".into(),
+                });
+                skipped += 1;
+                group_invalid = true;
+                continue;
             }
 
-            total_debit += debit;
-            total_credit += credit;
-            lines.push((account, description, debit, credit, reference));
+            let debit_milli = (debit * 1000.0).round();
+            let credit_milli = (credit * 1000.0).round();
+            if debit_milli > i64::MAX as f64 || credit_milli > i64::MAX as f64 {
+                errors.push(ImportError {
+                    row: excel_row,
+                    column: "debit/credit".into(),
+                    value: format!("{}/{}", debit, credit),
+                    error: "Amount exceeds the supported accounting range".into(),
+                    suggestion: "Split the amount into valid journal entries.".into(),
+                });
+                skipped += 1;
+                group_invalid = true;
+                continue;
+            }
+            let debit_milli = debit_milli as i64;
+            let credit_milli = credit_milli as i64;
+            let Some(next_debit) = total_debit.checked_add(debit_milli) else {
+                errors.push(ImportError {
+                    row: excel_row,
+                    column: "debit".into(),
+                    value: debit.to_string(),
+                    error: "Journal debit total exceeds the supported accounting range".into(),
+                    suggestion: "Split the entry into smaller balanced entries.".into(),
+                });
+                skipped += 1;
+                group_invalid = true;
+                continue;
+            };
+            let Some(next_credit) = total_credit.checked_add(credit_milli) else {
+                errors.push(ImportError {
+                    row: excel_row,
+                    column: "credit".into(),
+                    value: credit.to_string(),
+                    error: "Journal credit total exceeds the supported accounting range".into(),
+                    suggestion: "Split the entry into smaller balanced entries.".into(),
+                });
+                skipped += 1;
+                group_invalid = true;
+                continue;
+            };
+            total_debit = next_debit;
+            total_credit = next_credit;
+            lines.push((account, debit_milli, credit_milli, Some(description)));
         }
 
-        // Validate debits == credits
-        let diff = (total_debit - total_credit).abs();
-        if diff > 0.01 {
-            warnings.push(format!(
-                "Journal entry for {}: debits ({}) ≠ credits ({}). Difference: {}",
-                date, total_debit, total_credit, diff
-            ));
+        if total_debit != total_credit {
+            errors.push(ImportError {
+                row: indices.first().copied().unwrap_or(0) + if input.skip_first_row { 2 } else { 1 },
+                column: "debit/credit".into(),
+                value: format!("{}/{}", total_debit, total_credit),
+                error: format!("Journal entry for {} is not balanced", date),
+                suggestion: "Correct the debit and credit totals before importing this entry.".into(),
+            });
+            group_invalid = true;
+        }
+
+        // Never turn a partially valid spreadsheet group into a partial journal
+        // entry. Every line in the source group belongs to the same accounting
+        // event and must be accepted or rejected together.
+        if group_invalid {
+            skipped += lines.len();
+            continue;
         }
 
         if input.dry_run {
@@ -622,23 +684,30 @@ pub fn excel_import_journal(
             continue;
         }
 
-        // Insert the journal entry
+        // Use the sole journal posting path so imported entries receive a
+        // sequence number, period-lock protection, account validation, and a
+        // savepoint that rolls back header and lines together on any error.
         let entry_desc = format!("Imported from {}", file_name);
-        let entry_no = format!("IMP-{}", file_name);
-        conn.execute(
-            "INSERT INTO journal_entries (entry_no, date, memo, ref_type, ref_id, created_by) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            rusqlite::params![entry_no, date, entry_desc, "import", Option::<i64>::None, "system"],
-        )
-        .map_err(|e| format!("Failed to insert journal entry: {}", e))?;
-        let entry_id = conn.last_insert_rowid();
-
-        for (account, desc, debit, credit, _reference) in &lines {
-            conn.execute(
-                "INSERT INTO journal_entry_lines (entry_id, account_code, debit_milli, credit_milli, memo) VALUES (?1, ?2, ?3, ?4, ?5)",
-                rusqlite::params![entry_id, account, (debit * 1000.0) as i64, (credit * 1000.0) as i64, desc],
-            )
-            .map_err(|e| format!("Failed to insert journal line: {}", e))?;
-            imported += 1;
+        match crate::commands::accounting::post_to_journal(
+            &conn,
+            "import",
+            0,
+            date,
+            &entry_desc,
+            &lines,
+            &format!("user:{}", user_id),
+        ) {
+            Ok(_) => imported += lines.len(),
+            Err(error) => {
+                errors.push(ImportError {
+                    row: indices.first().copied().unwrap_or(0) + if input.skip_first_row { 2 } else { 1 },
+                    column: "journal".into(),
+                    value: date.clone(),
+                    error: error.to_string(),
+                    suggestion: "Correct the indicated journal group and import it again.".into(),
+                });
+                skipped += lines.len();
+            }
         }
     }
 
