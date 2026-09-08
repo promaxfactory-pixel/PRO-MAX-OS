@@ -34,6 +34,7 @@ const JournalPage = lazy(() => import("./pages/accounting/JournalPage"));
 const TrialBalancePage = lazy(() => import("./pages/accounting/TrialBalancePage"));
 const FinancialStatementsPage = lazy(() => import("./pages/accounting/FinancialStatementsPage"));
 const AuditLogPage = lazy(() => import("./pages/accounting/AuditLogPage"));
+const AccountingPeriodsPage = lazy(() => import("./pages/accounting/AccountingPeriodsPage"));
 const EmployeeListPage = lazy(() => import("./pages/hr/EmployeeListPage"));
 const EmployeeDetailPage = lazy(() => import("./pages/hr/EmployeeDetailPage"));
 const EmployeeFormPage = lazy(() => import("./pages/hr/EmployeeFormPage"));
@@ -182,6 +183,7 @@ export default function App() {
             <Route path="/accounting/journal" element={<ProtectedRoute><JournalPage /></ProtectedRoute>} />
             <Route path="/accounting/trial-balance" element={<ProtectedRoute><TrialBalancePage /></ProtectedRoute>} />
             <Route path="/accounting/statements" element={<ProtectedRoute><FinancialStatementsPage /></ProtectedRoute>} />
+            <Route path="/accounting/periods" element={<ProtectedRoute><AccountingPeriodsPage /></ProtectedRoute>} />
             <Route path="/audit-log" element={<ProtectedRoute><AuditLogPage /></ProtectedRoute>} />
 
             {/* Finance */}
