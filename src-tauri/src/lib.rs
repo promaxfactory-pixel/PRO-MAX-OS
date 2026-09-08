@@ -102,6 +102,7 @@ pub fn run() {
             commands::accounting::get_journal_entry_lines,
             commands::accounting::create_journal_entry,
             commands::accounting::get_trial_balance,
+            commands::accounting::get_trial_balance_as_of,
             commands::accounting::get_balance_sheet,
             commands::accounting::get_income_statement,
             commands::accounting::list_accounting_periods,
