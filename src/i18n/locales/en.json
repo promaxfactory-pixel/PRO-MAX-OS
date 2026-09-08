@@ -140,7 +140,11 @@
     "copyright": "Mayadeen Bahla National Company. All rights reserved.",
     "admin": "Admin",
     "loginError": "Login error",
-    "changing": "Changing..."
+    "changing": "Changing...",
+    "firstSetupTitle": "First-time administrator setup",
+    "firstSetupDescription": "Create a password for this device. It is never stored in or sent to GitHub.",
+    "passwordRules": "At least 12 characters with uppercase, lowercase, number, and symbol.",
+    "completeSetup": "Save and start"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -415,6 +419,7 @@
     "trialBalance": "Trial Balance",
     "incomeStatement": "Income Statement",
     "balanceSheet": "Balance Sheet",
+    "periods": "Accounting Periods",
     "newEntry": "New Entry",
     "accountCode": "Account Code",
     "accountName": "Account Name",

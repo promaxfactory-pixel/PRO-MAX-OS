@@ -56,11 +56,11 @@ describe("useAuthStore", () => {
       token: "test-jwt-token",
     });
 
-    const result = await useAuthStore.getState().login("admin", "Admin@2026");
+    const result = await useAuthStore.getState().login("admin", "UnitTest#Password2026");
 
     expect(result?.user.username).toBe("admin");    expect(invoke).toHaveBeenCalledWith("login", {
       username: "admin",
-      password: "Admin@2026",
+      password: "UnitTest#Password2026",
     });
     expect(window.localStorage.getItem("auth_token")).toBe("test-jwt-token");
     expect(window.localStorage.getItem("auth_user")).toContain("admin");

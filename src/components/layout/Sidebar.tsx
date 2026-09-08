@@ -9,7 +9,7 @@ import {
   Receipt, CreditCard, Landmark, BookOpen,
   Cog, Eye, ShoppingCart, Wallet, Coins, ListChecks,
   ClipboardCheck, RefreshCw, Bell, HandCoins, FileClock, FileWarning, Clock,
-  Building2, ScrollText, IdCard, Globe,
+  Building2, ScrollText, IdCard, Globe, CalendarRange,
   Ship, ArrowLeftRight, Sun, Moon, Sparkles, Undo2
 } from "lucide-react";
 import LanguageSwitcher from "./LanguageSwitcher";
@@ -87,6 +87,7 @@ const menuSections = (t: (key: string) => string) => [
       { label: t("accounting.journal"), icon: Receipt, path: "/accounting/journal" },
       { label: t("accounting.trialBalance"), icon: Calculator, path: "/accounting/trial-balance" },
       { label: t("reports.title"), icon: TrendingUp, path: "/accounting/statements" },
+      { label: t("accounting.periods"), icon: CalendarRange, path: "/accounting/periods" },
       { label: t("nav.expenses"), icon: Wallet, path: "/expenses" },
       { label: "الحسابات النقدية والبنكية", icon: Landmark, path: "/cashbank" },
       { label: "العهد والصرف النثري", icon: Coins, path: "/custody" },

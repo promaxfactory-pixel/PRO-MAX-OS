@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "@/stores/authStore";
+import { invoke } from "@/lib/tauri";
 import { Factory, Eye, EyeOff, ArrowLeft, Shield, Zap } from "lucide-react";
 import LanguageSwitcher from "@/components/layout/LanguageSwitcher";
 
@@ -28,13 +29,26 @@ export default function LoginPage() {
   const { t, i18n } = useTranslation();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [setupRequired, setSetupRequired] = useState(false);
+  const [setupChecked, setSetupChecked] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const navigate = useNavigate();
   const { login, isAuthenticated } = useAuthStore();
   const isRtl = i18n.language === "ar" || i18n.language === "ur";
+
+  useEffect(() => {
+    invoke<{ required: boolean; username: string }>("get_initial_setup_status")
+      .then((status) => {
+        setSetupRequired(status.required);
+        if (status.required) setUsername(status.username);
+      })
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
+      .finally(() => setSetupChecked(true));
+  }, []);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -49,6 +63,15 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
     try {
+      if (setupRequired) {
+        await invoke("complete_initial_admin_setup", {
+          newPassword: password,
+          confirmPassword,
+        });
+        await login("admin", password);
+        navigate("/", { replace: true });
+        return;
+      }
       const result = await login(username, password);
       if (result?.user?.must_change_password) {
         navigate("/settings/change-password");
@@ -140,8 +163,12 @@ export default function LoginPage() {
             className="relative bg-surface-800/70 backdrop-blur-2xl border border-surface-600/30 rounded-[2rem] p-8 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.5)]"
           >
             <div className="mb-8">
-              <h2 className="text-2xl font-bold text-white mb-1">{t("auth.login")}</h2>
-              <p className="text-sm text-surface-400">{t("auth.enterCredentials")}</p>
+              <h2 className="text-2xl font-bold text-white mb-1">
+                {setupRequired ? t("auth.firstSetupTitle") : t("auth.login")}
+              </h2>
+              <p className="text-sm text-surface-400">
+                {setupRequired ? t("auth.firstSetupDescription") : t("auth.enterCredentials")}
+              </p>
             </div>
 
             <AnimatePresence>
@@ -171,6 +198,8 @@ export default function LoginPage() {
                   className={`w-full transition-all duration-300 ${focusedField === "username" ? "border-gold-400/50 shadow-[0_0_0_3px_rgba(212,175,55,0.1)]" : ""}`}
                   required
                   autoFocus
+                  readOnly={setupRequired}
+                  autoComplete="username"
                   onFocus={() => setFocusedField("username")}
                   onBlur={() => setFocusedField(null)}
                   aria-label={t("auth.username")}
@@ -187,6 +216,8 @@ export default function LoginPage() {
                     placeholder={t("auth.passwordPlaceholder")}
                     className={`w-full pr-12 transition-all duration-300 ${focusedField === "password" ? "border-gold-400/50 shadow-[0_0_0_3px_rgba(212,175,55,0.1)]" : ""}`}
                     required
+                    minLength={setupRequired ? 12 : undefined}
+                    autoComplete={setupRequired ? "new-password" : "current-password"}
                     onFocus={() => setFocusedField("password")}
                     onBlur={() => setFocusedField(null)}
                     aria-label={t("auth.password")}
@@ -201,11 +232,30 @@ export default function LoginPage() {
                   </button>
                 </div>
               </div>
+              {setupRequired && (
+                <div className="relative">
+                  <label className="input-label mb-1.5 block">{t("auth.confirmPassword")}</label>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder={t("auth.confirmPassword")}
+                    className={`w-full pr-12 transition-all duration-300 ${focusedField === "confirmPassword" ? "border-gold-400/50 shadow-[0_0_0_3px_rgba(212,175,55,0.1)]" : ""}`}
+                    required
+                    minLength={12}
+                    autoComplete="new-password"
+                    onFocus={() => setFocusedField("confirmPassword")}
+                    onBlur={() => setFocusedField(null)}
+                    aria-label={t("auth.confirmPassword")}
+                  />
+                  <p className="mt-2 text-xs text-surface-400">{t("auth.passwordRules")}</p>
+                </div>
+              )}
             </div>
 
             <motion.button
               type="submit"
-              disabled={loading || !username || !password}
+              disabled={!setupChecked || loading || !username || !password || (setupRequired && !confirmPassword)}
               className="w-full mt-8 py-4 rounded-2xl font-bold text-pure-white text-base relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
               style={{
                 background: loading
@@ -227,7 +277,7 @@ export default function LoginPage() {
               ) : (
                 <>
                   <Zap className="w-5 h-5" />
-                  <span>{t("auth.loginBtn")}</span>
+                  <span>{setupRequired ? t("auth.completeSetup") : t("auth.loginBtn")}</span>
                   <ArrowLeft className="w-4 h-4" />
                 </>
               )}
@@ -241,7 +291,7 @@ export default function LoginPage() {
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.8 }}
                 >
-                  PRO MAX OS v2.1.0
+                  PRO MAX OS
                 </motion.p>
                 <motion.div
                   className="flex items-center gap-1.5"

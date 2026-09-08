@@ -140,7 +140,11 @@
     "copyright": "شركة ميادين بهلا الوطنية. جميع الحقوق محفوظة.",
     "admin": "المدير",
     "loginError": "خطأ في تسجيل الدخول",
-    "changing": "جارٍ التغيير..."
+    "changing": "جارٍ التغيير...",
+    "firstSetupTitle": "إعداد المدير لأول مرة",
+    "firstSetupDescription": "أنشئ كلمة مرور خاصة بهذا الجهاز. لن تُحفظ أو تُرسل إلى GitHub.",
+    "passwordRules": "12 حرفًا على الأقل، وتشمل حرفًا كبيرًا وصغيرًا ورقمًا ورمزًا.",
+    "completeSetup": "حفظ وبدء الاستخدام"
   },
   "dashboard": {
     "title": "لوحة التحكم",
@@ -415,6 +419,7 @@
     "trialBalance": "ميزان المراجعة",
     "incomeStatement": "قائمة الدخل",
     "balanceSheet": "الميزانية العمومية",
+    "periods": "الفترات المالية",
     "newEntry": "قيد جديد",
     "accountCode": "رمز الحساب",
     "accountName": "اسم الحساب",
