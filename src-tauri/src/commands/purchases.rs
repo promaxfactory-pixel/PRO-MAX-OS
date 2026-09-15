@@ -396,6 +396,7 @@ pub fn create_supplier_payment(input: CreateSupplierPaymentInput, state: State<'
     if input.amount_milli <= 0 {
         return Err(AppError::validation("المبلغ يجب أن يكون أكبر من صفر"));
     }
+    let payment_date = crate::commands::accounting::normalized_iso_date(&input.date, "تاريخ سند الدفع")?;
     let tx = conn.transaction()?;
 
     let supplier_exists: i64 = tx
@@ -405,8 +406,7 @@ pub fn create_supplier_payment(input: CreateSupplierPaymentInput, state: State<'
     }
 
     let method = input.method.clone().unwrap_or_else(|| "cash".into());
-    let year: String = tx
-        .query_row("SELECT substr(?1, 1, 4)", [&input.date], |row| row.get(0))?;
+    let year = payment_date[..4].to_string();
     let seq = next_sequence(&tx, "PAY", &year)?;
     let pay_no = format!("PAY-{}-{:04}", year, seq);
     let created_by: String = tx
@@ -418,7 +418,7 @@ pub fn create_supplier_payment(input: CreateSupplierPaymentInput, state: State<'
         rusqlite::params![
             pay_no,
             input.supplier_id,
-            input.date.clone(),
+            payment_date.clone(),
             input.amount_milli,
             method.clone(),
             input.reference,
@@ -432,7 +432,9 @@ pub fn create_supplier_payment(input: CreateSupplierPaymentInput, state: State<'
     // Allocate the payment across the supplier's open (posted, unpaid) purchases,
     // oldest first (FIFO), so per-purchase paid/outstanding amounts stay accurate.
     // Any amount beyond the outstanding total remains as an on-account credit.
-    allocate_payment_fifo(&tx, input.supplier_id, input.amount_milli, None)?;
+    allocate_supplier_payment_fifo_for_payment(
+        &tx, input.supplier_id, input.amount_milli, None, Some(payment_id),
+    )?;
 
     // Keep the supplier's running balance in sync: a payment reduces what is owed.
     tx.execute(
@@ -449,7 +451,7 @@ pub fn create_supplier_payment(input: CreateSupplierPaymentInput, state: State<'
         &tx,
         "supplier_payment",
         payment_id,
-        &input.date,
+        &payment_date,
         "سند دفع مورد",
         &lines,
         "system",
@@ -470,9 +472,20 @@ pub fn create_supplier_payment(input: CreateSupplierPaymentInput, state: State<'
 pub(crate) fn allocate_payment_fifo(
     conn: &rusqlite::Connection,
     supplier_id: i64,
+    amount: i64,
+    exclude_id: Option<i64>,
+) -> Result<i64, AppError> {
+    allocate_supplier_payment_fifo_for_payment(conn, supplier_id, amount, exclude_id, None)
+}
+
+fn allocate_supplier_payment_fifo_for_payment(
+    conn: &rusqlite::Connection,
+    supplier_id: i64,
     mut amount: i64,
     exclude_id: Option<i64>,
-) -> Result<i64, AppError> {    let mut stmt = conn.prepare(
+    payment_id: Option<i64>,
+) -> Result<i64, AppError> {
+    let mut stmt = conn.prepare(
         "SELECT id, total_milli, paid_milli FROM purchases
          WHERE supplier_id=?1 AND LOWER(status) NOT IN ('void','draft') AND total_milli > paid_milli
          ORDER BY date ASC, id ASC",
@@ -497,6 +510,15 @@ pub(crate) fn allocate_payment_fifo(
                 "UPDATE purchases SET paid_milli = paid_milli + ?1 WHERE id = ?2",
                 rusqlite::params![apply, pid],
             )?;
+            if let Some(payment_id) = payment_id {
+                conn.execute(
+                    "INSERT INTO supplier_payment_allocations(payment_id, purchase_id, amount_milli)
+                     VALUES(?1, ?2, ?3)
+                     ON CONFLICT(payment_id, purchase_id) DO UPDATE
+                     SET amount_milli = supplier_payment_allocations.amount_milli + excluded.amount_milli",
+                    rusqlite::params![payment_id, pid, apply],
+                )?;
+            }
             amount -= apply;
         }
     }

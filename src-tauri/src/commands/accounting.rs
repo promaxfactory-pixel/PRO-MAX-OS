@@ -137,7 +137,7 @@ pub struct CreateAccountingPeriodInput {
     pub end_date: String,
 }
 
-fn normalized_iso_date(value: &str, field_name: &str) -> Result<String, AppError> {
+pub(crate) fn normalized_iso_date(value: &str, field_name: &str) -> Result<String, AppError> {
     let trimmed = value.trim();
     let parsed = NaiveDate::parse_from_str(trimmed, "%Y-%m-%d")
         .map_err(|_| AppError::validation(format!("{} يجب أن يكون بصيغة YYYY-MM-DD", field_name)))?;

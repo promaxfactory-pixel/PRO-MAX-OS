@@ -302,6 +302,14 @@ CREATE TABLE IF NOT EXISTS supplier_payments (
     created_by TEXT, created_at TEXT, journal_id INTEGER REFERENCES journal_entries(id)
 );
 
+CREATE TABLE IF NOT EXISTS supplier_payment_allocations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    payment_id INTEGER NOT NULL REFERENCES supplier_payments(id),
+    purchase_id INTEGER NOT NULL REFERENCES purchases(id),
+    amount_milli INTEGER NOT NULL CHECK(amount_milli > 0),
+    UNIQUE(payment_id, purchase_id)
+);
+
 CREATE TABLE IF NOT EXISTS expenses (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     exp_no TEXT, date TEXT NOT NULL, category TEXT, account_code TEXT REFERENCES accounts(code),

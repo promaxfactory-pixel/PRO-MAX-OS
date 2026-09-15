@@ -193,7 +193,8 @@ pub fn create_customer_payment(
         return Err(AppError::not_found("العميل غير موجود"));
     }
 
-    let year = chrono::Utc::now().format("%Y").to_string();
+    let payment_date = crate::commands::accounting::normalized_iso_date(&input.date, "تاريخ سند القبض")?;
+    let year = payment_date[..4].to_string();
     let seq = next_sequence(&tx, "RCP", &year)?;
     let rec_no = format!("RCP-{}-{:04}", year, seq);
 
@@ -206,7 +207,7 @@ pub fn create_customer_payment(
         "INSERT INTO customer_payments(rec_no, date, customer_id, amount_milli, method, cashbank_id, reference, notes, created_by, created_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9, datetime('now'))",
         rusqlite::params![
             rec_no,
-            input.date.clone(),
+            payment_date.clone(),
             customer_id,
             input.amount_milli,
             method,
@@ -226,7 +227,7 @@ pub fn create_customer_payment(
     // Spread the payment across the customer's open (posted, unpaid) credit invoices,
     // oldest first (FIFO), mirroring the supplier-side allocation. This keeps
     // per-invoice outstanding amounts (and thus aging/dunning) accurate.
-    allocate_customer_payment_fifo(&tx, customer_id, input.amount_milli, None)?;
+    allocate_customer_payment_fifo_for_payment(&tx, customer_id, input.amount_milli, None, Some(payment_id))?;
 
     let cash_account = crate::commands::accounting::resolve_cash_account(&tx, input.cashbank_id, &method)?;
     let lines: Vec<(String, i64, i64, Option<String>)> = vec![
@@ -237,7 +238,7 @@ pub fn create_customer_payment(
         &tx,
         "customer_payment",
         payment_id,
-        &input.date,
+        &payment_date,
         &format!("سند قبض {}", rec_no),
         &lines,
         &created_by,
@@ -259,8 +260,18 @@ pub fn create_customer_payment(
 pub(crate) fn allocate_customer_payment_fifo(
     conn: &rusqlite::Connection,
     customer_id: i64,
+    amount: i64,
+    exclude_id: Option<i64>,
+) -> Result<i64, AppError> {
+    allocate_customer_payment_fifo_for_payment(conn, customer_id, amount, exclude_id, None)
+}
+
+fn allocate_customer_payment_fifo_for_payment(
+    conn: &rusqlite::Connection,
+    customer_id: i64,
     mut amount: i64,
     exclude_id: Option<i64>,
+    payment_id: Option<i64>,
 ) -> Result<i64, AppError> {
     let mut stmt = conn.prepare(
         "SELECT id, total_milli, paid_milli FROM sales_invoices
@@ -288,6 +299,13 @@ pub(crate) fn allocate_customer_payment_fifo(
                 "UPDATE sales_invoices SET paid_milli = paid_milli + ?1 WHERE id = ?2",
                 rusqlite::params![apply, inv_id],
             )?;
+            if let Some(payment_id) = payment_id {
+                conn.execute(
+                    "INSERT INTO payment_allocations(payment_id, invoice_id, amount_milli)
+                     VALUES(?1, ?2, ?3)",
+                    rusqlite::params![payment_id, inv_id, apply],
+                )?;
+            }
             amount -= apply;
         }
     }
@@ -324,14 +342,23 @@ pub fn get_customer_statement(
 ) -> Result<CustomerStatementData, AppError> {
     let conn = state.0.lock()?;
     let customer = get_customer_by_conn(&conn, customer_id)?;
-    let from = from_date.unwrap_or_else(|| "2000-01-01".into());
-    let to = to_date.unwrap_or_else(|| "2099-12-31".into());
+    let from = match from_date {
+        Some(value) => crate::commands::accounting::normalized_iso_date(&value, "من تاريخ")?,
+        None => "2000-01-01".into(),
+    };
+    let to = match to_date {
+        Some(value) => crate::commands::accounting::normalized_iso_date(&value, "إلى تاريخ")?,
+        None => "2099-12-31".into(),
+    };
+    if from > to {
+        return Err(AppError::validation("تاريخ البداية يجب ألا يتجاوز تاريخ النهاية"));
+    }
 
     let mut transactions: Vec<StatementTransaction> = Vec::new();
 
     {
         let mut stmt = conn.prepare(
-            "SELECT si.date, si.inv_no, si.total_milli, si.discount_milli, si.notes FROM sales_invoices si
+            "SELECT si.date, si.inv_no, si.total_milli, si.notes FROM sales_invoices si
              WHERE si.customer_id=? AND si.date BETWEEN ? AND ? AND LOWER(si.status) = 'posted' AND LOWER(COALESCE(si.payment_type,'credit')) = 'credit'
              ORDER BY si.date ASC"
         )?;
@@ -340,13 +367,11 @@ pub fn get_customer_statement(
                 row.get::<_, String>(0)?,
                 row.get::<_, Option<String>>(1)?,
                 row.get::<_, i64>(2)?,
-                row.get::<_, i64>(3)?,
-                row.get::<_, Option<String>>(4)?,
+                row.get::<_, Option<String>>(3)?,
             ))
         })?;
         for r in rows {
-            let (date, inv_no, total, discount, notes) = r?;
-            let amount = total - discount;
+            let (date, inv_no, amount, notes) = r?;
             transactions.push(StatementTransaction {
                 date,
                 ref_no: inv_no,
@@ -415,7 +440,24 @@ pub fn get_customer_statement(
 
     transactions.sort_by(|a, b| a.date.cmp(&b.date));
 
-    let opening = customer.opening_balance_milli;
+    let pre_range_invoices: i64 = conn.query_row(
+        "SELECT COALESCE(SUM(total_milli), 0) FROM sales_invoices
+         WHERE customer_id=?1 AND date < ?2 AND LOWER(status)='posted'
+           AND LOWER(COALESCE(payment_type,'credit'))='credit'",
+        rusqlite::params![customer_id, from], |row| row.get(0),
+    )?;
+    let pre_range_payments: i64 = conn.query_row(
+        "SELECT COALESCE(SUM(amount_milli), 0) FROM customer_payments
+         WHERE customer_id=?1 AND date < ?2",
+        rusqlite::params![customer_id, from], |row| row.get(0),
+    )?;
+    let pre_range_credits: i64 = conn.query_row(
+        "SELECT COALESCE(SUM(total_milli), 0) FROM credit_notes
+         WHERE customer_id=?1 AND date < ?2 AND LOWER(status) != 'void'",
+        rusqlite::params![customer_id, from], |row| row.get(0),
+    )?;
+    let opening = customer.opening_balance_milli + pre_range_invoices
+        - pre_range_payments - pre_range_credits;
     let mut balance = opening;
     let mut total_debit: i64 = 0;
     let mut total_credit: i64 = 0;

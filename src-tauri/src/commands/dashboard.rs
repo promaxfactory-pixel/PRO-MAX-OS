@@ -19,6 +19,13 @@ pub struct DashboardStats {
     pub waste_today: i64,
     pub custody_total: i64,
     pub bank_balance: i64,
+    pub cash_position: i64,
+    pub receivables_milli: i64,
+    pub payables_milli: i64,
+    pub gross_profit_milli: i64,
+    pub gross_margin_bps: i64,
+    pub due_cheques_milli: i64,
+    pub pending_approvals: i64,
     pub sales_trend: Vec<TrendPoint>,
     pub production_trend: Vec<ProductionTrendPoint>,
     pub monthly_production: Vec<MonthlyProductionPoint>,
@@ -76,11 +83,15 @@ pub fn get_dashboard_stats(state: State<'_, DbState>) -> Result<DashboardStats, 
     let total_products: i64 = conn.query_row("SELECT COUNT(*) FROM products WHERE active=1", [], |r| r.get(0)).unwrap_or(0);
     let total_employees: i64 = conn.query_row("SELECT COUNT(*) FROM employees", [], |r| r.get(0)).unwrap_or(0);
     let total_invoices: i64 = conn.query_row("SELECT COUNT(*) FROM sales_invoices", [], |r| r.get(0)).unwrap_or(0);
-    let revenue_milli: i64 = conn.query_row("SELECT COALESCE(SUM(total_milli),0) FROM sales_invoices WHERE status='Posted'", [], |r| r.get(0)).unwrap_or(0);
-    let expenses_milli: i64 = conn.query_row("SELECT COALESCE(SUM(amount_milli),0) FROM expenses", [], |r| r.get(0)).unwrap_or(0);
-    let pending_invoices: i64 = conn.query_row("SELECT COUNT(*) FROM sales_invoices WHERE status='Draft'", [], |r| r.get(0)).unwrap_or(0);
+    let revenue_milli: i64 = conn.query_row("SELECT COALESCE(SUM(net_milli),0) FROM sales_invoices WHERE LOWER(status)='posted' AND date >= date('now','start of month')", [], |r| r.get(0)).unwrap_or(0);
+    let expenses_milli: i64 = conn.query_row("SELECT COALESCE(SUM(amount_milli),0) FROM expenses WHERE LOWER(COALESCE(approval_status,'posted'))='posted' AND date >= date('now','start of month')", [], |r| r.get(0)).unwrap_or(0);
+    let pending_invoices: i64 = conn.query_row("SELECT COUNT(*) FROM sales_invoices WHERE LOWER(status)='draft'", [], |r| r.get(0)).unwrap_or(0);
     let overdue_amount: i64 = conn.query_row(
-        "SELECT COALESCE(SUM(total_milli - paid_milli),0) FROM sales_invoices WHERE status='Posted' AND total_milli > paid_milli AND date < date('now')",
+        "SELECT COALESCE(SUM(si.total_milli - si.paid_milli),0)
+         FROM sales_invoices si JOIN customers c ON c.id=si.customer_id
+         WHERE LOWER(si.status)='posted' AND LOWER(COALESCE(si.payment_type,'credit'))='credit'
+           AND si.total_milli > si.paid_milli
+           AND date(si.date, '+' || MAX(c.payment_terms_days, 0) || ' days') < date('now')",
         [], |r| r.get(0)
     ).unwrap_or(0);
     let inventory_value: i64 = conn.query_row(
@@ -92,6 +103,14 @@ pub fn get_dashboard_stats(state: State<'_, DbState>) -> Result<DashboardStats, 
     let waste_today: i64 = conn.query_row("SELECT COALESCE(SUM(cartons_waste),0) FROM production_lines pl JOIN production_orders po ON pl.order_id=po.id WHERE po.date = date('now')", [], |r| r.get(0)).unwrap_or(0);
     let custody_total: i64 = conn.query_row("SELECT COALESCE(SUM(balance_milli),0) FROM cashbank_accounts WHERE atype='Custody'", [], |r| r.get(0)).unwrap_or(0);
     let bank_balance: i64 = conn.query_row("SELECT COALESCE(SUM(balance_milli),0) FROM cashbank_accounts WHERE atype='Bank'", [], |r| r.get(0)).unwrap_or(0);
+    let cash_position: i64 = conn.query_row("SELECT COALESCE(SUM(balance_milli),0) FROM cashbank_accounts WHERE LOWER(atype) IN ('cash','bank') AND active=1", [], |r| r.get(0)).unwrap_or(0);
+    let receivables_milli: i64 = conn.query_row("SELECT COALESCE(SUM(total_milli-paid_milli),0) FROM sales_invoices WHERE LOWER(status)='posted' AND LOWER(COALESCE(payment_type,'credit'))='credit' AND total_milli>paid_milli", [], |r| r.get(0)).unwrap_or(0);
+    let payables_milli: i64 = conn.query_row("SELECT COALESCE(SUM(total_milli-paid_milli),0) FROM purchases WHERE LOWER(status)='posted' AND total_milli>paid_milli", [], |r| r.get(0)).unwrap_or(0);
+    let cogs_milli: i64 = conn.query_row("SELECT COALESCE(SUM(cogs_milli),0) FROM sales_invoices WHERE LOWER(status)='posted' AND date >= date('now','start of month')", [], |r| r.get(0)).unwrap_or(0);
+    let gross_profit_milli = revenue_milli - cogs_milli;
+    let gross_margin_bps = if revenue_milli > 0 { gross_profit_milli.saturating_mul(10_000) / revenue_milli } else { 0 };
+    let due_cheques_milli: i64 = conn.query_row("SELECT COALESCE(SUM(amount_milli),0) FROM cheques WHERE LOWER(COALESCE(status,'pending')) NOT IN ('paid','cleared','cancelled','void') AND due_date <= date('now','+7 days')", [], |r| r.get(0)).unwrap_or(0);
+    let pending_approvals: i64 = conn.query_row("SELECT COUNT(*) FROM approval_requests WHERE LOWER(status)='pending'", [], |r| r.get(0)).unwrap_or(0);
 
     // Sales trend (last 30 days)
     let sales_trend = {
@@ -152,7 +171,7 @@ pub fn get_dashboard_stats(state: State<'_, DbState>) -> Result<DashboardStats, 
         rows.filter_map(|r| r.ok()).collect()
     };
 
-    Ok(DashboardStats { total_customers, total_products, total_employees, total_invoices, revenue_milli, expenses_milli, pending_invoices, overdue_amount, inventory_value, low_stock_count, production_today, waste_today, custody_total, bank_balance, sales_trend, production_trend, monthly_production, top_customers, expenses_by_category })
+    Ok(DashboardStats { total_customers, total_products, total_employees, total_invoices, revenue_milli, expenses_milli, pending_invoices, overdue_amount, inventory_value, low_stock_count, production_today, waste_today, custody_total, bank_balance, cash_position, receivables_milli, payables_milli, gross_profit_milli, gross_margin_bps, due_cheques_milli, pending_approvals, sales_trend, production_trend, monthly_production, top_customers, expenses_by_category })
 }
 
 #[tauri::command]

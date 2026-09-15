@@ -182,8 +182,17 @@ pub fn get_supplier_statement(
 ) -> Result<SupplierStatementData, AppError> {
     let conn = state.0.lock()?;
     let supplier = get_supplier_by_conn(&conn, supplier_id)?;
-    let from = from_date.unwrap_or_else(|| "2000-01-01".into());
-    let to = to_date.unwrap_or_else(|| "2099-12-31".into());
+    let from = match from_date {
+        Some(value) => crate::commands::accounting::normalized_iso_date(&value, "من تاريخ")?,
+        None => "2000-01-01".into(),
+    };
+    let to = match to_date {
+        Some(value) => crate::commands::accounting::normalized_iso_date(&value, "إلى تاريخ")?,
+        None => "2099-12-31".into(),
+    };
+    if from > to {
+        return Err(AppError::validation("تاريخ البداية يجب ألا يتجاوز تاريخ النهاية"));
+    }
 
     let mut transactions: Vec<StatementTransaction> = Vec::new();
 
@@ -247,7 +256,17 @@ pub fn get_supplier_statement(
     transactions.sort_by(|a, b| a.date.cmp(&b.date));
 
     // Calculate running balance (opening_balance is what we owe the supplier)
-    let opening = supplier.opening_balance_milli;
+    let pre_range_purchases: i64 = conn.query_row(
+        "SELECT COALESCE(SUM(total_milli), 0) FROM purchases
+         WHERE supplier_id=?1 AND date < ?2 AND LOWER(status)='posted'",
+        rusqlite::params![supplier_id, from], |row| row.get(0),
+    )?;
+    let pre_range_payments: i64 = conn.query_row(
+        "SELECT COALESCE(SUM(amount_milli), 0) FROM supplier_payments
+         WHERE supplier_id=?1 AND date < ?2",
+        rusqlite::params![supplier_id, from], |row| row.get(0),
+    )?;
+    let opening = supplier.opening_balance_milli + pre_range_purchases - pre_range_payments;
     let mut balance = opening;
     let mut total_debit: i64 = 0;
     let mut total_credit: i64 = 0;
