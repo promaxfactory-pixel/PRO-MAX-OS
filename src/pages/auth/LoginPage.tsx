@@ -8,14 +8,17 @@ import { Factory, Eye, EyeOff, ArrowLeft, Shield, Zap } from "lucide-react";
 import LanguageSwitcher from "@/components/layout/LanguageSwitcher";
 
 function Particle({ index: _index }: { index: number }) {
-  const style = useMemo(() => ({
-    left: `${Math.random() * 100}%`,
-    top: `${Math.random() * 100}%`,
-    width: `${2 + Math.random() * 4}px`,
-    height: `${2 + Math.random() * 4}px`,
-    animationDelay: `${Math.random() * 8}s`,
-    animationDuration: `${6 + Math.random() * 10}s`,
-  }), []);
+  const style = useMemo(
+    () => ({
+      left: `${Math.random() * 100}%`,
+      top: `${Math.random() * 100}%`,
+      width: `${2 + Math.random() * 4}px`,
+      height: `${2 + Math.random() * 4}px`,
+      animationDelay: `${Math.random() * 8}s`,
+      animationDuration: `${6 + Math.random() * 10}s`,
+    }),
+    []
+  );
   return (
     <div
       className="absolute rounded-full bg-gold-400/20 animate-pulse-slow"
@@ -27,7 +30,7 @@ function Particle({ index: _index }: { index: number }) {
 
 export default function LoginPage() {
   const { t, i18n } = useTranslation();
-  const [username, setUsername] = useState("");
+  const [username, setUsername] = useState("Admin");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -56,7 +59,7 @@ export default function LoginPage() {
     }
   }, [isAuthenticated, navigate]);
 
-  const particles = useMemo(() => Array.from({ length: 30 }, (_, i) => i), []);
+  const particles = useMemo(() => Array.from({ length: 8 }, (_, i) => i), []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,7 +71,7 @@ export default function LoginPage() {
           newPassword: password,
           confirmPassword,
         });
-        await login("admin", password);
+        await login("Admin", password);
         navigate("/", { replace: true });
         return;
       }
@@ -86,16 +89,18 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden" data-theme="dark" style={{ background: "var(--surface-950)" }}>
+    <div
+      className="min-h-screen flex items-center justify-center relative overflow-hidden bg-slate-50"
+      data-theme="light"
+    >
       <div className={`absolute top-6 ${isRtl ? "left-6" : "right-6"} z-30`}>
         <LanguageSwitcher />
       </div>
 
       <div className="absolute inset-0">
-        <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-brand-950 via-surface-950 to-brand-950" />
-        <div className="absolute top-1/3 right-1/4 w-[500px] h-[500px] bg-brand-800/15 rounded-full blur-[150px] animate-pulse-slow" />
-        <div className="absolute bottom-1/3 left-1/4 w-[400px] h-[400px] bg-gold-400/5 rounded-full blur-[120px] animate-pulse-slow" style={{ animationDelay: "2s" }} />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-brand-700/8 rounded-full blur-[200px] animate-pulse-slow" style={{ animationDelay: "4s" }} />
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-white to-slate-100" />
+        <div className="absolute top-1/4 right-1/4 w-[480px] h-[480px] bg-blue-200/30 rounded-full blur-[150px]" />
+        <div className="absolute bottom-1/4 left-1/4 w-[380px] h-[380px] bg-emerald-100/30 rounded-full blur-[130px]" />
       </div>
 
       <div className="absolute inset-0 overflow-hidden">
@@ -104,10 +109,14 @@ export default function LoginPage() {
         ))}
       </div>
 
-      <div className="absolute inset-0 opacity-[0.02]" style={{
-        backgroundImage: "linear-gradient(rgba(212,175,55,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(212,175,55,0.3) 1px, transparent 1px)",
-        backgroundSize: "80px 80px"
-      }} />
+      <div
+        className="absolute inset-0 opacity-[0.02]"
+        style={{
+          backgroundImage:
+            "linear-gradient(rgba(212,175,55,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(212,175,55,0.3) 1px, transparent 1px)",
+          backgroundSize: "80px 80px",
+        }}
+      />
 
       <motion.div
         className="relative z-20 w-full max-w-md mx-auto px-6"
@@ -133,7 +142,7 @@ export default function LoginPage() {
           </motion.div>
 
           <motion.h1
-            className="text-4xl font-bold font-display text-white mb-3 tracking-tight"
+            className="text-4xl font-bold font-display text-slate-900 mb-3 tracking-tight"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.4 }}
@@ -141,7 +150,7 @@ export default function LoginPage() {
             PRO <span className="gradient-text">MAX</span> OS
           </motion.h1>
           <motion.p
-            className="text-gold-400/80 font-medium text-base"
+            className="text-blue-700 font-medium text-base"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.5 }}
@@ -156,17 +165,17 @@ export default function LoginPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
         >
-          <div className="absolute -inset-1 bg-gradient-to-r from-brand-500/20 via-gold-400/10 to-brand-500/20 rounded-[2rem] blur-xl opacity-50" />
+          <div className="absolute -inset-1 bg-gradient-to-r from-blue-200/50 via-white to-blue-100/50 rounded-[2rem] blur-xl" />
 
           <form
             onSubmit={handleSubmit}
-            className="relative bg-surface-800/70 backdrop-blur-2xl border border-surface-600/30 rounded-[2rem] p-8 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.5)]"
+            className="relative bg-white/95 backdrop-blur-xl border border-slate-200 rounded-[2rem] p-8 shadow-[0_24px_70px_-24px_rgba(15,23,42,0.28)]"
           >
             <div className="mb-8">
-              <h2 className="text-2xl font-bold text-white mb-1">
+              <h2 className="text-2xl font-bold text-slate-900 mb-1">
                 {setupRequired ? t("auth.firstSetupTitle") : t("auth.login")}
               </h2>
-              <p className="text-sm text-surface-400">
+              <p className="text-sm text-slate-500">
                 {setupRequired ? t("auth.firstSetupDescription") : t("auth.enterCredentials")}
               </p>
             </div>
@@ -255,7 +264,13 @@ export default function LoginPage() {
 
             <motion.button
               type="submit"
-              disabled={!setupChecked || loading || !username || !password || (setupRequired && !confirmPassword)}
+              disabled={
+                !setupChecked ||
+                loading ||
+                !username ||
+                !password ||
+                (setupRequired && !confirmPassword)
+              }
               className="w-full mt-8 py-4 rounded-2xl font-bold text-pure-white text-base relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
               style={{
                 background: loading
@@ -265,7 +280,9 @@ export default function LoginPage() {
                   ? "0 4px 20px rgba(76,29,149,0.3)"
                   : "0 4px 20px rgba(212,175,55,0.3)",
               }}
-              whileHover={!loading ? { scale: 1.01, boxShadow: "0 6px 30px rgba(212,175,55,0.4)" } : undefined}
+              whileHover={
+                !loading ? { scale: 1.01, boxShadow: "0 6px 30px rgba(212,175,55,0.4)" } : undefined
+              }
               whileTap={!loading ? { scale: 0.98 } : undefined}
             >
               {loading ? (
@@ -300,7 +317,9 @@ export default function LoginPage() {
                   transition={{ delay: 0.9 }}
                 >
                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="text-[10px] text-surface-500 font-medium">{t("auth.secureSystem")}</span>
+                  <span className="text-[10px] text-surface-500 font-medium">
+                    {t("auth.secureSystem")}
+                  </span>
                 </motion.div>
               </div>
             </div>

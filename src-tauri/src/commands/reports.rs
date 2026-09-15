@@ -19,10 +19,14 @@ pub struct LowStockItem {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CustomerAgingItem {
-    pub customer_id: i64,
+    pub customer_code: String,
     pub customer_name: String,
-    pub total_due: i64,
-    pub overdue_days: i64,
+    pub current: i64,
+    pub days_30: i64,
+    pub days_60: i64,
+    pub days_90: i64,
+    pub over_90: i64,
+    pub total: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -63,29 +67,70 @@ pub fn low_stock_report(state: State<'_, DbState>) -> Result<Vec<LowStockItem>, 
 #[tauri::command]
 pub fn customers_aging(state: State<'_, DbState>) -> Result<Vec<CustomerAgingItem>, AppError> {
     let conn = state.0.lock()?;
+    customers_aging_by_conn(&conn)
+}
+
+fn customers_aging_by_conn(conn: &rusqlite::Connection) -> Result<Vec<CustomerAgingItem>, AppError> {
     let mut stmt = conn.prepare(
-        "SELECT c.id, c.name,
+        "SELECT COALESCE(c.code, ''), c.name,
+                COALESCE(SUM(CASE WHEN julianday('now') - julianday(si.date, '+' || MAX(c.payment_terms_days, 0) || ' days') <= 30
+                                  THEN si.total_milli - si.paid_milli ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN julianday('now') - julianday(si.date, '+' || MAX(c.payment_terms_days, 0) || ' days') BETWEEN 31 AND 60
+                                  THEN si.total_milli - si.paid_milli ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN julianday('now') - julianday(si.date, '+' || MAX(c.payment_terms_days, 0) || ' days') BETWEEN 61 AND 90
+                                  THEN si.total_milli - si.paid_milli ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN julianday('now') - julianday(si.date, '+' || MAX(c.payment_terms_days, 0) || ' days') BETWEEN 91 AND 120
+                                  THEN si.total_milli - si.paid_milli ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN julianday('now') - julianday(si.date, '+' || MAX(c.payment_terms_days, 0) || ' days') > 120
+                                  THEN si.total_milli - si.paid_milli ELSE 0 END), 0),
                 COALESCE(SUM(si.total_milli - si.paid_milli), 0)
-                    - COALESCE((SELECT SUM(cn.total_milli) FROM credit_notes cn WHERE cn.customer_id = c.id AND cn.status != 'Void'), 0),
-                CAST(julianday('now') - julianday(MAX(si.date)) AS INTEGER)
          FROM customers c
-         LEFT JOIN sales_invoices si ON si.customer_id = c.id AND si.status IN ('Posted', 'Issued') AND si.total_milli > si.paid_milli
+         JOIN sales_invoices si ON si.customer_id = c.id
+          AND LOWER(si.status) = 'posted'
+          AND LOWER(COALESCE(si.payment_type, 'credit')) = 'credit'
+          AND si.total_milli > si.paid_milli
          WHERE c.active = 1
-         GROUP BY c.id
-         HAVING COALESCE(SUM(si.total_milli - si.paid_milli), 0)
-                    - COALESCE((SELECT SUM(cn.total_milli) FROM credit_notes cn WHERE cn.customer_id = c.id AND cn.status != 'Void'), 0) > 0
-         ORDER BY (COALESCE(SUM(si.total_milli - si.paid_milli), 0)
-                    - COALESCE((SELECT SUM(cn.total_milli) FROM credit_notes cn WHERE cn.customer_id = c.id AND cn.status != 'Void'), 0)) DESC"
+         GROUP BY c.id, c.code, c.name
+         HAVING COALESCE(SUM(si.total_milli - si.paid_milli), 0) > 0
+         ORDER BY COALESCE(SUM(si.total_milli - si.paid_milli), 0) DESC"
     )?;
     let items = stmt.query_map([], |r| {
         Ok(CustomerAgingItem {
-            customer_id: r.get(0)?, customer_name: r.get(1)?,
-            total_due: r.get(2)?, overdue_days: r.get::<_, i64>(3).unwrap_or(0),
+            customer_code: r.get(0)?, customer_name: r.get(1)?,
+            current: r.get(2)?, days_30: r.get(3)?, days_60: r.get(4)?,
+            days_90: r.get(5)?, over_90: r.get(6)?, total: r.get(7)?,
         })
     })?
     .filter_map(|r| r.ok())
     .collect();
     Ok(items)
+}
+
+#[cfg(test)]
+mod aging_tests {
+    use super::*;
+
+    #[test]
+    fn aging_contract_matches_ui_and_uses_due_date() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE customers(id INTEGER PRIMARY KEY, code TEXT, name TEXT, payment_terms_days INTEGER, active INTEGER);
+             CREATE TABLE sales_invoices(id INTEGER PRIMARY KEY, customer_id INTEGER, date TEXT, status TEXT, payment_type TEXT, total_milli INTEGER, paid_milli INTEGER);
+             INSERT INTO customers VALUES(1, 'C-1', 'Customer', 30, 1);
+             INSERT INTO sales_invoices VALUES(1, 1, date('now','-20 days'), 'Posted', 'credit', 100000, 25000);
+             INSERT INTO sales_invoices VALUES(2, 1, date('now','-70 days'), 'Posted', 'credit', 50000, 0);
+             INSERT INTO sales_invoices VALUES(3, 1, date('now','-200 days'), 'Void', 'credit', 999000, 0);"
+        ).unwrap();
+
+        let rows = customers_aging_by_conn(&conn).unwrap();
+        assert_eq!(rows.len(), 1);
+        let row = &rows[0];
+        assert_eq!(row.customer_code, "C-1");
+        assert_eq!(row.current, 75_000, "not-yet-due invoice belongs in current");
+        assert_eq!(row.days_30, 50_000, "40 days past due belongs in 31-60");
+        assert_eq!(row.total, 125_000);
+        assert_eq!(row.current + row.days_30 + row.days_60 + row.days_90 + row.over_90, row.total);
+    }
 }
 
 #[tauri::command]

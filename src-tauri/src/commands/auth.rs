@@ -94,7 +94,7 @@ fn complete_initial_admin_setup_inner(
     let admin_id: i64 = conn
         .query_row(
             "SELECT id FROM users
-             WHERE username='admin' AND role='admin' AND active=1 AND must_change_password=1",
+             WHERE LOWER(username)='admin' AND role='admin' AND active=1 AND must_change_password=1",
             [],
             |row| row.get(0),
         )
@@ -141,7 +141,7 @@ pub fn get_initial_setup_status(
     let conn = state.0.lock()?;
     Ok(InitialSetupStatus {
         required: initial_setup_is_required(&conn)?,
-        username: "admin".to_string(),
+        username: "Admin".to_string(),
     })
 }
 
@@ -204,7 +204,7 @@ pub fn login(
 
     let row = conn
         .query_row(
-            "SELECT id, username, full_name, role, active, must_change_password, created_at, password_hash, salt FROM users WHERE username = ? AND active = 1",
+            "SELECT id, username, full_name, role, active, must_change_password, created_at, password_hash, salt FROM users WHERE username = ? COLLATE NOCASE AND active = 1",
             [&username],
             |row| {
                 Ok((
@@ -396,7 +396,7 @@ mod tests {
                 reason TEXT
              );
              INSERT INTO users(username, full_name, password_hash, salt, role, active, must_change_password)
-             VALUES('admin', 'Admin', 'unusable-bootstrap-hash', '', 'admin', 1, 1);
+             VALUES('Admin', 'Admin', 'unusable-bootstrap-hash', '', 'admin', 1, 1);
              INSERT INTO app_settings(key, value) VALUES('initial_admin_setup_required', '1');",
         )
         .unwrap();
@@ -416,7 +416,7 @@ mod tests {
 
         let (hash, must_change): (String, i64) = conn
             .query_row(
-                "SELECT password_hash, must_change_password FROM users WHERE username='admin'",
+                "SELECT password_hash, must_change_password FROM users WHERE username='Admin'",
                 [],
                 |row| Ok((row.get(0)?, row.get(1)?)),
             )
@@ -446,7 +446,7 @@ mod tests {
         assert!(initial_setup_is_required(&conn).unwrap());
         let must_change: i64 = conn
             .query_row(
-                "SELECT must_change_password FROM users WHERE username='admin'",
+                "SELECT must_change_password FROM users WHERE username='Admin'",
                 [],
                 |row| row.get(0),
             )

@@ -39,7 +39,7 @@ pub fn init_database(path: &Path) -> Result<Connection> {
 fn ensure_admin_user(conn: &Connection) -> Result<bool> {
     let admin_exists: bool = conn
         .query_row(
-            "SELECT COUNT(*) FROM users WHERE username='admin'",
+            "SELECT COUNT(*) FROM users WHERE LOWER(username)='admin'",
             [],
             |r| r.get::<_, i64>(0),
         )
@@ -63,7 +63,7 @@ fn ensure_admin_user(conn: &Connection) -> Result<bool> {
         let tx = conn.unchecked_transaction()?;
         tx.execute(
             "INSERT INTO users(username, full_name, password_hash, salt, role, active, must_change_password, created_at)
-             VALUES('admin', 'مدير النظام', ?, '', 'admin', 1, 1, datetime('now'))",
+             VALUES('Admin', 'مدير النظام', ?, '', 'admin', 1, 1, datetime('now'))",
             [&hash],
         )?;
         tx.execute(
@@ -81,7 +81,7 @@ fn ensure_admin_user(conn: &Connection) -> Result<bool> {
 mod migrations {
     use rusqlite::{Connection, Result};
     
-    pub(crate) const SCHEMA_VERSION: i32 = 38;
+    pub(crate) const SCHEMA_VERSION: i32 = 39;
     
     pub fn run(conn: &Connection) -> Result<()> {
         let current: i32 = conn
@@ -1219,6 +1219,36 @@ mod migrations {
                     })?;
                 }
             }
+            39 => {
+                // Normalize only the built-in administrator's display/login casing.
+                // Password hashes and all business data remain untouched.
+                let has_title_case_admin: i64 = conn.query_row(
+                    "SELECT COUNT(*) FROM users WHERE username='Admin'",
+                    [],
+                    |row| row.get(0),
+                ).unwrap_or(0);
+                if has_title_case_admin == 0 {
+                    conn.execute(
+                        "UPDATE users SET username='Admin' WHERE username='admin' AND role='admin'",
+                        [],
+                    )?;
+                }
+                conn.execute_batch(
+                    "CREATE INDEX IF NOT EXISTS idx_payment_allocations_payment_invoice
+                         ON payment_allocations(payment_id, invoice_id);
+                     CREATE TABLE IF NOT EXISTS supplier_payment_allocations (
+                         id INTEGER PRIMARY KEY AUTOINCREMENT,
+                         payment_id INTEGER NOT NULL REFERENCES supplier_payments(id),
+                         purchase_id INTEGER NOT NULL REFERENCES purchases(id),
+                         amount_milli INTEGER NOT NULL CHECK(amount_milli > 0),
+                         UNIQUE(payment_id, purchase_id)
+                     );
+                     CREATE INDEX IF NOT EXISTS idx_supplier_alloc_payment
+                         ON supplier_payment_allocations(payment_id);
+                     CREATE INDEX IF NOT EXISTS idx_supplier_alloc_purchase
+                         ON supplier_payment_allocations(purchase_id);"
+                )?;
+            }
             _ => {}
         }
         Ok(())
@@ -1259,7 +1289,7 @@ mod tests {
 
         let (hash, must_change): (String, i64) = conn
             .query_row(
-                "SELECT password_hash, must_change_password FROM users WHERE username='admin'",
+                "SELECT password_hash, must_change_password FROM users WHERE username='Admin'",
                 [],
                 |r| Ok((r.get(0)?, r.get(1)?)),
             )
@@ -1597,7 +1627,7 @@ mod tests {
     fn test_admin_user_exists() {
         let conn = test_conn();
         let count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM users WHERE username='admin'", [], |r| r.get(0))
+            .query_row("SELECT COUNT(*) FROM users WHERE LOWER(username)='admin'", [], |r| r.get(0))
             .unwrap();
         assert_eq!(count, 1, "Admin user should exist after init");
     }
