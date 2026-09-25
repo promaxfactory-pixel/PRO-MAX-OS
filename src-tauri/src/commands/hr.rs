@@ -40,6 +40,12 @@ pub struct Employee {
     pub sponsor_name: Option<String>,
     pub sponsor_id: Option<String>,
     pub joining_date: Option<String>,
+    pub civil_id_expiry: Option<String>,
+    pub visa_no: Option<String>,
+    pub workpermit_no: Option<String>,
+    pub driving_license_no: Option<String>,
+    pub driving_license_expiry: Option<String>,
+    pub medical_expiry: Option<String>,
     pub active: i64,
     pub notes: Option<String>,
 }
@@ -78,6 +84,12 @@ pub struct CreateEmployeeInput {
     pub sponsor_name: Option<String>,
     pub sponsor_id: Option<String>,
     pub joining_date: Option<String>,
+    pub civil_id_expiry: Option<String>,
+    pub visa_no: Option<String>,
+    pub workpermit_no: Option<String>,
+    pub driving_license_no: Option<String>,
+    pub driving_license_expiry: Option<String>,
+    pub medical_expiry: Option<String>,
     pub notes: Option<String>,
 }
 
@@ -115,6 +127,12 @@ pub struct UpdateEmployeeInput {
     pub sponsor_name: Option<String>,
     pub sponsor_id: Option<String>,
     pub joining_date: Option<String>,
+    pub civil_id_expiry: Option<String>,
+    pub visa_no: Option<String>,
+    pub workpermit_no: Option<String>,
+    pub driving_license_no: Option<String>,
+    pub driving_license_expiry: Option<String>,
+    pub medical_expiry: Option<String>,
     pub active: Option<i64>,
     pub notes: Option<String>,
 }
@@ -127,7 +145,7 @@ pub struct EmployeeListItem {
     pub job: Option<String>,
 }
 
-const EMPLOYEE_COLUMNS: &str = "id, code, name, nationality, job, salary_milli, allowances_milli, phone, passport_no, passport_expiry, residence_expiry, visa_expiry, workpermit_expiry, insurance_expiry, contract_end, id_number, date_of_birth, gender, marital_status, email, bank_name, bank_account_no, basic_salary_milli, housing_allowance_milli, transport_allowance_milli, food_allowance_milli, other_allowances_milli, overtime_rate_milli, insurance_policy_no, insurance_premium_milli, ticket_allowance_milli, sponsor_name, sponsor_id, joining_date, active, notes";
+const EMPLOYEE_COLUMNS: &str = "id, code, name, nationality, job, salary_milli, allowances_milli, phone, passport_no, passport_expiry, residence_expiry, visa_expiry, workpermit_expiry, insurance_expiry, contract_end, id_number, date_of_birth, gender, marital_status, email, bank_name, bank_account_no, basic_salary_milli, housing_allowance_milli, transport_allowance_milli, food_allowance_milli, other_allowances_milli, overtime_rate_milli, insurance_policy_no, insurance_premium_milli, ticket_allowance_milli, sponsor_name, sponsor_id, joining_date, active, notes, civil_id_expiry, visa_no, workpermit_no, driving_license_no, driving_license_expiry, medical_expiry";
 
 #[tauri::command]
 pub fn list_employees(state: State<'_, DbState>) -> Result<Vec<Employee>, AppError> {
@@ -174,6 +192,12 @@ pub fn list_employees(state: State<'_, DbState>) -> Result<Vec<Employee>, AppErr
                 joining_date: row.get(33)?,
                 active: row.get(34)?,
                 notes: row.get(35)?,
+                civil_id_expiry: row.get(36)?,
+                visa_no: row.get(37)?,
+                workpermit_no: row.get(38)?,
+                driving_license_no: row.get(39)?,
+                driving_license_expiry: row.get(40)?,
+                medical_expiry: row.get(41)?,
             })
         })?;
     Ok(rows.collect::<Result<Vec<_>, _>>()?)
@@ -259,7 +283,7 @@ pub fn create_employee(
     let emp_code = format!("EMP-{}-{:04}", year, seq);
 
     conn.execute(
-        "INSERT INTO employees(code, name, nationality, job, salary_milli, allowances_milli, phone, passport_no, passport_expiry, residence_expiry, visa_expiry, workpermit_expiry, insurance_expiry, contract_end, id_number, date_of_birth, gender, marital_status, email, bank_name, bank_account_no, basic_salary_milli, housing_allowance_milli, transport_allowance_milli, food_allowance_milli, other_allowances_milli, overtime_rate_milli, insurance_policy_no, insurance_premium_milli, ticket_allowance_milli, sponsor_name, sponsor_id, joining_date, notes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO employees(code, name, nationality, job, salary_milli, allowances_milli, phone, passport_no, passport_expiry, residence_expiry, visa_expiry, workpermit_expiry, insurance_expiry, contract_end, id_number, date_of_birth, gender, marital_status, email, bank_name, bank_account_no, basic_salary_milli, housing_allowance_milli, transport_allowance_milli, food_allowance_milli, other_allowances_milli, overtime_rate_milli, insurance_policy_no, insurance_premium_milli, ticket_allowance_milli, sponsor_name, sponsor_id, joining_date, notes, civil_id_expiry, visa_no, workpermit_no, driving_license_no, driving_license_expiry, medical_expiry) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         rusqlite::params![
             emp_code,
             input.name,
@@ -295,6 +319,12 @@ pub fn create_employee(
             input.sponsor_id,
             input.joining_date,
             input.notes,
+            input.civil_id_expiry,
+            input.visa_no,
+            input.workpermit_no,
+            input.driving_license_no,
+            input.driving_license_expiry,
+            input.medical_expiry,
         ],
     )?;
     let emp_id = conn.last_insert_rowid();
@@ -440,6 +470,30 @@ pub fn update_employee(
     }
     if let Some(v) = &input.joining_date {
         sets.push("joining_date=?");
+        params.push(Box::new(v.clone()));
+    }
+    if let Some(v) = &input.civil_id_expiry {
+        sets.push("civil_id_expiry=?");
+        params.push(Box::new(v.clone()));
+    }
+    if let Some(v) = &input.visa_no {
+        sets.push("visa_no=?");
+        params.push(Box::new(v.clone()));
+    }
+    if let Some(v) = &input.workpermit_no {
+        sets.push("workpermit_no=?");
+        params.push(Box::new(v.clone()));
+    }
+    if let Some(v) = &input.driving_license_no {
+        sets.push("driving_license_no=?");
+        params.push(Box::new(v.clone()));
+    }
+    if let Some(v) = &input.driving_license_expiry {
+        sets.push("driving_license_expiry=?");
+        params.push(Box::new(v.clone()));
+    }
+    if let Some(v) = &input.medical_expiry {
+        sets.push("medical_expiry=?");
         params.push(Box::new(v.clone()));
     }
     if let Some(v) = input.active {
