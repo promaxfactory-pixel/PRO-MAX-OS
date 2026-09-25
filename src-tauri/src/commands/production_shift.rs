@@ -929,6 +929,11 @@ mod tests {
             [],
         )
         .unwrap();
+        conn.execute(
+            "INSERT INTO employees(id, code, name, job, active) VALUES(1, 'SUP-1', 'مشرف اختبار', 'Supervisor', 1)",
+            [],
+        )
+        .unwrap();
         conn
     }
 
@@ -950,7 +955,7 @@ mod tests {
             [],
         ).unwrap();
         conn.execute(
-            "INSERT INTO operations_daily_sheets(id, sheet_no, date, shift, status) VALUES(1, 'PRD-0001', '2026-08-16', 'صباحي', 'Draft')",
+            "INSERT INTO operations_daily_sheets(id, sheet_no, date, shift, status, supervisor_employee_id) VALUES(1, 'PRD-0001', '2026-08-16', 'صباحي', 'Draft', 1)",
             [],
         ).unwrap();
         conn.execute(
@@ -1033,7 +1038,7 @@ mod tests {
             [],
         ).unwrap();
         conn.execute(
-            "INSERT INTO operations_daily_sheets(id, sheet_no, date, shift, status) VALUES(1, 'PRD-0001', '2026-08-16', 'صباحي', 'Draft')",
+            "INSERT INTO operations_daily_sheets(id, sheet_no, date, shift, status, supervisor_employee_id) VALUES(1, 'PRD-0001', '2026-08-16', 'صباحي', 'Draft', 1)",
             [],
         ).unwrap();
         conn.execute(
