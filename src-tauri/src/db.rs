@@ -1278,6 +1278,16 @@ mod migrations {
                     "ALTER TABLE supplier_payments ADD COLUMN source_account_code TEXT REFERENCES accounts(code);")?;
                 add_col("supplier_payments", "custody_id",
                     "ALTER TABLE supplier_payments ADD COLUMN custody_id INTEGER REFERENCES petty_cash_accounts(id);")?;
+                add_col("payroll_run_lines", "paid_milli",
+                    "ALTER TABLE payroll_run_lines ADD COLUMN paid_milli INTEGER NOT NULL DEFAULT 0;")?;
+                add_col("payroll_payments", "employee_id",
+                    "ALTER TABLE payroll_payments ADD COLUMN employee_id INTEGER REFERENCES employees(id);")?;
+                add_col("payroll_payments", "method",
+                    "ALTER TABLE payroll_payments ADD COLUMN method TEXT DEFAULT 'bank_transfer';")?;
+                add_col("payroll_payments", "reference",
+                    "ALTER TABLE payroll_payments ADD COLUMN reference TEXT;")?;
+                add_col("payroll_payments", "notes",
+                    "ALTER TABLE payroll_payments ADD COLUMN notes TEXT;")?;
                 add_col("payroll_payments", "source_account_code",
                     "ALTER TABLE payroll_payments ADD COLUMN source_account_code TEXT REFERENCES accounts(code);")?;
                 add_col("payroll_payments", "wps_status",
@@ -1296,6 +1306,7 @@ mod migrations {
                      CREATE INDEX IF NOT EXISTS idx_sp_source_account ON supplier_payments(source_account_code);
                      CREATE INDEX IF NOT EXISTS idx_sp_custody ON supplier_payments(custody_id);
                      CREATE INDEX IF NOT EXISTS idx_pp_source_account ON payroll_payments(source_account_code);
+                     CREATE INDEX IF NOT EXISTS idx_payroll_payment_employee ON payroll_payments(employee_id);
                      CREATE INDEX IF NOT EXISTS idx_ot_type ON overtime_records(overtime_type);"
                 )?;
             }
