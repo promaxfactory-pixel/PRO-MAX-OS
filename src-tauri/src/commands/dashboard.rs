@@ -76,11 +76,26 @@ pub fn get_dashboard_stats(state: State<'_, DbState>) -> Result<DashboardStats, 
     let total_products: i64 = conn.query_row("SELECT COUNT(*) FROM products WHERE active=1", [], |r| r.get(0)).unwrap_or(0);
     let total_employees: i64 = conn.query_row("SELECT COUNT(*) FROM employees", [], |r| r.get(0)).unwrap_or(0);
     let total_invoices: i64 = conn.query_row("SELECT COUNT(*) FROM sales_invoices", [], |r| r.get(0)).unwrap_or(0);
-    let revenue_milli: i64 = conn.query_row("SELECT COALESCE(SUM(total_milli),0) FROM sales_invoices WHERE status='Posted'", [], |r| r.get(0)).unwrap_or(0);
-    let expenses_milli: i64 = conn.query_row("SELECT COALESCE(SUM(amount_milli),0) FROM expenses", [], |r| r.get(0)).unwrap_or(0);
+    // Dashboard P&L metrics are VAT-exclusive and include only posted/approved documents.
+    let revenue_milli: i64 = conn.query_row(
+        "SELECT COALESCE(SUM(net_milli),0) FROM sales_invoices WHERE LOWER(status) IN ('posted','issued')",
+        [], |r| r.get(0)
+    ).unwrap_or(0);
+    let expenses_milli: i64 = conn.query_row(
+        "SELECT COALESCE(SUM(amount_milli),0) FROM expenses WHERE LOWER(COALESCE(approval_status,''))='approved'",
+        [], |r| r.get(0)
+    ).unwrap_or(0);
     let pending_invoices: i64 = conn.query_row("SELECT COUNT(*) FROM sales_invoices WHERE status='Draft'", [], |r| r.get(0)).unwrap_or(0);
     let overdue_amount: i64 = conn.query_row(
-        "SELECT COALESCE(SUM(total_milli - paid_milli),0) FROM sales_invoices WHERE status='Posted' AND total_milli > paid_milli AND date < date('now')",
+        "SELECT COALESCE(SUM(
+            MAX(0, si.total_milli - si.paid_milli
+                - COALESCE((SELECT SUM(cn.total_milli) FROM credit_notes cn
+                            WHERE cn.invoice_id=si.id AND LOWER(COALESCE(cn.status,''))!='void'),0))
+         ),0)
+         FROM sales_invoices si
+         JOIN customers c ON c.id=si.customer_id
+         WHERE LOWER(si.status) IN ('posted','issued')
+           AND date(si.date, '+' || COALESCE(c.payment_terms_days,30) || ' days') < date('now','localtime')",
         [], |r| r.get(0)
     ).unwrap_or(0);
     let inventory_value: i64 = conn.query_row(
@@ -90,13 +105,28 @@ pub fn get_dashboard_stats(state: State<'_, DbState>) -> Result<DashboardStats, 
     let low_stock_count: i64 = conn.query_row("SELECT COUNT(*) FROM inventory_items WHERE reorder_level > 0 AND qty_on_hand <= reorder_level", [], |r| r.get(0)).unwrap_or(0);
     let production_today: i64 = conn.query_row("SELECT COALESCE(SUM(cartons_good),0) FROM production_lines pl JOIN production_orders po ON pl.order_id=po.id WHERE po.date = date('now')", [], |r| r.get(0)).unwrap_or(0);
     let waste_today: i64 = conn.query_row("SELECT COALESCE(SUM(cartons_waste),0) FROM production_lines pl JOIN production_orders po ON pl.order_id=po.id WHERE po.date = date('now')", [], |r| r.get(0)).unwrap_or(0);
-    let custody_total: i64 = conn.query_row("SELECT COALESCE(SUM(balance_milli),0) FROM cashbank_accounts WHERE atype='Custody'", [], |r| r.get(0)).unwrap_or(0);
-    let bank_balance: i64 = conn.query_row("SELECT COALESCE(SUM(balance_milli),0) FROM cashbank_accounts WHERE atype='Bank'", [], |r| r.get(0)).unwrap_or(0);
+    // Petty-cash subledger is the operational source of truth for custody.
+    let custody_total: i64 = conn.query_row(
+        "SELECT COALESCE(SUM(balance_milli),0) FROM petty_cash_accounts WHERE active=1",
+        [], |r| r.get(0)
+    ).unwrap_or(0);
+    // Bank dashboard balance is derived from posted GL movements so receipts/payments
+    // cannot leave a stale manually-maintained cashbank balance.
+    let bank_balance: i64 = conn.query_row(
+        "SELECT COALESCE(SUM(CASE WHEN jel.debit_milli>0 THEN jel.debit_milli ELSE -jel.credit_milli END),0)
+         FROM journal_entry_lines jel
+         WHERE jel.account_code='1101'
+            OR jel.account_code IN (
+                SELECT DISTINCT account_code FROM cashbank_accounts
+                WHERE LOWER(COALESCE(atype,''))='bank' AND account_code IS NOT NULL AND trim(account_code)!=''
+            )",
+        [], |r| r.get(0)
+    ).unwrap_or(0);
 
     // Sales trend (last 30 days)
     let sales_trend = {
         let mut stmt = conn.prepare(
-            "SELECT date, COALESCE(SUM(total_milli),0) as total FROM sales_invoices WHERE status='Posted' AND date >= date('now','-30 days') GROUP BY date ORDER BY date"
+            "SELECT date, COALESCE(SUM(net_milli),0) as total FROM sales_invoices WHERE LOWER(status) IN ('posted','issued') AND date >= date('now','localtime','-30 days') GROUP BY date ORDER BY date"
         )?;
         let rows = stmt.query_map([], |row| {
             Ok(TrendPoint { date: row.get(0)?, amount: row.get(1)? })
@@ -133,7 +163,7 @@ pub fn get_dashboard_stats(state: State<'_, DbState>) -> Result<DashboardStats, 
     // Top 5 customers by revenue
     let top_customers = {
         let mut stmt = conn.prepare(
-            "SELECT c.name, COALESCE(SUM(si.total_milli),0) as total FROM sales_invoices si JOIN customers c ON si.customer_id=c.id WHERE si.status='Posted' GROUP BY si.customer_id ORDER BY total DESC LIMIT 5"
+            "SELECT c.name, COALESCE(SUM(si.net_milli),0) as total FROM sales_invoices si JOIN customers c ON si.customer_id=c.id WHERE LOWER(si.status) IN ('posted','issued') GROUP BY si.customer_id ORDER BY total DESC LIMIT 5"
         )?;
         let rows = stmt.query_map([], |row| {
             Ok(TopCustomerPoint { name: row.get(0)?, total: row.get(1)? })
@@ -144,7 +174,7 @@ pub fn get_dashboard_stats(state: State<'_, DbState>) -> Result<DashboardStats, 
     // Expenses by category (current month)
     let expenses_by_category = {
         let mut stmt = conn.prepare(
-            "SELECT COALESCE(category,'أخرى') as cat, SUM(amount_milli) as total FROM expenses WHERE date >= date('now','start of month') GROUP BY cat ORDER BY total DESC"
+            "SELECT COALESCE(category,'أخرى') as cat, SUM(amount_milli) as total FROM expenses WHERE LOWER(COALESCE(approval_status,''))='approved' AND date >= date('now','localtime','start of month') GROUP BY cat ORDER BY total DESC"
         )?;
         let rows = stmt.query_map([], |row| {
             Ok(CategoryAmountPoint { category: row.get(0)?, amount: row.get(1)? })
@@ -161,7 +191,15 @@ pub fn get_daily_brief(state: State<'_, DbState>) -> Result<DailyBrief, AppError
     let unpaid_count: i64 = conn.query_row("SELECT COUNT(*) FROM sales_invoices WHERE status IN ('Posted','Issued','Partially Paid') AND total_milli > paid_milli", [], |r| r.get(0)).unwrap_or(0);
     let unpaid_total: i64 = conn.query_row("SELECT COALESCE(SUM(total_milli - paid_milli),0) FROM sales_invoices WHERE status IN ('Posted','Issued','Partially Paid') AND total_milli > paid_milli", [], |r| r.get(0)).unwrap_or(0);
     let overdue_total: i64 = conn.query_row(
-        "SELECT COALESCE(SUM(total_milli - paid_milli),0) FROM sales_invoices WHERE status='Posted' AND total_milli > paid_milli AND date < date('now')",
+        "SELECT COALESCE(SUM(
+            MAX(0, si.total_milli - si.paid_milli
+                - COALESCE((SELECT SUM(cn.total_milli) FROM credit_notes cn
+                            WHERE cn.invoice_id=si.id AND LOWER(COALESCE(cn.status,''))!='void'),0))
+         ),0)
+         FROM sales_invoices si
+         JOIN customers c ON c.id=si.customer_id
+         WHERE LOWER(si.status) IN ('posted','issued')
+           AND date(si.date, '+' || COALESCE(c.payment_terms_days,30) || ' days') < date('now','localtime')",
         [], |r| r.get(0)
     ).unwrap_or(0);
     let waste_yesterday: i64 = conn.query_row("SELECT COALESCE(SUM(cartons_waste),0) FROM production_lines pl JOIN production_orders po ON pl.order_id=po.id WHERE po.date = date('now', '-1 day')", [], |r| r.get(0)).unwrap_or(0);
