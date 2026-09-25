@@ -1296,6 +1296,10 @@ mod migrations {
                     "ALTER TABLE payroll_payments ADD COLUMN wps_reference TEXT;")?;
                 add_col("overtime_records", "overtime_type",
                     "ALTER TABLE overtime_records ADD COLUMN overtime_type TEXT NOT NULL DEFAULT 'normal_day_day';")?;
+                add_col("operations_daily_sheets", "supervisor_employee_id",
+                    "ALTER TABLE operations_daily_sheets ADD COLUMN supervisor_employee_id INTEGER REFERENCES employees(id);")?;
+                add_col("production_shift_lines", "machine_id",
+                    "ALTER TABLE production_shift_lines ADD COLUMN machine_id INTEGER REFERENCES machines(id);")?;
 
                 conn.execute_batch(
                     "UPDATE petty_cash_accounts SET account_code='1110'
@@ -1307,7 +1311,9 @@ mod migrations {
                      CREATE INDEX IF NOT EXISTS idx_sp_custody ON supplier_payments(custody_id);
                      CREATE INDEX IF NOT EXISTS idx_pp_source_account ON payroll_payments(source_account_code);
                      CREATE INDEX IF NOT EXISTS idx_payroll_payment_employee ON payroll_payments(employee_id);
-                     CREATE INDEX IF NOT EXISTS idx_ot_type ON overtime_records(overtime_type);"
+                     CREATE INDEX IF NOT EXISTS idx_ot_type ON overtime_records(overtime_type);
+                     CREATE INDEX IF NOT EXISTS idx_shift_supervisor ON operations_daily_sheets(supervisor_employee_id);
+                     CREATE INDEX IF NOT EXISTS idx_psl_machine ON production_shift_lines(machine_id);"
                 )?;
             }
             _ => {}
