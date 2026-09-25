@@ -64,18 +64,27 @@ pub fn low_stock_report(state: State<'_, DbState>) -> Result<Vec<LowStockItem>, 
 pub fn customers_aging(state: State<'_, DbState>) -> Result<Vec<CustomerAgingItem>, AppError> {
     let conn = state.0.lock()?;
     let mut stmt = conn.prepare(
-        "SELECT c.id, c.name,
-                COALESCE(SUM(si.total_milli - si.paid_milli), 0)
-                    - COALESCE((SELECT SUM(cn.total_milli) FROM credit_notes cn WHERE cn.customer_id = c.id AND cn.status != 'Void'), 0),
-                CAST(julianday('now') - julianday(MAX(si.date)) AS INTEGER)
-         FROM customers c
-         LEFT JOIN sales_invoices si ON si.customer_id = c.id AND si.status IN ('Posted', 'Issued') AND si.total_milli > si.paid_milli
-         WHERE c.active = 1
-         GROUP BY c.id
-         HAVING COALESCE(SUM(si.total_milli - si.paid_milli), 0)
-                    - COALESCE((SELECT SUM(cn.total_milli) FROM credit_notes cn WHERE cn.customer_id = c.id AND cn.status != 'Void'), 0) > 0
-         ORDER BY (COALESCE(SUM(si.total_milli - si.paid_milli), 0)
-                    - COALESCE((SELECT SUM(cn.total_milli) FROM credit_notes cn WHERE cn.customer_id = c.id AND cn.status != 'Void'), 0)) DESC"
+        "WITH open_invoice AS (
+            SELECT si.id, si.customer_id,
+                   MAX(0, si.total_milli - si.paid_milli
+                       - COALESCE((SELECT SUM(cn.total_milli) FROM credit_notes cn
+                                   WHERE cn.invoice_id=si.id AND LOWER(COALESCE(cn.status,''))!='void'),0)) AS outstanding,
+                   date(si.date, '+' || COALESCE(c.payment_terms_days,30) || ' days') AS due_date
+            FROM sales_invoices si
+            JOIN customers c ON c.id=si.customer_id
+            WHERE LOWER(si.status) IN ('posted','issued')
+        )
+        SELECT c.id, c.name,
+               COALESCE(SUM(oi.outstanding),0) AS total_due,
+               MAX(0, COALESCE(MAX(CASE WHEN oi.outstanding>0 AND oi.due_date < date('now','localtime')
+                                        THEN CAST(julianday(date('now','localtime')) - julianday(oi.due_date) AS INTEGER)
+                                        ELSE 0 END),0)) AS overdue_days
+        FROM customers c
+        LEFT JOIN open_invoice oi ON oi.customer_id=c.id AND oi.outstanding>0
+        WHERE c.active=1
+        GROUP BY c.id, c.name
+        HAVING COALESCE(SUM(oi.outstanding),0)>0
+        ORDER BY total_due DESC"
     )?;
     let items = stmt.query_map([], |r| {
         Ok(CustomerAgingItem {
@@ -177,7 +186,8 @@ pub fn owner_summary(state: State<'_, DbState>, date_from: String, date_to: Stri
         params![date_from, date_to], |r| r.get(0),
     ).unwrap_or(0);
     let expenses: i64 = conn.query_row(
-        "SELECT COALESCE(SUM(amount_milli), 0) FROM expenses WHERE date >= ?1 AND date <= ?2",
+        "SELECT COALESCE(SUM(amount_milli), 0) FROM expenses
+         WHERE date >= ?1 AND date <= ?2 AND LOWER(COALESCE(approval_status,''))='approved'",
         params![date_from, date_to], |r| r.get(0),
     ).unwrap_or(0);
     let production: f64 = conn.query_row(
