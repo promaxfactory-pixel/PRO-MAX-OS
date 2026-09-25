@@ -22,6 +22,18 @@ pub struct ShiftLine {
     pub recorded_by: Option<String>,
     pub worker_id: Option<i64>,
     pub worker_name: Option<String>,
+    pub machine_id: Option<i64>,
+    pub machine_name: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ShiftSheetInfo {
+    pub id: i64,
+    pub date: String,
+    pub shift: String,
+    pub status: String,
+    pub supervisor_employee_id: Option<i64>,
+    pub supervisor_name: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -51,7 +63,9 @@ pub fn get_shift_sheet(state: State<'_, DbState>, user_id: i64, date: String, sh
 
     let existing: Option<i64> = conn
         .query_row(
-            "SELECT id FROM operations_daily_sheets WHERE date = ?1 AND shift = ?2 AND status = 'Draft'",
+            "SELECT id FROM operations_daily_sheets
+             WHERE date = ?1 AND shift = ?2
+             ORDER BY id DESC LIMIT 1",
             params![date, shift],
             |row| row.get(0),
         )
@@ -78,6 +92,61 @@ pub fn get_shift_sheet(state: State<'_, DbState>, user_id: i64, date: String, sh
     Ok(id)
 }
 
+#[tauri::command]
+pub fn get_shift_sheet_info(
+    state: State<'_, DbState>,
+    sheet_id: i64,
+) -> Result<ShiftSheetInfo, AppError> {
+    let conn = state.0.lock()?;
+    conn.query_row(
+        "SELECT ods.id, ods.date, COALESCE(ods.shift,''), ods.status,
+                ods.supervisor_employee_id, COALESCE(e.name, ods.supervisor_name)
+         FROM operations_daily_sheets ods
+         LEFT JOIN employees e ON e.id=ods.supervisor_employee_id
+         WHERE ods.id=?1",
+        [sheet_id],
+        |r| Ok(ShiftSheetInfo {
+            id: r.get(0)?,
+            date: r.get(1)?,
+            shift: r.get(2)?,
+            status: r.get(3)?,
+            supervisor_employee_id: r.get(4)?,
+            supervisor_name: r.get(5)?,
+        }),
+    ).map_err(|_| AppError::not_found("الوردية غير موجودة"))
+}
+
+#[tauri::command]
+pub fn update_shift_supervisor(
+    state: State<'_, DbState>,
+    user_id: i64,
+    sheet_id: i64,
+    supervisor_employee_id: i64,
+) -> Result<String, AppError> {
+    let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "manager", "operator"])?;
+    let supervisor_name: String = conn.query_row(
+        "SELECT name FROM employees WHERE id=?1 AND active=1",
+        [supervisor_employee_id],
+        |r| r.get(0),
+    ).map_err(|_| AppError::not_found("المشرف غير موجود أو غير نشط"))?;
+    let changed = conn.execute(
+        "UPDATE operations_daily_sheets
+         SET supervisor_employee_id=?1, supervisor_name=?2
+         WHERE id=?3 AND status='Draft'",
+        params![supervisor_employee_id, supervisor_name, sheet_id],
+    )?;
+    if changed == 0 {
+        return Err(AppError::validation("لا يمكن تغيير مشرف وردية مقفلة"));
+    }
+    let _ = rbac::log_audit(
+        &conn, Some(user_id), None, "update_shift_supervisor",
+        "operations_daily_sheets", Some(sheet_id), None,
+        Some(&format!("supervisor={}", supervisor_employee_id)), None
+    );
+    Ok("تم تحديد مشرف الوردية".to_string())
+}
+
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn record_production(
@@ -91,29 +160,76 @@ pub fn record_production(
     waste_cartons: Option<f64>,
     recorded_by: Option<String>,
     worker_id: Option<i64>,
+    machine_id: Option<i64>,
 ) -> Result<ShiftLine, AppError> {
     let conn = state.0.lock()?;
     rbac::require_role(&conn, user_id, &["admin", "manager", "operator"])?;
 
-    let cpc = cups_per_carton.unwrap_or(1000);
+    if cartons_produced <= 0.0 {
+        return Err(AppError::validation("كمية الإنتاج يجب أن تكون أكبر من صفر"));
+    }
     let waste = waste_cartons.unwrap_or(0.0);
+    if waste < 0.0 {
+        return Err(AppError::validation("الهالك لا يمكن أن يكون سالبًا"));
+    }
+    let worker_id = worker_id.ok_or_else(|| AppError::validation("حدد العامل المسؤول عن الإنتاج"))?;
+
+    let sheet_status: String = conn.query_row(
+        "SELECT status FROM operations_daily_sheets WHERE id=?1",
+        [sheet_id], |r| r.get(0)
+    ).map_err(|_| AppError::not_found("الوردية غير موجودة"))?;
+    if sheet_status != "Draft" {
+        return Err(AppError::validation("الوردية مقفلة ولا تقبل تسجيلات جديدة"));
+    }
+
+    let supervisor_exists: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM operations_daily_sheets
+         WHERE id=?1 AND supervisor_employee_id IS NOT NULL",
+        [sheet_id], |r| r.get(0)
+    ).unwrap_or(0);
+    if supervisor_exists == 0 {
+        return Err(AppError::validation("حدد مشرف الوردية قبل تسجيل الإنتاج"));
+    }
+
+    let machine_count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM machines WHERE active=1", [], |r| r.get(0)
+    ).unwrap_or(0);
+    if machine_count > 0 && machine_id.is_none() {
+        return Err(AppError::validation("حدد الماكينة التي تم عليها الإنتاج"));
+    }
+    if let Some(mid) = machine_id {
+        let active_machine: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM machines WHERE id=?1 AND active=1", [mid], |r| r.get(0)
+        ).unwrap_or(0);
+        if active_machine == 0 {
+            return Err(AppError::validation("الماكينة المحددة غير موجودة أو غير نشطة"));
+        }
+    }
+
+    let product_cpc: i64 = conn.query_row(
+        "SELECT COALESCE(cups_per_carton,1000) FROM products WHERE id=?1 AND active=1",
+        [product_id], |r| r.get(0)
+    ).map_err(|_| AppError::not_found("المنتج غير موجود أو غير نشط"))?;
+    let cpc = cups_per_carton.filter(|x| *x > 0).unwrap_or(product_cpc);
 
     conn.execute(
-        "INSERT INTO production_shift_lines (sheet_id, product_id, customer_brand, cartons_produced, cups_per_carton, waste_cartons, recorded_by, worker_id)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-        params![sheet_id, product_id, customer_brand, cartons_produced, cpc, waste, recorded_by, worker_id],
-    )
-    ?;
+        "INSERT INTO production_shift_lines
+         (sheet_id, product_id, customer_brand, cartons_produced, cups_per_carton,
+          waste_cartons, recorded_by, worker_id, machine_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        params![sheet_id, product_id, customer_brand, cartons_produced, cpc, waste, recorded_by, worker_id, machine_id],
+    )?;
 
     let id = conn.last_insert_rowid();
 
     let line = conn.query_row(
         "SELECT psl.id, psl.sheet_id, psl.product_id, COALESCE(p.name_ar, p.name_en, '') as product_name,
                 psl.customer_brand, psl.cartons_produced, psl.cups_per_carton, psl.waste_cartons, psl.unit_cost_milli, psl.material_cost_milli, psl.ts, psl.recorded_by,
-                psl.worker_id, e.name as worker_name
+                psl.worker_id, e.name as worker_name, psl.machine_id, m.name as machine_name
          FROM production_shift_lines psl
          LEFT JOIN products p ON p.id = psl.product_id
          LEFT JOIN employees e ON e.id = psl.worker_id
+         LEFT JOIN machines m ON m.id = psl.machine_id
          WHERE psl.id = ?1",
         params![id],
         row_to_shift_line,
@@ -146,10 +262,11 @@ pub fn get_shift_lines(state: State<'_, DbState>, sheet_id: i64) -> Result<Vec<S
             "SELECT psl.id, psl.sheet_id, psl.product_id, COALESCE(p.name_ar, p.name_en, ''),
                     psl.customer_brand, psl.cartons_produced, psl.cups_per_carton, psl.waste_cartons,
                     psl.unit_cost_milli, psl.material_cost_milli, psl.ts, psl.recorded_by,
-                    psl.worker_id, e.name as worker_name
+                    psl.worker_id, e.name as worker_name, psl.machine_id, m.name as machine_name
              FROM production_shift_lines psl
              LEFT JOIN products p ON p.id = psl.product_id
              LEFT JOIN employees e ON e.id = psl.worker_id
+             LEFT JOIN machines m ON m.id = psl.machine_id
              WHERE psl.sheet_id = ?1
              ORDER BY psl.ts DESC",
         )
@@ -190,6 +307,21 @@ pub(crate) fn complete_shift_inner(conn: &rusqlite::Connection, sheet_id: i64, c
 
     if status != "Draft" {
         return Err(AppError::validation("لا يمكن إقفال وردية تم إقفالها مسبقاً"));
+    }
+    let supervisor_set: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM operations_daily_sheets
+         WHERE id=?1 AND supervisor_employee_id IS NOT NULL",
+        [sheet_id], |r| r.get(0)
+    ).unwrap_or(0);
+    if supervisor_set == 0 {
+        return Err(AppError::validation("لا يمكن إقفال الوردية بدون تحديد المشرف"));
+    }
+    let production_count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM production_shift_lines WHERE sheet_id=?1",
+        [sheet_id], |r| r.get(0)
+    ).unwrap_or(0);
+    if production_count == 0 {
+        return Err(AppError::validation("لا يمكن إقفال وردية بدون إنتاج مسجل"));
     }
 
     let lines: Vec<(i64, f64, f64)> = {
@@ -474,11 +606,12 @@ pub fn get_live_dashboard(state: State<'_, DbState>) -> Result<LiveProductionSum
     let mut recent = conn.prepare(
         "SELECT psl.id, psl.sheet_id, psl.product_id, COALESCE(p.name_ar, p.name_en, ''),
                 psl.customer_brand, psl.cartons_produced, psl.cups_per_carton, psl.waste_cartons, psl.unit_cost_milli, psl.material_cost_milli, psl.ts, psl.recorded_by,
-                psl.worker_id, e.name as worker_name
+                psl.worker_id, e.name as worker_name, psl.machine_id, m.name as machine_name
          FROM production_shift_lines psl
          JOIN operations_daily_sheets ods ON ods.id = psl.sheet_id
          LEFT JOIN products p ON p.id = psl.product_id
          LEFT JOIN employees e ON e.id = psl.worker_id
+         LEFT JOIN machines m ON m.id = psl.machine_id
          WHERE ods.date = ?1
          ORDER BY psl.ts DESC LIMIT 20",
     )?;
@@ -627,6 +760,8 @@ fn row_to_shift_line(row: &rusqlite::Row) -> rusqlite::Result<ShiftLine> {
         recorded_by: row.get(11)?,
         worker_id: row.get(12)?,
         worker_name: row.get(13)?,
+        machine_id: row.get(14)?,
+        machine_name: row.get(15)?,
     })
 }
 
