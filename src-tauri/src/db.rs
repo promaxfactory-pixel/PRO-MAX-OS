@@ -1296,6 +1296,18 @@ mod migrations {
                     "ALTER TABLE payroll_payments ADD COLUMN wps_reference TEXT;")?;
                 add_col("overtime_records", "overtime_type",
                     "ALTER TABLE overtime_records ADD COLUMN overtime_type TEXT NOT NULL DEFAULT 'normal_day_day';")?;
+                add_col("employees", "civil_id_expiry",
+                    "ALTER TABLE employees ADD COLUMN civil_id_expiry TEXT;")?;
+                add_col("employees", "visa_no",
+                    "ALTER TABLE employees ADD COLUMN visa_no TEXT;")?;
+                add_col("employees", "workpermit_no",
+                    "ALTER TABLE employees ADD COLUMN workpermit_no TEXT;")?;
+                add_col("employees", "driving_license_no",
+                    "ALTER TABLE employees ADD COLUMN driving_license_no TEXT;")?;
+                add_col("employees", "driving_license_expiry",
+                    "ALTER TABLE employees ADD COLUMN driving_license_expiry TEXT;")?;
+                add_col("employees", "medical_expiry",
+                    "ALTER TABLE employees ADD COLUMN medical_expiry TEXT;")?;
                 add_col("operations_daily_sheets", "supervisor_employee_id",
                     "ALTER TABLE operations_daily_sheets ADD COLUMN supervisor_employee_id INTEGER REFERENCES employees(id);")?;
                 add_col("production_shift_lines", "machine_id",
