@@ -118,6 +118,7 @@ pub fn run() {
             commands::custody::create_custody_spend,
             commands::custody::create_custody_transfer,
             commands::custody::get_custody_statement,
+            commands::custody::get_custody_reconciliation,
             commands::custody::update_custody_spend,
             commands::custody::update_custody_fund,
             // HR
