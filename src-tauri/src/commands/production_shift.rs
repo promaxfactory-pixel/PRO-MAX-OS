@@ -144,7 +144,8 @@ pub fn get_shift_lines(state: State<'_, DbState>, sheet_id: i64) -> Result<Vec<S
     let mut stmt = conn
         .prepare(
             "SELECT psl.id, psl.sheet_id, psl.product_id, COALESCE(p.name_ar, p.name_en, ''),
-                    psl.customer_brand, psl.cartons_produced, psl.cups_per_carton, psl.waste_cartons, psl.ts, psl.recorded_by,
+                    psl.customer_brand, psl.cartons_produced, psl.cups_per_carton, psl.waste_cartons,
+                    psl.unit_cost_milli, psl.material_cost_milli, psl.ts, psl.recorded_by,
                     psl.worker_id, e.name as worker_name
              FROM production_shift_lines psl
              LEFT JOIN products p ON p.id = psl.product_id
