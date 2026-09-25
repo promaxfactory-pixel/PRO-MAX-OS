@@ -60,6 +60,10 @@ pub struct CreateSupplierPaymentInput {
     pub date: String,
     pub amount_milli: i64,
     pub method: Option<String>,
+    pub cashbank_id: Option<i64>,
+    pub source_type: Option<String>,
+    pub source_account_code: Option<String>,
+    pub custody_id: Option<i64>,
     pub reference: Option<String>,
     pub notes: Option<String>,
 }
@@ -390,14 +394,17 @@ pub fn list_suppliers_for_select(state: State<'_, DbState>) -> Result<Vec<serde_
 }
 
 #[tauri::command]
-pub fn create_supplier_payment(input: CreateSupplierPaymentInput, state: State<'_, DbState>, user_id: i64) -> Result<i64, AppError> {
+pub fn create_supplier_payment(
+    input: CreateSupplierPaymentInput,
+    state: State<'_, DbState>,
+    user_id: i64,
+) -> Result<i64, AppError> {
     let mut conn = state.0.lock()?;
     rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     if input.amount_milli <= 0 {
         return Err(AppError::validation("المبلغ يجب أن يكون أكبر من صفر"));
     }
     let tx = conn.transaction()?;
-
     let supplier_exists: i64 = tx
         .query_row("SELECT COUNT(*) FROM suppliers WHERE id=?1", [input.supplier_id], |r| r.get(0))?;
     if supplier_exists == 0 {
@@ -405,61 +412,94 @@ pub fn create_supplier_payment(input: CreateSupplierPaymentInput, state: State<'
     }
 
     let method = input.method.clone().unwrap_or_else(|| "cash".into());
-    let year: String = tx
-        .query_row("SELECT substr(?1, 1, 4)", [&input.date], |row| row.get(0))?;
+    let source_type = input.source_type.clone().unwrap_or_else(|| "company".into()).to_lowercase();
+    let source_account = if let Some(code) = input.source_account_code.clone().filter(|x| !x.trim().is_empty()) {
+        let exists: i64 = tx.query_row("SELECT COUNT(*) FROM accounts WHERE code=?1", [&code], |r| r.get(0)).unwrap_or(0);
+        if exists == 0 {
+            return Err(AppError::validation("حساب مصدر الدفع غير موجود"));
+        }
+        code
+    } else {
+        match source_type.as_str() {
+            "company" => crate::commands::accounting::resolve_cash_account(&tx, input.cashbank_id, &method)?,
+            "custody" => {
+                let pid = input.custody_id.ok_or_else(|| AppError::validation("حدد العهدة التي دفعت للمورد"))?;
+                tx.query_row(
+                    "SELECT COALESCE(NULLIF(trim(account_code),''),'1110') FROM petty_cash_accounts WHERE id=?1 AND active=1",
+                    [pid],
+                    |r| r.get::<_, String>(0),
+                ).map_err(|_| AppError::not_found("حساب العهدة غير موجود"))?
+            }
+            "owner_saif" => "2310".to_string(),
+            "owner_abu_saif" => "2320".to_string(),
+            _ => return Err(AppError::validation("مصدر دفع المورد غير معروف")),
+        }
+    };
+
+    if source_type == "custody" {
+        let pid = input.custody_id.ok_or_else(|| AppError::validation("حدد العهدة"))?;
+        let old_balance: i64 = tx.query_row(
+            "SELECT balance_milli FROM petty_cash_accounts WHERE id=?1 AND active=1",
+            [pid], |r| r.get(0)
+        ).map_err(|_| AppError::not_found("حساب العهدة غير موجود"))?;
+        if old_balance < input.amount_milli {
+            return Err(AppError::validation("رصيد العهدة غير كافٍ لدفع المورد"));
+        }
+        let new_balance = old_balance - input.amount_milli;
+        tx.execute("UPDATE petty_cash_accounts SET balance_milli=?1 WHERE id=?2", rusqlite::params![new_balance, pid])?;
+        tx.execute(
+            "INSERT INTO petty_cash_transactions
+             (ts, petty_id, ttype, debit_milli, credit_milli, balance_milli, category, account_code, reference, notes, user_id)
+             VALUES(?1,?2,'Supplier Payment',0,?3,?4,'دفع مورد','2200',?5,?6,?7)",
+            rusqlite::params![
+                format!("{} 12:00:00", input.date),
+                pid, input.amount_milli, new_balance, input.reference, input.notes, user_id
+            ],
+        )?;
+    }
+
+    let year: String = tx.query_row("SELECT substr(?1,1,4)", [&input.date], |r| r.get(0))?;
     let seq = next_sequence(&tx, "PAY", &year)?;
     let pay_no = format!("PAY-{}-{:04}", year, seq);
     let created_by: String = tx
         .query_row("SELECT username FROM users WHERE id=?", [user_id], |r| r.get(0))
         .unwrap_or_else(|_| "user".into());
+
     tx.execute(
-        "INSERT INTO supplier_payments(pay_no, supplier_id, date, amount_milli, method, reference, notes, created_by, created_at)
-         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'))",
+        "INSERT INTO supplier_payments
+         (pay_no, supplier_id, date, amount_milli, method, cashbank_id, reference, notes,
+          source_type, source_account_code, custody_id, created_by, created_at)
+         VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,datetime('now'))",
         rusqlite::params![
-            pay_no,
-            input.supplier_id,
-            input.date.clone(),
-            input.amount_milli,
-            method.clone(),
-            input.reference,
-            input.notes,
-            created_by,
+            pay_no, input.supplier_id, input.date.clone(), input.amount_milli, method,
+            input.cashbank_id, input.reference, input.notes, source_type,
+            source_account, input.custody_id, created_by,
         ],
     )?;
+    let payment_id = tx.last_insert_rowid();
 
-    let payment_id: i64 = tx.last_insert_rowid();
-
-    // Allocate the payment across the supplier's open (posted, unpaid) purchases,
-    // oldest first (FIFO), so per-purchase paid/outstanding amounts stay accurate.
-    // Any amount beyond the outstanding total remains as an on-account credit.
     allocate_payment_fifo(&tx, input.supplier_id, input.amount_milli, None)?;
-
-    // Keep the supplier's running balance in sync: a payment reduces what is owed.
     tx.execute(
         "UPDATE suppliers SET balance_milli = COALESCE(balance_milli, 0) - ?1 WHERE id = ?2",
         rusqlite::params![input.amount_milli, input.supplier_id],
     )?;
 
-    let cash_account = crate::commands::accounting::resolve_cash_account(&tx, None, &method)?;
     let lines: Vec<(String, i64, i64, Option<String>)> = vec![
-        ("2200".to_string(), input.amount_milli, 0, Some("سند صرف".to_string())),
-        (cash_account, 0, input.amount_milli, None),
+        ("2200".to_string(), input.amount_milli, 0, Some("تسوية ذمم مورد".to_string())),
+        (source_account.clone(), 0, input.amount_milli, Some("مصدر دفع المورد".to_string())),
     ];
     let journal_id = crate::commands::accounting::post_to_journal(
-        &tx,
-        "supplier_payment",
-        payment_id,
-        &input.date,
-        "سند دفع مورد",
-        &lines,
-        "system",
+        &tx, "supplier_payment", payment_id, &input.date, "سند دفع مورد", &lines, &created_by
     )?;
     tx.execute(
         "UPDATE supplier_payments SET journal_id=?1 WHERE id=?2",
         rusqlite::params![journal_id, payment_id],
     )?;
 
-    let _ = rbac::log_audit(&tx, Some(user_id), None, "create_supplier_payment", "supplier_payments", Some(payment_id), None, None, None);
+    let _ = rbac::log_audit(
+        &tx, Some(user_id), None, "create_supplier_payment", "supplier_payments",
+        Some(payment_id), None, Some(&format!("source={}", source_type)), None
+    );
     tx.commit()?;
     Ok(payment_id)
 }
