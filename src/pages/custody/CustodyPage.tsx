@@ -9,6 +9,13 @@ import { Plus, Coins, FileText, Banknote, ArrowLeftRight, Wallet, Save } from "l
 import { useUIStore } from "@/stores/uiStore";
 import type { CustodyAccount, CustodyTransaction } from "@/types";
 
+interface CustodyReconciliation {
+  subledger_balance_milli: number;
+  gl_balance_milli: number;
+  difference_milli: number;
+  is_reconciled: boolean;
+}
+
 type ModalKind = "fund" | "topup" | "spend" | "transfer" | "statement" | null;
 
 const EXPENSE_CATEGORIES = [
@@ -29,6 +36,7 @@ const EXPENSE_CATEGORIES = [
 export default function CustodyPage() {
   const addNotification = useUIStore((s) => s.addNotification);
   const [accounts, setAccounts] = useState<CustodyAccount[]>([]);
+  const [reconciliation, setReconciliation] = useState<CustodyReconciliation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalKind>(null);
@@ -64,12 +72,14 @@ export default function CustodyPage() {
     setLoading(true);
     setError(null);
     try {
-      const [d, cash] = await Promise.all([
+      const [d, cash, rec] = await Promise.all([
         invoke("list_custody_accounts"),
         invoke("list_cashbank_accounts").catch(() => []),
+        invoke("get_custody_reconciliation").catch(() => null),
       ]);
       setAccounts(d as CustodyAccount[]);
       setCashAccounts(cash as Array<{id:number; name:string; code?:string|null}>);
+      setReconciliation(rec as CustodyReconciliation | null);
     }
     catch (err) { setError(err instanceof Error ? err.message : String(err)); addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء تحميل البيانات" }); }
     finally { setLoading(false); }
@@ -242,11 +252,22 @@ export default function CustodyPage() {
         <Button icon={<Plus className="w-4 h-4" />} onClick={openFund}>إنشاء صندوق</Button>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard title="عدد الصناديق" value={String(accounts.length)} icon={<Coins className="w-6 h-6" />} />
         <StatCard title="إجمالي الأرصدة" value={formatOMR(totalBalance)} icon={<Coins className="w-6 h-6" />} />
         <StatCard title="إجمالي حدود الصرف" value={formatOMR(totalLimit)} icon={<Banknote className="w-6 h-6" />} />
+        <StatCard title="فرق العهدة مع الأستاذ" value={formatOMR(Math.abs(reconciliation?.difference_milli || 0))} subtitle={reconciliation?.is_reconciled ? "متطابق" : "يحتاج تسوية افتتاحية/مراجعة"} icon={<FileText className="w-6 h-6" />} />
       </div>
+
+      {reconciliation && !reconciliation.is_reconciled && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm">
+          <p className="font-bold text-amber-300">العهدة غير متطابقة مع الأستاذ العام</p>
+          <p className="text-surface-300 mt-1">
+            دفاتر العهد: {formatOMR(reconciliation.subledger_balance_milli)} • حساب 1110: {formatOMR(reconciliation.gl_balance_milli)} • الفرق: {formatOMR(reconciliation.difference_milli)}.
+            غالبًا يعود ذلك لحركات تاريخية قبل تفعيل الربط المحاسبي. لم يقم النظام بإنشاء قيد تلقائي.
+          </p>
+        </div>
+      )}
 
       <DataTable columns={columns} data={accounts} loading={loading} emptyMessage="لا توجد صناديق — أنشئ أول صندوق عهدة" />
 
