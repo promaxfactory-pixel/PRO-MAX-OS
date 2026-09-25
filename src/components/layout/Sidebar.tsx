@@ -54,7 +54,7 @@ const menuSections = (t: (key: string) => string) => [
   {
     title: t("nav.dashboard"),
     items: [
-      { label: t("nav.dashboard"), icon: LayoutDashboard, path: "/dashboard" },
+      { label: "مركز الإدارة اليومية", icon: ClipboardCheck, path: "/daily-operations" },\n      { label: t("nav.dashboard"), icon: LayoutDashboard, path: "/dashboard" },
       { label: t("dashboard.dailyBrief"), icon: FileSearch, path: "/dashboard/daily-brief" },
       { label: t("nav.alerts"), icon: Bell, path: "/alerts" },
     ],
