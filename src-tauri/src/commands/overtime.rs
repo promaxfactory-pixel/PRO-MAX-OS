@@ -12,6 +12,7 @@ pub struct OvertimeRecord {
     pub date: String,
     pub hours: f64,
     pub rate_multiplier: f64,
+    pub overtime_type: String,
     pub hourly_rate_milli: i64,
     pub estimated_cost_milli: i64,
     pub reason: Option<String>,
@@ -29,6 +30,7 @@ pub struct CreateOvertimeInput {
     pub employee_id: i64,
     pub date: String,
     pub hours: f64,
+    pub overtime_type: Option<String>,
     pub rate_multiplier: Option<f64>,
     pub reason: Option<String>,
     pub notes: Option<String>,
@@ -41,7 +43,7 @@ pub fn list_overtime_records(
     let conn = state.0.lock()?;
     let mut stmt = conn
         .prepare(
-            "SELECT o.id, o.employee_id, e.name, o.date, o.hours, o.rate_multiplier,
+            "SELECT o.id, o.employee_id, e.name, o.date, o.hours, o.rate_multiplier, COALESCE(o.overtime_type, 'normal_day_day'),
                     CAST(COALESCE(e.overtime_rate_milli, 0) AS INTEGER) AS hourly_rate_milli,
                     CAST(ROUND(o.hours * o.rate_multiplier * COALESCE(e.overtime_rate_milli, 0)) AS INTEGER) AS estimated_cost_milli,
                     o.reason, o.approved, o.approved_by, o.approved_at, o.status, o.notes, o.created_by, o.created_at
@@ -58,16 +60,17 @@ pub fn list_overtime_records(
                 date: row.get(3)?,
                 hours: row.get(4)?,
                 rate_multiplier: row.get(5)?,
-                hourly_rate_milli: row.get(6)?,
-                estimated_cost_milli: row.get(7)?,
-                reason: row.get(8)?,
-                approved: row.get(9)?,
-                approved_by: row.get(10)?,
-                approved_at: row.get(11)?,
-                status: row.get(12)?,
-                notes: row.get(13)?,
-                created_by: row.get(14)?,
-                created_at: row.get(15)?,
+                overtime_type: row.get(6)?,
+                hourly_rate_milli: row.get(7)?,
+                estimated_cost_milli: row.get(8)?,
+                reason: row.get(9)?,
+                approved: row.get(10)?,
+                approved_by: row.get(11)?,
+                approved_at: row.get(12)?,
+                status: row.get(13)?,
+                notes: row.get(14)?,
+                created_by: row.get(15)?,
+                created_at: row.get(16)?,
             })
         })?;
     Ok(rows.collect::<Result<Vec<_>, _>>()?)
@@ -79,13 +82,32 @@ pub fn create_overtime_record(
     input: CreateOvertimeInput,
 ) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
+    if input.hours <= 0.0 {
+        return Err(AppError::validation("عدد ساعات العمل الإضافي يجب أن يكون أكبر من صفر"));
+    }
+    let overtime_type = input.overtime_type.unwrap_or_else(|| "normal_day_day".to_string());
+    let legal_multiplier = match overtime_type.as_str() {
+        "normal_day_day" => 1.25,
+        "normal_day_night" => 1.50,
+        "rest_or_holiday" => 2.00,
+        "emergency_day" => 1.50,
+        "emergency_night" => 1.75,
+        "emergency_rest_or_holiday" => 3.00,
+        _ => return Err(AppError::validation("نوع العمل الإضافي غير معروف")),
+    };
+    let multiplier = input.rate_multiplier.unwrap_or(legal_multiplier);
+    if (multiplier - legal_multiplier).abs() > 0.0001 {
+        return Err(AppError::validation("مضاعف الأجر لا يطابق نوع العمل الإضافي المحدد"));
+    }
     conn.execute(
-        "INSERT INTO overtime_records(employee_id, date, hours, rate_multiplier, reason, notes, status, created_at) VALUES(?,?,?,?,?,?, 'Pending', datetime('now'))",
+        "INSERT INTO overtime_records(employee_id, date, hours, rate_multiplier, overtime_type, reason, notes, status, created_at)
+         VALUES(?,?,?,?,?,?,?, 'Pending', datetime('now'))",
         rusqlite::params![
             input.employee_id,
             input.date,
             input.hours,
-            input.rate_multiplier.unwrap_or(1.25),
+            multiplier,
+            overtime_type,
             input.reason,
             input.notes,
         ],
