@@ -263,6 +263,7 @@ CREATE TABLE IF NOT EXISTS customer_payments (
     rec_no TEXT, date TEXT NOT NULL, customer_id INTEGER NOT NULL REFERENCES customers(id),
     amount_milli INTEGER NOT NULL DEFAULT 0, method TEXT DEFAULT 'cash',
     cashbank_id INTEGER REFERENCES cashbank_accounts(id), reference TEXT, notes TEXT,
+    source_type TEXT DEFAULT 'company', source_account_code TEXT REFERENCES accounts(code),
     created_by TEXT, created_at TEXT, journal_id INTEGER REFERENCES journal_entries(id)
 );
 
