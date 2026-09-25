@@ -76,9 +76,12 @@ export default function EmployeeDetailPage() {
           <h3 className="section-title">الوثائق والانتهاء</h3>
           <div className="space-y-3 mt-4">
             <div className="flex justify-between text-sm"><span className="text-surface-400">جواز السفر</span>{expiryWarning(emp.passport_expiry)}</div>
-            <div className="flex justify-between text-sm"><span className="text-surface-400">الإقامة</span>{expiryWarning(emp.residence_expiry)}</div>
+            <div className="flex justify-between text-sm"><span className="text-surface-400">البطاقة المدنية / الإقامة</span>{expiryWarning(emp.civil_id_expiry || emp.residence_expiry)}</div>
+            <div className="flex justify-between text-sm"><span className="text-surface-400">الإقامة (سجل قديم)</span>{expiryWarning(emp.residence_expiry)}</div>
             <div className="flex justify-between text-sm"><span className="text-surface-400">التأشيرة</span>{expiryWarning(emp.visa_expiry)}</div>
             <div className="flex justify-between text-sm"><span className="text-surface-400">تصريح العمل</span>{expiryWarning(emp.workpermit_expiry)}</div>
+            <div className="flex justify-between text-sm"><span className="text-surface-400">رخصة القيادة</span>{expiryWarning(emp.driving_license_expiry)}</div>
+            <div className="flex justify-between text-sm"><span className="text-surface-400">الفحص الطبي / البطاقة الصحية</span>{expiryWarning(emp.medical_expiry)}</div>
             <div className="flex justify-between text-sm"><span className="text-surface-400">التأمين</span>{expiryWarning(emp.insurance_expiry)}</div>
             <div className="flex justify-between text-sm"><span className="text-surface-400">انتهاء العقد</span>{expiryWarning(emp.contract_end)}</div>
           </div>
