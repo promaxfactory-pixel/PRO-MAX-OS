@@ -274,10 +274,11 @@ pub fn create_operating_advance(
          department, purpose, description, amount_milli, currency, exchange_rate,
          status, approval_status, source_account_code, advance_gl_account_code,
          default_expense_account_code, expected_return_date, notes, created_by, created_at)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,'draft','pending',?10,?11,?12,?13,?14,?15,datetime('now'))",
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,'draft','pending',?11,?12,?13,?14,?15,?16,datetime('now'))",
         params![advance_no, date_str, input.employee_id, input.employee_name, input.department,
-                input.purpose, input.description, input.amount_milli, currency,
-                input.source_account_code, input.advance_gl_account_code,
+                input.purpose, input.description, input.amount_milli, currency, _exchange_rate,
+                input.source_account_code,
+                input.advance_gl_account_code.clone().unwrap_or_else(|| "1320".to_string()),
                 input.default_expense_account_code, input.expected_return_date, input.notes, input.created_by],
     )?;
     let id = tx.last_insert_rowid();
