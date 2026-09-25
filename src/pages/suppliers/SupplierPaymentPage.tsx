@@ -24,12 +24,25 @@ export default function SupplierPaymentPage() {
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("cash");
+  const [sourceType, setSourceType] = useState("company");
+  const [cashbankId, setCashbankId] = useState("");
+  const [custodyId, setCustodyId] = useState("");
+  const [cashAccounts, setCashAccounts] = useState<Array<{id:number; name:string; code?:string|null}>>([]);
+  const [custodyAccounts, setCustodyAccounts] = useState<Array<{id:number; name:string; code?:string|null}>>([]);
   const [reference, setReference] = useState("");
   const [notes, setNotes] = useState("");
 
   useEffect(() => {
-    invoke("get_supplier", { id: Number(id) })
-      .then((d) => setSupplier(d as Supplier))
+    Promise.all([
+      invoke("get_supplier", { id: Number(id) }),
+      invoke("list_cashbank_accounts").catch(() => []),
+      invoke("get_custody_accounts_for_select").catch(() => []),
+    ])
+      .then(([d, cash, custody]) => {
+        setSupplier(d as Supplier);
+        setCashAccounts(cash as Array<{id:number; name:string; code?:string|null}>);
+        setCustodyAccounts(custody as Array<{id:number; name:string; code?:string|null}>);
+      })
       .catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" }))
       .finally(() => setLoading(false));
   }, [id]);
@@ -47,6 +60,9 @@ export default function SupplierPaymentPage() {
           date,
           amount_milli: amountMilli,
           method,
+          cashbank_id: sourceType === "company" && cashbankId ? Number(cashbankId) : null,
+          source_type: sourceType,
+          custody_id: sourceType === "custody" && custodyId ? Number(custodyId) : null,
           reference: reference || null,
           notes: notes || null,
         },
@@ -153,9 +169,45 @@ export default function SupplierPaymentPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm text-surface-400 mb-1">المرجع (اختياري)</label>
-                <input type="text" value={reference} onChange={(e) => setReference(e.target.value)} className="w-full input-field" placeholder="—" aria-label="المرجع" />
+                <label className="block text-sm text-surface-400 mb-1">من أين خرجت أموال المورد؟</label>
+                <select value={sourceType} onChange={(e) => { setSourceType(e.target.value); setCashbankId(""); setCustodyId(""); }} className="w-full input-field" aria-label="مصدر دفع المورد">
+                  <option value="company">الشركة / المصنع</option>
+                  <option value="custody">من عهدة موظف</option>
+                  <option value="owner_saif">دفع سيف محمد</option>
+                  <option value="owner_abu_saif">دفع أبو سيف</option>
+                </select>
               </div>
+            </div>
+
+            {sourceType === "company" && (
+              <div>
+                <label className="block text-sm text-surface-400 mb-1">حساب الشركة الدافع</label>
+                <select value={cashbankId} onChange={(e) => setCashbankId(e.target.value)} className="w-full input-field" aria-label="حساب الشركة الدافع">
+                  <option value="">تلقائي حسب طريقة الدفع</option>
+                  {cashAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}{a.code ? ` — ${a.code}` : ""}</option>)}
+                </select>
+              </div>
+            )}
+
+            {sourceType === "custody" && (
+              <div>
+                <label className="block text-sm text-surface-400 mb-1">العهدة الدافعة *</label>
+                <select value={custodyId} onChange={(e) => setCustodyId(e.target.value)} className="w-full input-field" required aria-label="العهدة الدافعة">
+                  <option value="">— اختر العهدة —</option>
+                  {custodyAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}{a.code ? ` — ${a.code}` : ""}</option>)}
+                </select>
+              </div>
+            )}
+
+            {(sourceType === "owner_saif" || sourceType === "owner_abu_saif") && (
+              <p className="text-xs text-violet-300 bg-violet-500/10 border border-violet-500/20 rounded-xl p-3">
+                سيُخفض رصيد المورد ويُثبت المقابل في الحساب الجاري للمالك الدافع، بدون تسجيل مصروف جديد إذا كانت فاتورة المورد قد رُحلت بالفعل.
+              </p>
+            )}
+
+            <div>
+              <label className="block text-sm text-surface-400 mb-1">المرجع (اختياري)</label>
+              <input type="text" value={reference} onChange={(e) => setReference(e.target.value)} className="w-full input-field" placeholder="—" aria-label="المرجع" />
             </div>
 
             <div>
