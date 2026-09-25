@@ -1270,10 +1270,14 @@ mod migrations {
                     "ALTER TABLE customer_payments ADD COLUMN source_type TEXT DEFAULT 'company';")?;
                 add_col("customer_payments", "source_account_code",
                     "ALTER TABLE customer_payments ADD COLUMN source_account_code TEXT REFERENCES accounts(code);")?;
+                add_col("customer_payments", "custody_id",
+                    "ALTER TABLE customer_payments ADD COLUMN custody_id INTEGER REFERENCES petty_cash_accounts(id);")?;
                 add_col("supplier_payments", "source_type",
                     "ALTER TABLE supplier_payments ADD COLUMN source_type TEXT DEFAULT 'company';")?;
                 add_col("supplier_payments", "source_account_code",
                     "ALTER TABLE supplier_payments ADD COLUMN source_account_code TEXT REFERENCES accounts(code);")?;
+                add_col("supplier_payments", "custody_id",
+                    "ALTER TABLE supplier_payments ADD COLUMN custody_id INTEGER REFERENCES petty_cash_accounts(id);")?;
                 add_col("payroll_payments", "source_account_code",
                     "ALTER TABLE payroll_payments ADD COLUMN source_account_code TEXT REFERENCES accounts(code);")?;
                 add_col("payroll_payments", "wps_status",
@@ -1288,7 +1292,9 @@ mod migrations {
                      WHERE account_code IS NULL OR trim(account_code)='';
                      CREATE INDEX IF NOT EXISTS idx_exp_source_account ON expenses(source_account_code);
                      CREATE INDEX IF NOT EXISTS idx_cp_source_account ON customer_payments(source_account_code);
+                     CREATE INDEX IF NOT EXISTS idx_cp_custody ON customer_payments(custody_id);
                      CREATE INDEX IF NOT EXISTS idx_sp_source_account ON supplier_payments(source_account_code);
+                     CREATE INDEX IF NOT EXISTS idx_sp_custody ON supplier_payments(custody_id);
                      CREATE INDEX IF NOT EXISTS idx_pp_source_account ON payroll_payments(source_account_code);
                      CREATE INDEX IF NOT EXISTS idx_ot_type ON overtime_records(overtime_type);"
                 )?;
