@@ -12,6 +12,8 @@ pub struct OvertimeRecord {
     pub date: String,
     pub hours: f64,
     pub rate_multiplier: f64,
+    pub hourly_rate_milli: i64,
+    pub estimated_cost_milli: i64,
     pub reason: Option<String>,
     pub approved: i64,
     pub approved_by: Option<String>,
@@ -39,7 +41,13 @@ pub fn list_overtime_records(
     let conn = state.0.lock()?;
     let mut stmt = conn
         .prepare(
-            "SELECT o.id, o.employee_id, e.name, o.date, o.hours, o.rate_multiplier, o.reason, o.approved, o.approved_by, o.approved_at, o.status, o.notes, o.created_by, o.created_at FROM overtime_records o LEFT JOIN employees e ON o.employee_id=e.id ORDER BY o.date DESC",
+            "SELECT o.id, o.employee_id, e.name, o.date, o.hours, o.rate_multiplier,
+                    CAST(COALESCE(e.overtime_rate_milli, 0) AS INTEGER) AS hourly_rate_milli,
+                    CAST(ROUND(o.hours * o.rate_multiplier * COALESCE(e.overtime_rate_milli, 0)) AS INTEGER) AS estimated_cost_milli,
+                    o.reason, o.approved, o.approved_by, o.approved_at, o.status, o.notes, o.created_by, o.created_at
+             FROM overtime_records o
+             LEFT JOIN employees e ON o.employee_id=e.id
+             ORDER BY o.date DESC",
         )?;
     let rows = stmt
         .query_map([], |row| {
@@ -50,14 +58,16 @@ pub fn list_overtime_records(
                 date: row.get(3)?,
                 hours: row.get(4)?,
                 rate_multiplier: row.get(5)?,
-                reason: row.get(6)?,
-                approved: row.get(7)?,
-                approved_by: row.get(8)?,
-                approved_at: row.get(9)?,
-                status: row.get(10)?,
-                notes: row.get(11)?,
-                created_by: row.get(12)?,
-                created_at: row.get(13)?,
+                hourly_rate_milli: row.get(6)?,
+                estimated_cost_milli: row.get(7)?,
+                reason: row.get(8)?,
+                approved: row.get(9)?,
+                approved_by: row.get(10)?,
+                approved_at: row.get(11)?,
+                status: row.get(12)?,
+                notes: row.get(13)?,
+                created_by: row.get(14)?,
+                created_at: row.get(15)?,
             })
         })?;
     Ok(rows.collect::<Result<Vec<_>, _>>()?)
@@ -75,7 +85,7 @@ pub fn create_overtime_record(
             input.employee_id,
             input.date,
             input.hours,
-            input.rate_multiplier.unwrap_or(1.5),
+            input.rate_multiplier.unwrap_or(1.25),
             input.reason,
             input.notes,
         ],
