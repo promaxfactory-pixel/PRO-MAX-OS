@@ -289,6 +289,7 @@ pub fn add_custody_funding(
         Some(&format!("source={} amount={}", source_type, input.amount_milli)), None
     );
     tx.commit()?;
+    drop(conn);
 
     get_custody_account(state, input.petty_id)
 }
@@ -394,6 +395,7 @@ pub fn create_custody_spend(
         Some(&format!("custody={} total={}", input.petty_id, total)), None
     );
     tx.commit()?;
+    drop(conn);
 
     get_custody_account(state, input.petty_id)
 }
