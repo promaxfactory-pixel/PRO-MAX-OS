@@ -356,6 +356,8 @@ pub fn run() {
             commands::device::scan_document,
             // Live Production Shift
             commands::production_shift::get_shift_sheet,
+            commands::production_shift::get_shift_sheet_info,
+            commands::production_shift::update_shift_supervisor,
             commands::production_shift::record_production,
             commands::production_shift::get_shift_lines,
             commands::production_shift::complete_shift,
