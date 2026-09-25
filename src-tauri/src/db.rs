@@ -81,7 +81,7 @@ fn ensure_admin_user(conn: &Connection) -> Result<bool> {
 mod migrations {
     use rusqlite::{Connection, Result};
     
-    pub(crate) const SCHEMA_VERSION: i32 = 38;
+    pub(crate) const SCHEMA_VERSION: i32 = 39;
     
     pub fn run(conn: &Connection) -> Result<()> {
         let current: i32 = conn
@@ -1218,6 +1218,80 @@ mod migrations {
                         e
                     })?;
                 }
+            }
+            39 => {
+                // Finance/operations control layer for the primary accountant:
+                // distinct custody, owner-clearing and employee-payable accounts;
+                // source-account traceability on cash movements; explicit OT type.
+                conn.execute_batch(
+                    "INSERT OR IGNORE INTO accounts(code, name_ar, name_en, type, parent, is_system) VALUES
+                        ('1110', 'عهد الموظفين والصرف النثري', 'Employee Custody / Petty Cash', 'asset', '1100', 1),
+                        ('2250', 'رواتب مستحقة', 'Payroll Payable', 'liability', '2000', 1),
+                        ('2255', 'خصومات رواتب مستحقة التسوية', 'Payroll Deductions Clearing', 'liability', '2000', 1),
+                        ('2260', 'مستحقات رد مصروفات الموظفين', 'Employee Reimbursements Payable', 'liability', '2000', 1),
+                        ('2310', 'جاري المالك - سيف محمد', 'Owner Current - Saif Mohammed', 'liability', '2000', 1),
+                        ('2320', 'جاري المالك - محمد سيف (أبو سيف)', 'Owner Current - Mohammed Saif (Abu Saif)', 'liability', '2000', 1),
+                        ('5210', 'إيجارات', 'Rent Expense', 'expense', '5000', 1),
+                        ('5220', 'كهرباء', 'Electricity Expense', 'expense', '5000', 1),
+                        ('5221', 'مياه', 'Water Expense', 'expense', '5000', 1),
+                        ('5222', 'اتصالات وإنترنت', 'Telecom & Internet Expense', 'expense', '5000', 1),
+                        ('5230', 'وقود وزيوت', 'Fuel & Lubricants Expense', 'expense', '5000', 1),
+                        ('5231', 'نقل وتوصيل', 'Transport & Delivery Expense', 'expense', '5000', 1),
+                        ('5240', 'صيانة وإصلاح', 'Repairs & Maintenance Expense', 'expense', '5000', 1),
+                        ('5241', 'قطع غيار', 'Spare Parts Expense', 'expense', '5000', 1),
+                        ('5250', 'مواد تعبئة وتشغيل', 'Packing & Operating Consumables', 'expense', '5000', 1),
+                        ('5260', 'رسوم حكومية وتأشيرات وفحوصات', 'Government, Visa & Medical Fees', 'expense', '5000', 1),
+                        ('5270', 'رسوم بنكية وتحويلات', 'Bank & Transfer Charges', 'expense', '5000', 1),
+                        ('5280', 'جمارك وتخليص', 'Customs & Clearance Expense', 'expense', '5000', 1),
+                        ('5290', 'مصروفات إدارية أخرى', 'Other Administrative Expense', 'expense', '5000', 1),
+                        ('5300', 'رواتب وأجور', 'Payroll Expense', 'expense', '5000', 1),
+                        ('5310', 'عمل إضافي وتحميل', 'Overtime & Loading Labour', 'expense', '5000', 1),
+                        ('5320', 'سكن العاملين والإدارة', 'Staff Accommodation Expense', 'expense', '5000', 1),
+                        ('5330', 'تأمين وعلاج العاملين', 'Staff Insurance & Medical Expense', 'expense', '5000', 1);"
+                )?;
+
+                let add_col = |table: &str, col: &str, ddl: &str| -> Result<()> {
+                    let has_col: bool = conn
+                        .prepare(&format!("SELECT COUNT(*) FROM pragma_table_info('{}') WHERE name=?1", table))
+                        .and_then(|mut stmt| stmt.query_row([col], |r| r.get::<_, i64>(0)))
+                        .map(|count| count > 0)
+                        .unwrap_or(false);
+                    if !has_col {
+                        conn.execute_batch(ddl)?;
+                    }
+                    Ok(())
+                };
+
+                add_col("expenses", "source_account_code",
+                    "ALTER TABLE expenses ADD COLUMN source_account_code TEXT REFERENCES accounts(code);")?;
+                add_col("petty_cash_accounts", "account_code",
+                    "ALTER TABLE petty_cash_accounts ADD COLUMN account_code TEXT DEFAULT '1110' REFERENCES accounts(code);")?;
+                add_col("customer_payments", "source_type",
+                    "ALTER TABLE customer_payments ADD COLUMN source_type TEXT DEFAULT 'company';")?;
+                add_col("customer_payments", "source_account_code",
+                    "ALTER TABLE customer_payments ADD COLUMN source_account_code TEXT REFERENCES accounts(code);")?;
+                add_col("supplier_payments", "source_type",
+                    "ALTER TABLE supplier_payments ADD COLUMN source_type TEXT DEFAULT 'company';")?;
+                add_col("supplier_payments", "source_account_code",
+                    "ALTER TABLE supplier_payments ADD COLUMN source_account_code TEXT REFERENCES accounts(code);")?;
+                add_col("payroll_payments", "source_account_code",
+                    "ALTER TABLE payroll_payments ADD COLUMN source_account_code TEXT REFERENCES accounts(code);")?;
+                add_col("payroll_payments", "wps_status",
+                    "ALTER TABLE payroll_payments ADD COLUMN wps_status TEXT DEFAULT 'pending';")?;
+                add_col("payroll_payments", "wps_reference",
+                    "ALTER TABLE payroll_payments ADD COLUMN wps_reference TEXT;")?;
+                add_col("overtime_records", "overtime_type",
+                    "ALTER TABLE overtime_records ADD COLUMN overtime_type TEXT NOT NULL DEFAULT 'normal_day_day';")?;
+
+                conn.execute_batch(
+                    "UPDATE petty_cash_accounts SET account_code='1110'
+                     WHERE account_code IS NULL OR trim(account_code)='';
+                     CREATE INDEX IF NOT EXISTS idx_exp_source_account ON expenses(source_account_code);
+                     CREATE INDEX IF NOT EXISTS idx_cp_source_account ON customer_payments(source_account_code);
+                     CREATE INDEX IF NOT EXISTS idx_sp_source_account ON supplier_payments(source_account_code);
+                     CREATE INDEX IF NOT EXISTS idx_pp_source_account ON payroll_payments(source_account_code);
+                     CREATE INDEX IF NOT EXISTS idx_ot_type ON overtime_records(overtime_type);"
+                )?;
             }
             _ => {}
         }
