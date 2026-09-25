@@ -238,6 +238,7 @@ pub fn run() {
             commands::reports::inventory_margin_report,
             commands::reports::sales_by_customer_report,
             commands::reports::unpaid_invoices_report,
+            commands::reports::get_operational_kpis,
             // RBAC & Audit
             commands::rbac::list_audit_logs,
             // Settings
