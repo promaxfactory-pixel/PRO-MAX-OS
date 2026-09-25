@@ -54,6 +54,14 @@ pub struct CustodyTransaction {
     pub journal_id: Option<i64>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CustodyReconciliation {
+    pub subledger_balance_milli: i64,
+    pub gl_balance_milli: i64,
+    pub difference_milli: i64,
+    pub is_reconciled: bool,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct CreateFundInput {
     pub name: String,
@@ -487,6 +495,30 @@ pub fn create_custody_transfer(
 }
 
 #[tauri::command]
+pub fn get_custody_reconciliation(
+    state: State<'_, DbState>,
+) -> Result<CustodyReconciliation, AppError> {
+    let conn = state.0.lock()?;
+    let subledger: i64 = conn.query_row(
+        "SELECT COALESCE(SUM(balance_milli),0) FROM petty_cash_accounts WHERE active=1",
+        [], |r| r.get(0)
+    ).unwrap_or(0);
+    let (debit, credit): (i64, i64) = conn.query_row(
+        "SELECT COALESCE(SUM(debit_milli),0), COALESCE(SUM(credit_milli),0)
+         FROM journal_entry_lines WHERE account_code='1110'",
+        [], |r| Ok((r.get(0)?, r.get(1)?))
+    ).unwrap_or((0,0));
+    let gl = debit - credit;
+    let difference = subledger - gl;
+    Ok(CustodyReconciliation {
+        subledger_balance_milli: subledger,
+        gl_balance_milli: gl,
+        difference_milli: difference,
+        is_reconciled: difference == 0,
+    })
+}
+
+#[tauri::command]
 pub fn get_custody_statement(
     state: State<'_, DbState>,
     petty_id: i64,
@@ -543,32 +575,41 @@ pub fn update_custody_spend(
 ) -> Result<(), AppError> {
     let conn = state.0.lock()?;
     rbac::require_role(&conn, user_id, &["admin", "accountant"])?;
-    if let Some(ref date) = input.date {
-        conn.execute(
-            "UPDATE petty_cash_transactions SET ts = ?1, category = COALESCE(?2, category), reference = COALESCE(?3, reference), notes = COALESCE(?4, notes) WHERE id = ?5",
-            params![date, input.category, input.reference, input.notes, input.txn_id],
-        )?;
-    } else {
-        conn.execute(
-            "UPDATE petty_cash_transactions SET category = COALESCE(?1, category), reference = COALESCE(?2, reference), notes = COALESCE(?3, notes) WHERE id = ?4",
-            params![input.category, input.reference, input.notes, input.txn_id],
-        )?;
-    }
+
     if input.amount_milli.is_some() || input.date.is_some() {
-        let journal_id: Option<i64> = conn.query_row(
-            "SELECT journal_id FROM petty_cash_transactions WHERE id=?1",
-            [input.txn_id], |r| r.get(0)
-        ).unwrap_or(None);
-        if journal_id.is_some() {
-            return Err(AppError::validation(
-                "لا يمكن تغيير قيمة أو تاريخ حركة عهدة مرحّلة؛ استخدم إجراء تصحيح/عكس موثق"
-            ));
-        }
         return Err(AppError::validation(
-            "تعديل قيمة أو تاريخ حركة العهدة غير مسموح من هذه الشاشة"
+            "لا يمكن تغيير قيمة أو تاريخ حركة عهدة مالية؛ استخدم تصحيح/عكس موثق حتى يظل الأستاذ متطابقًا"
         ));
     }
-    let _ = rbac::log_audit(&conn, Some(user_id), None, "update_custody_spend", "petty_cash_transactions", Some(input.txn_id), None, None, None);
+
+    let expense_id: Option<i64> = conn.query_row(
+        "SELECT expense_id FROM petty_cash_transactions WHERE id=?1",
+        [input.txn_id],
+        |r| r.get(0),
+    ).unwrap_or(None);
+
+    conn.execute(
+        "UPDATE petty_cash_transactions
+         SET category=COALESCE(?1,category), reference=COALESCE(?2,reference),
+             notes=COALESCE(?3,notes)
+         WHERE id=?4",
+        params![input.category, input.reference, input.notes, input.txn_id],
+    )?;
+
+    if let Some(exp_id) = expense_id {
+        conn.execute(
+            "UPDATE expenses
+             SET category=COALESCE(?1,category), reference=COALESCE(?2,reference),
+                 notes=COALESCE(?3,notes)
+             WHERE id=?4",
+            params![input.category, input.reference, input.notes, exp_id],
+        )?;
+    }
+
+    let _ = rbac::log_audit(
+        &conn, Some(user_id), None, "update_custody_spend",
+        "petty_cash_transactions", Some(input.txn_id), None, None, None
+    );
     Ok(())
 }
 
