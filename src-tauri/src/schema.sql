@@ -195,7 +195,8 @@ CREATE TABLE IF NOT EXISTS production_lines (
 CREATE TABLE IF NOT EXISTS operations_daily_sheets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sheet_no TEXT, date TEXT NOT NULL, shift TEXT,
-    supervisor_name TEXT, worker_name TEXT, attendance TEXT,
+    supervisor_name TEXT, supervisor_employee_id INTEGER REFERENCES employees(id),
+    worker_name TEXT, attendance TEXT,
     start_time TEXT, end_time TEXT, normal_hours REAL DEFAULT 0,
     overtime_hours REAL DEFAULT 0, overtime_reason TEXT, overtime_approved INTEGER DEFAULT 0,
     product_id INTEGER REFERENCES products(id), customer_brand_name TEXT,
@@ -687,6 +688,7 @@ CREATE TABLE IF NOT EXISTS production_shift_lines (
     waste_cartons REAL NOT NULL DEFAULT 0,
     unit_cost_milli INTEGER NOT NULL DEFAULT 0,
     material_cost_milli INTEGER NOT NULL DEFAULT 0,
+    machine_id INTEGER REFERENCES machines(id),
     ts TEXT NOT NULL DEFAULT (datetime('now')),
     recorded_by TEXT
 );
