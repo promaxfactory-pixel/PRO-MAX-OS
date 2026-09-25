@@ -114,6 +114,7 @@ pub fn run() {
             commands::custody::list_custody_accounts,
             commands::custody::get_custody_account,
             commands::custody::create_custody_fund,
+            commands::custody::add_custody_funding,
             commands::custody::create_custody_spend,
             commands::custody::create_custody_transfer,
             commands::custody::get_custody_statement,
