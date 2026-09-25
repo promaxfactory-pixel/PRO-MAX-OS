@@ -203,6 +203,11 @@ pub fn run() {
             // Payroll
             commands::payroll::list_payroll_runs,
             commands::payroll::create_payroll_run,
+            commands::payroll::prepare_payroll_run,
+            commands::payroll::list_payroll_run_lines,
+            commands::payroll::approve_payroll_run,
+            commands::payroll::record_payroll_payment,
+            commands::payroll::list_payroll_payments,
             commands::payroll::list_employee_advances,
             commands::payroll::create_employee_advance,
             // Overtime
