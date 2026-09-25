@@ -311,6 +311,7 @@ CREATE TABLE IF NOT EXISTS expenses (
     attachment_required INTEGER DEFAULT 0, approval_status TEXT DEFAULT 'posted',
     created_by TEXT, created_at TEXT, journal_id INTEGER REFERENCES journal_entries(id),
     paid_by_employee_id INTEGER, custody_txn_id INTEGER,
+    source_account_code TEXT REFERENCES accounts(code),
     reimbursement_status TEXT DEFAULT 'none', reimbursement_date TEXT, reimbursed_by TEXT
 );
 
@@ -360,6 +361,8 @@ CREATE TABLE IF NOT EXISTS payroll_payments (
     source_id INTEGER,
     amount_milli INTEGER NOT NULL,
     journal_id INTEGER REFERENCES journal_entries(id),
+    source_account_code TEXT REFERENCES accounts(code),
+    wps_status TEXT DEFAULT 'pending', wps_reference TEXT,
     reversed INTEGER DEFAULT 0,
     reversal_journal_id INTEGER REFERENCES journal_entries(id),
     reversed_by TEXT, reversed_at TEXT,
@@ -415,7 +418,8 @@ CREATE TABLE IF NOT EXISTS petty_cash_accounts (
     code TEXT, name TEXT NOT NULL, responsible TEXT, role TEXT, employee_id INTEGER REFERENCES employees(id),
     spending_limit_milli INTEGER DEFAULT 0, requires_approval INTEGER DEFAULT 0,
     balance_milli INTEGER DEFAULT 0, status TEXT DEFAULT 'open',
-    active INTEGER DEFAULT 1, notes TEXT, created_at TEXT
+    active INTEGER DEFAULT 1, notes TEXT, created_at TEXT,
+    account_code TEXT DEFAULT '1110' REFERENCES accounts(code)
 );
 
 CREATE TABLE IF NOT EXISTS petty_cash_transactions (
@@ -814,6 +818,7 @@ CREATE TABLE IF NOT EXISTS overtime_records (
     rate_multiplier REAL NOT NULL DEFAULT 1.5,
     reason TEXT,
     status TEXT NOT NULL DEFAULT 'Pending',
+    overtime_type TEXT NOT NULL DEFAULT 'normal_day_day',
     approved INTEGER NOT NULL DEFAULT 0,
     approved_by TEXT,
     approved_at TEXT,
