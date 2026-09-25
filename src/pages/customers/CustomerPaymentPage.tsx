@@ -22,6 +22,10 @@ export default function CustomerPaymentPage() {
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("cash");
   const [cashbankId, setCashbankId] = useState("");
+  const [sourceType, setSourceType] = useState("company");
+  const [custodyId, setCustodyId] = useState("");
+  const [cashAccounts, setCashAccounts] = useState<Array<{id:number; name:string; code?:string|null; atype?:string|null}>>([]);
+  const [custodyAccounts, setCustodyAccounts] = useState<Array<{id:number; name:string; code?:string|null}>>([]);
   const [reference, setReference] = useState("");
   const [notes, setNotes] = useState("");
 
@@ -29,8 +33,16 @@ export default function CustomerPaymentPage() {
   const [printData, setPrintData] = useState<ReceiptPrintData | null>(null);
 
   useEffect(() => {
-    invoke("get_customer", { id: Number(id) })
-      .then((d) => setCustomer(d as Customer))
+    Promise.all([
+      invoke("get_customer", { id: Number(id) }),
+      invoke("list_cashbank_accounts").catch(() => []),
+      invoke("get_custody_accounts_for_select").catch(() => []),
+    ])
+      .then(([d, cash, custody]) => {
+        setCustomer(d as Customer);
+        setCashAccounts(cash as Array<{id:number; name:string; code?:string|null; atype?:string|null}>);
+        setCustodyAccounts(custody as Array<{id:number; name:string; code?:string|null}>);
+      })
       .catch((e: unknown) => addNotification({ title: "خطأ", message: String(e), type: "error" }))
       .finally(() => setLoading(false));
   }, [id]);
@@ -48,7 +60,9 @@ export default function CustomerPaymentPage() {
           date,
           amount_milli: amountMilli,
           method,
-          cashbank_id: cashbankId ? Number(cashbankId) : null,
+          cashbank_id: sourceType === "company" && cashbankId ? Number(cashbankId) : null,
+          source_type: sourceType,
+          custody_id: sourceType === "custody" && custodyId ? Number(custodyId) : null,
           reference: reference || null,
           notes: notes || null,
         },
@@ -134,18 +148,49 @@ export default function CustomerPaymentPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-surface-400 mb-1">طريقة الدفع</label>
-                  <select value={method} onChange={(e) => setMethod(e.target.value)} className="w-full input-field" aria-label="طريقة الدفع">
+                  <label className="block text-sm text-surface-400 mb-1">طريقة التحصيل</label>
+                  <select value={method} onChange={(e) => setMethod(e.target.value)} className="w-full input-field" aria-label="طريقة التحصيل">
                     <option value="cash">نقدي</option>
                     <option value="bank_transfer">تحويل بنكي</option>
                     <option value="cheque">شيك</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm text-surface-400 mb-1">رقم الحساب (اختياري)</label>
-                  <input type="number" value={cashbankId} onChange={(e) => setCashbankId(e.target.value)} className="w-full input-field" placeholder="—" aria-label="رقم الحساب" />
+                  <label className="block text-sm text-surface-400 mb-1">أين استُلمت أموال العميل؟</label>
+                  <select value={sourceType} onChange={(e) => { setSourceType(e.target.value); setCashbankId(""); setCustodyId(""); }} className="w-full input-field" aria-label="جهة استلام التحصيل">
+                    <option value="company">الشركة / المصنع</option>
+                    <option value="custody">عهدة موظف</option>
+                    <option value="owner_saif">استلمها سيف محمد</option>
+                    <option value="owner_abu_saif">استلمها أبو سيف</option>
+                  </select>
                 </div>
               </div>
+
+              {sourceType === "company" && (
+                <div>
+                  <label className="block text-sm text-surface-400 mb-1">حساب الشركة المستلم</label>
+                  <select value={cashbankId} onChange={(e) => setCashbankId(e.target.value)} className="w-full input-field" aria-label="حساب الشركة">
+                    <option value="">تلقائي حسب طريقة التحصيل</option>
+                    {cashAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}{a.code ? ` — ${a.code}` : ""}</option>)}
+                  </select>
+                </div>
+              )}
+
+              {sourceType === "custody" && (
+                <div>
+                  <label className="block text-sm text-surface-400 mb-1">العهدة التي استلمت المبلغ *</label>
+                  <select value={custodyId} onChange={(e) => setCustodyId(e.target.value)} className="w-full input-field" required aria-label="العهدة المستلمة">
+                    <option value="">— اختر العهدة —</option>
+                    {custodyAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}{a.code ? ` — ${a.code}` : ""}</option>)}
+                  </select>
+                </div>
+              )}
+
+              {(sourceType === "owner_saif" || sourceType === "owner_abu_saif") && (
+                <p className="text-xs text-violet-300 bg-violet-500/10 border border-violet-500/20 rounded-xl p-3">
+                  سيُخفض رصيد العميل، ويُسجّل المبلغ في الحساب الجاري للمالك الذي استلمه. لا يُعتبر مبيعات جديدة ولا دخولًا لبنك الشركة.
+                </p>
+              )}
 
               <div>
                 <label className="block text-sm text-surface-400 mb-1">المرجع (اختياري)</label>
