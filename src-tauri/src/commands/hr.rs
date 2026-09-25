@@ -245,6 +245,12 @@ pub fn get_employee(state: State<'_, DbState>, id: i64) -> Result<Employee, AppE
             joining_date: row.get(33)?,
             active: row.get(34)?,
             notes: row.get(35)?,
+            civil_id_expiry: row.get(36)?,
+            visa_no: row.get(37)?,
+            workpermit_no: row.get(38)?,
+            driving_license_no: row.get(39)?,
+            driving_license_expiry: row.get(40)?,
+            medical_expiry: row.get(41)?,
         })
     })?)
 }
