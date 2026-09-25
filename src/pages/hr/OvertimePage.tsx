@@ -17,6 +17,8 @@ interface OvertimeRecord {
   date: string;
   hours: number;
   rate_multiplier: number;
+  hourly_rate_milli: number;
+  estimated_cost_milli: number;
   reason: string;
   notes: string;
   status: string;
@@ -38,7 +40,7 @@ export default function OvertimePage() {
     employee_id: "",
     date: new Date().toISOString().split("T")[0],
     hours: "",
-    rate_multiplier: "1.5",
+    rate_multiplier: "1.25",
     reason: "",
     notes: "",
   });
@@ -72,7 +74,7 @@ export default function OvertimePage() {
         },
       });
       setShowForm(false);
-      setForm({ employee_id: "", date: new Date().toISOString().split("T")[0], hours: "", rate_multiplier: "1.5", reason: "", notes: "" });
+      setForm({ employee_id: "", date: new Date().toISOString().split("T")[0], hours: "", rate_multiplier: "1.25", reason: "", notes: "" });
       loadData();
     } catch (err) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "حدث خطأ أثناء الحفظ" }); }
     finally { setSaving(false); }
@@ -106,7 +108,7 @@ export default function OvertimePage() {
       const now = new Date();
       return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     })
-    .reduce((s, r) => s + (r.hours || 0) * (r.rate_multiplier || 1), 0);
+    .reduce((s, r) => s + (r.estimated_cost_milli || 0), 0);
 
   const pendingCount = records.filter((r) => r.status === "pending").length;
   const approvedCount = records.filter((r) => r.status === "approved").length;
@@ -142,7 +144,7 @@ export default function OvertimePage() {
           <p className="text-xs text-surface-400">ساعات إضافية هذا الشهر</p>
         </Card>
         <Card className="text-center">
-          <p className="text-2xl font-bold text-gold-400">{formatOMR(Math.round(totalCost * 1000))}</p>
+          <p className="text-2xl font-bold text-gold-400">{formatOMR(totalCost)}</p>
           <p className="text-xs text-surface-400">التكلفة التقديرية</p>
         </Card>
         <Card className="text-center">
@@ -185,10 +187,12 @@ export default function OvertimePage() {
               <div className="input-group">
                 <label className="input-label">مضاعف الأجر</label>
                 <select value={form.rate_multiplier} onChange={(e) => setForm({ ...form, rate_multiplier: e.target.value })} className="input-field" aria-label="مضاعف الأجر">
-                  <option value="1.5">1.5x</option>
-                  <option value="2">2x</option>
-                  <option value="2.5">2.5x</option>
-                  <option value="3">3x</option>
+                  <option value="1.25">1.25x — نهاري عادي</option>
+                  <option value="1.5">1.5x — ليلي عادي</option>
+                  <option value="2">2x — راحة أسبوعية / إجازة رسمية</option>
+                  <option value="1.5">1.5x — نهاري طارئ (مادة 72)</option>
+                  <option value="1.75">1.75x — ليلي طارئ (مادة 72)</option>
+                  <option value="3">3x — راحة/إجازة في حالة طارئة (مادة 72)</option>
                 </select>
               </div>
             </div>
