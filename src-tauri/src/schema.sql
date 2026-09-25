@@ -149,6 +149,8 @@ CREATE TABLE IF NOT EXISTS employees (
     phone TEXT, passport_no TEXT,
     passport_expiry TEXT, residence_expiry TEXT, visa_expiry TEXT,
     workpermit_expiry TEXT, insurance_expiry TEXT, contract_end TEXT,
+    civil_id_expiry TEXT, visa_no TEXT, workpermit_no TEXT,
+    driving_license_no TEXT, driving_license_expiry TEXT, medical_expiry TEXT,
     joining_date TEXT, active INTEGER NOT NULL DEFAULT 1, notes TEXT
 );
 
