@@ -169,6 +169,9 @@ pub struct CreateCustomerPaymentInput {
     pub amount_milli: i64,
     pub method: Option<String>,
     pub cashbank_id: Option<i64>,
+    pub source_type: Option<String>,
+    pub source_account_code: Option<String>,
+    pub custody_id: Option<i64>,
     pub reference: Option<String>,
     pub notes: Option<String>,
 }
@@ -193,45 +196,81 @@ pub fn create_customer_payment(
         return Err(AppError::not_found("العميل غير موجود"));
     }
 
-    let year = chrono::Utc::now().format("%Y").to_string();
+    let year: String = tx.query_row("SELECT substr(?1,1,4)", [&input.date], |r| r.get(0))?;
     let seq = next_sequence(&tx, "RCP", &year)?;
     let rec_no = format!("RCP-{}-{:04}", year, seq);
-
     let created_by: String = tx
         .query_row("SELECT username FROM users WHERE id=?", [user_id], |r| r.get(0))
         .unwrap_or_else(|_| "user".into());
 
     let method = input.method.clone().unwrap_or_else(|| "cash".into());
+    let source_type = input.source_type.clone().unwrap_or_else(|| "company".into()).to_lowercase();
+
+    let source_account = if let Some(code) = input.source_account_code.clone().filter(|x| !x.trim().is_empty()) {
+        let exists: i64 = tx.query_row("SELECT COUNT(*) FROM accounts WHERE code=?1", [&code], |r| r.get(0)).unwrap_or(0);
+        if exists == 0 {
+            return Err(AppError::validation("حساب استلام التحصيل غير موجود"));
+        }
+        code
+    } else {
+        match source_type.as_str() {
+            "company" => crate::commands::accounting::resolve_cash_account(&tx, input.cashbank_id, &method)?,
+            "custody" => {
+                let pid = input.custody_id.ok_or_else(|| AppError::validation("حدد العهدة التي استلمت التحصيل"))?;
+                tx.query_row(
+                    "SELECT COALESCE(NULLIF(trim(account_code),''),'1110') FROM petty_cash_accounts WHERE id=?1 AND active=1",
+                    [pid],
+                    |r| r.get::<_, String>(0),
+                ).map_err(|_| AppError::not_found("حساب العهدة غير موجود"))?
+            }
+            "owner_saif" => "2310".to_string(),
+            "owner_abu_saif" => "2320".to_string(),
+            _ => return Err(AppError::validation("جهة استلام التحصيل غير معروفة")),
+        }
+    };
+
+    if source_type == "custody" {
+        let pid = input.custody_id.ok_or_else(|| AppError::validation("حدد العهدة"))?;
+        let old_balance: i64 = tx.query_row(
+            "SELECT balance_milli FROM petty_cash_accounts WHERE id=?1 AND active=1",
+            [pid], |r| r.get(0)
+        ).map_err(|_| AppError::not_found("حساب العهدة غير موجود"))?;
+        let new_balance = old_balance.checked_add(input.amount_milli)
+            .ok_or_else(|| AppError::validation("رصيد العهدة يتجاوز الحد المسموح"))?;
+        tx.execute("UPDATE petty_cash_accounts SET balance_milli=?1 WHERE id=?2", rusqlite::params![new_balance, pid])?;
+        tx.execute(
+            "INSERT INTO petty_cash_transactions
+             (ts, petty_id, ttype, debit_milli, credit_milli, balance_milli, category, account_code, reference, notes, user_id)
+             VALUES(?1,?2,'Customer Receipt',?3,0,?4,'تحصيل عميل','1200',?5,?6,?7)",
+            rusqlite::params![
+                format!("{} 12:00:00", input.date),
+                pid, input.amount_milli, new_balance, input.reference, input.notes, user_id
+            ],
+        )?;
+    }
+
     tx.execute(
-        "INSERT INTO customer_payments(rec_no, date, customer_id, amount_milli, method, cashbank_id, reference, notes, created_by, created_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9, datetime('now'))",
+        "INSERT INTO customer_payments
+         (rec_no, date, customer_id, amount_milli, method, cashbank_id, reference, notes,
+          source_type, source_account_code, custody_id, created_by, created_at)
+         VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,datetime('now'))",
         rusqlite::params![
-            rec_no,
-            input.date.clone(),
-            customer_id,
-            input.amount_milli,
-            method,
-            input.cashbank_id,
-            input.reference,
-            input.notes,
-            created_by,
+            rec_no, input.date.clone(), customer_id, input.amount_milli, method,
+            input.cashbank_id, input.reference, input.notes, source_type,
+            source_account, input.custody_id, created_by,
         ],
     )?;
     let payment_id = tx.last_insert_rowid();
 
     tx.execute(
         "UPDATE customers SET balance_milli = balance_milli - ?1 WHERE id=?2",
-        [input.amount_milli, customer_id],
+        rusqlite::params![input.amount_milli, customer_id],
     )?;
-
-    // Spread the payment across the customer's open (posted, unpaid) credit invoices,
-    // oldest first (FIFO), mirroring the supplier-side allocation. This keeps
-    // per-invoice outstanding amounts (and thus aging/dunning) accurate.
     allocate_customer_payment_fifo(&tx, customer_id, input.amount_milli, None)?;
 
-    let cash_account = crate::commands::accounting::resolve_cash_account(&tx, input.cashbank_id, &method)?;
     let lines: Vec<(String, i64, i64, Option<String>)> = vec![
-        (cash_account, input.amount_milli, 0, Some("سند قبض".to_string())),
-        ("1200".to_string(), 0, input.amount_milli, None),
+        (source_account.clone(), input.amount_milli, 0, Some("تحصيل من عميل".to_string())),
+        ("1200".to_string(), 0, input.amount_milli, Some("تسوية ذمم مدينة".to_string())),
     ];
     let journal_id = crate::commands::accounting::post_to_journal(
         &tx,
@@ -247,7 +286,10 @@ pub fn create_customer_payment(
         rusqlite::params![journal_id, payment_id],
     )?;
 
-    let _ = rbac::log_audit(&tx, Some(user_id), None, "create_customer_payment", "customer_payments", Some(payment_id), None, None, None);
+    let _ = rbac::log_audit(
+        &tx, Some(user_id), None, "create_customer_payment", "customer_payments",
+        Some(payment_id), None, Some(&format!("source={}", source_type)), None
+    );
     tx.commit()?;
     Ok(payment_id)
 }
