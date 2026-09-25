@@ -29,6 +29,10 @@ interface EntityKpi {
   entity_id: number; name: string; shifts: number; total_cartons: number;
   total_cups: number; waste_cartons: number; waste_pct: number; avg_cartons_per_shift: number;
 }
+interface ControlBalance {
+  account_code: string; account_name: string; balance_milli: number;
+  balance_side: string; interpretation: string;
+}
 interface OperationalKpis {
   from_date: string; to_date: string; period_days: number; production_days: number; shift_count: number;
   total_cartons: number; total_cups: number; waste_cartons: number; waste_pct: number;
@@ -60,6 +64,7 @@ export default function DailyOperationsCenterPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [live, setLive] = useState<LiveProduction | null>(null);
   const [kpis, setKpis] = useState<OperationalKpis | null>(null);
+  const [controls, setControls] = useState<ControlBalance[]>([]);
   const [loading, setLoading] = useState(true);
 
   const monthRange = () => {
@@ -74,14 +79,16 @@ export default function DailyOperationsCenterPage() {
     setLoading(true);
     try {
       const { fromDate, toDate } = monthRange();
-      const [s, p, k] = await Promise.all([
+      const [s, p, k, ctl] = await Promise.all([
         invoke<DashboardStats>("get_dashboard_stats"),
         invoke<LiveProduction>("get_live_dashboard").catch(() => null),
         invoke<OperationalKpis>("get_operational_kpis", { fromDate, toDate }).catch(() => null),
+        invoke<ControlBalance[]>("get_control_balances").catch(() => []),
       ]);
       setStats(s);
       setLive(p);
       setKpis(k);
+      setControls(ctl);
     } finally {
       setLoading(false);
     }
@@ -115,6 +122,30 @@ export default function DailyOperationsCenterPage() {
         <Card><p className="text-xs text-surface-400">إنتاج اليوم</p><p className="text-xl font-bold mt-2">{(live?.today_total_cartons || 0).toFixed(0)} كرتون</p></Card>
         <Card><p className="text-xs text-surface-400">قيمة المخزون</p><p className="text-xl font-bold mt-2">{formatOMR(stats?.inventory_value || 0)}</p></Card>
       </div>
+
+      <Card>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="font-bold">الأرصدة الرقابية</h2>
+            <p className="text-xs text-surface-500 mt-1">أرصدة الأستاذ العام — ليست مبالغ دخل أو مصروف بحد ذاتها</p>
+          </div>
+          <button onClick={() => navigate("/accounting/trial-balance")} className="text-xs text-brand-400 hover:text-gold-400">ميزان المراجعة ←</button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
+          {controls.map((item) => (
+            <div key={item.account_code} className="p-3 rounded-xl border border-surface-700/40 bg-surface-800/30">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-surface-400">{item.account_name}</p>
+                <span className="text-[10px] font-mono text-surface-500">{item.account_code}</span>
+              </div>
+              <p className={`text-lg font-bold mt-2 ${item.balance_milli < 0 ? "text-amber-400" : ""}`}>
+                {formatOMR(Math.abs(item.balance_milli))}
+              </p>
+              <p className="text-[11px] text-surface-500 mt-1">{item.balance_milli < 0 ? "رصيد عكسي • " : ""}{item.interpretation}</p>
+            </div>
+          ))}
+        </div>
+      </Card>
 
       <Card>
         <div className="flex items-center justify-between mb-4">
