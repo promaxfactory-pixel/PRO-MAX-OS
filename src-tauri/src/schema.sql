@@ -361,7 +361,9 @@ CREATE TABLE IF NOT EXISTS payroll_payments (
     payment_date TEXT NOT NULL,
     source_type TEXT NOT NULL,
     source_id INTEGER,
+    employee_id INTEGER REFERENCES employees(id),
     amount_milli INTEGER NOT NULL,
+    method TEXT DEFAULT 'bank_transfer', reference TEXT, notes TEXT,
     journal_id INTEGER REFERENCES journal_entries(id),
     source_account_code TEXT REFERENCES accounts(code),
     wps_status TEXT DEFAULT 'pending', wps_reference TEXT,
@@ -616,7 +618,7 @@ CREATE TABLE IF NOT EXISTS payroll_run_lines (
     overtime_milli INTEGER DEFAULT 0, bonus_milli INTEGER DEFAULT 0,
     deduction_milli INTEGER DEFAULT 0, advance_deduction_milli INTEGER DEFAULT 0,
     insurance_deduction_milli INTEGER DEFAULT 0, tax_deduction_milli INTEGER DEFAULT 0,
-    net_milli INTEGER DEFAULT 0, notes TEXT
+    net_milli INTEGER DEFAULT 0, paid_milli INTEGER NOT NULL DEFAULT 0, notes TEXT
 );
 
 CREATE TABLE IF NOT EXISTS employee_advances (
