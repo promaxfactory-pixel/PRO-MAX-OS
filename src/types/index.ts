@@ -357,6 +357,12 @@ export interface Employee {
   bank_account_no: string;
   sponsor_name: string;
   sponsor_id: string;
+  civil_id_expiry: string;
+  visa_no: string;
+  workpermit_no: string;
+  driving_license_no: string;
+  driving_license_expiry: string;
+  medical_expiry: string;
   active: number;
   notes: string;
 }
@@ -625,6 +631,7 @@ export interface PayrollRunLine {
   insurance_deduction_milli: number;
   tax_deduction_milli: number;
   net_milli: number;
+  paid_milli: number;
   notes: string;
 }
 
