@@ -205,3 +205,58 @@ pub fn get_daily_brief(state: State<'_, DbState>) -> Result<DailyBrief, AppError
     let waste_yesterday: i64 = conn.query_row("SELECT COALESCE(SUM(cartons_waste),0) FROM production_lines pl JOIN production_orders po ON pl.order_id=po.id WHERE po.date = date('now', '-1 day')", [], |r| r.get(0)).unwrap_or(0);
     Ok(DailyBrief { unpaid_count, unpaid_total, overdue_total, waste_yesterday, last_backup_days: 0, backup_status: "amber".to_string() })
 }
+
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ControlBalance {
+    pub account_code: String,
+    pub account_name: String,
+    pub balance_milli: i64,
+    pub balance_side: String,
+    pub interpretation: String,
+}
+
+#[tauri::command]
+pub fn get_control_balances(state: State<'_, DbState>) -> Result<Vec<ControlBalance>, AppError> {
+    let conn = state.0.lock()?;
+    let controls = [
+        ("1110", "عهد الموظفين والصرف النثري", "asset", "رصيد أموال الشركة الموجودة بالعهد"),
+        ("2250", "رواتب مستحقة", "liability", "صافي رواتب تم اعتمادها ولم تُسدّد بعد"),
+        ("2260", "مستحقات رد مصروفات الموظفين", "liability", "مبالغ دفعتها العمالة/الموظفون من مالهم ولم تُسوَّ بعد"),
+        ("2310", "جاري المالك - سيف محمد", "liability", "موجب: الشركة مدينة لسيف؛ سالب: سيف يحتفظ/يدين بأموال للشركة"),
+        ("2320", "جاري المالك - محمد سيف (أبو سيف)", "liability", "موجب: الشركة مدينة لأبو سيف؛ سالب: أبو سيف يحتفظ/يدين بأموال للشركة"),
+    ];
+    let mut out = Vec::new();
+    for (code, fallback_name, account_type, meaning) in controls {
+        let name: String = conn.query_row(
+            "SELECT COALESCE(NULLIF(name_ar,''), NULLIF(name_en,''), ?2) FROM accounts WHERE code=?1",
+            params![code, fallback_name],
+            |r| r.get(0),
+        ).unwrap_or_else(|_| fallback_name.to_string());
+
+        let (debit, credit): (i64, i64) = conn.query_row(
+            "SELECT COALESCE(SUM(debit_milli),0), COALESCE(SUM(credit_milli),0)
+             FROM journal_entry_lines WHERE account_code=?1",
+            [code],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        ).unwrap_or((0,0));
+
+        let balance = if account_type == "asset" { debit - credit } else { credit - debit };
+        let side = if balance > 0 {
+            if account_type == "asset" { "debit" } else { "credit" }
+        } else if balance < 0 {
+            if account_type == "asset" { "credit" } else { "debit" }
+        } else {
+            "zero"
+        };
+
+        out.push(ControlBalance {
+            account_code: code.to_string(),
+            account_name: name,
+            balance_milli: balance,
+            balance_side: side.to_string(),
+            interpretation: meaning.to_string(),
+        });
+    }
+    Ok(out)
+}
