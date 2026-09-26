@@ -10,6 +10,7 @@ import { canAccessPath } from "./lib/roleAccess";
 const LoginPage = lazy(() => import("./pages/auth/LoginPage"));
 const DashboardPage = lazy(() => import("./pages/dashboard/DashboardPage"));
 const DailyBriefPage = lazy(() => import("./pages/dashboard/DailyBriefPage"));
+const DailyOperationsCenterPage = lazy(() => import("./pages/dashboard/DailyOperationsCenterPage"));
 const CustomerListPage = lazy(() => import("./pages/customers/CustomerListPage"));
 const CustomerDetailPage = lazy(() => import("./pages/customers/CustomerDetailPage"));
 const CustomerStatementPage = lazy(() => import("./pages/customers/CustomerStatementPage"));
@@ -135,6 +136,7 @@ export default function App() {
             <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
             <Route path="/dashboard/daily-brief" element={<ProtectedRoute><DailyBriefPage /></ProtectedRoute>} />
+            <Route path="/daily-operations" element={<ProtectedRoute><DailyOperationsCenterPage /></ProtectedRoute>} />
             <Route path="/alerts" element={<ProtectedRoute><AlertCenterPage /></ProtectedRoute>} />
 
             {/* Customers */}

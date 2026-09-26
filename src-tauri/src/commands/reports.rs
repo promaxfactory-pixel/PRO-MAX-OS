@@ -64,18 +64,27 @@ pub fn low_stock_report(state: State<'_, DbState>) -> Result<Vec<LowStockItem>, 
 pub fn customers_aging(state: State<'_, DbState>) -> Result<Vec<CustomerAgingItem>, AppError> {
     let conn = state.0.lock()?;
     let mut stmt = conn.prepare(
-        "SELECT c.id, c.name,
-                COALESCE(SUM(si.total_milli - si.paid_milli), 0)
-                    - COALESCE((SELECT SUM(cn.total_milli) FROM credit_notes cn WHERE cn.customer_id = c.id AND cn.status != 'Void'), 0),
-                CAST(julianday('now') - julianday(MAX(si.date)) AS INTEGER)
-         FROM customers c
-         LEFT JOIN sales_invoices si ON si.customer_id = c.id AND si.status IN ('Posted', 'Issued') AND si.total_milli > si.paid_milli
-         WHERE c.active = 1
-         GROUP BY c.id
-         HAVING COALESCE(SUM(si.total_milli - si.paid_milli), 0)
-                    - COALESCE((SELECT SUM(cn.total_milli) FROM credit_notes cn WHERE cn.customer_id = c.id AND cn.status != 'Void'), 0) > 0
-         ORDER BY (COALESCE(SUM(si.total_milli - si.paid_milli), 0)
-                    - COALESCE((SELECT SUM(cn.total_milli) FROM credit_notes cn WHERE cn.customer_id = c.id AND cn.status != 'Void'), 0)) DESC"
+        "WITH open_invoice AS (
+            SELECT si.id, si.customer_id,
+                   MAX(0, si.total_milli - si.paid_milli
+                       - COALESCE((SELECT SUM(cn.total_milli) FROM credit_notes cn
+                                   WHERE cn.invoice_id=si.id AND LOWER(COALESCE(cn.status,''))!='void'),0)) AS outstanding,
+                   date(si.date, '+' || COALESCE(c.payment_terms_days,30) || ' days') AS due_date
+            FROM sales_invoices si
+            JOIN customers c ON c.id=si.customer_id
+            WHERE LOWER(si.status) IN ('posted','issued')
+        )
+        SELECT c.id, c.name,
+               COALESCE(SUM(oi.outstanding),0) AS total_due,
+               MAX(0, COALESCE(MAX(CASE WHEN oi.outstanding>0 AND oi.due_date < date('now','localtime')
+                                        THEN CAST(julianday(date('now','localtime')) - julianday(oi.due_date) AS INTEGER)
+                                        ELSE 0 END),0)) AS overdue_days
+        FROM customers c
+        LEFT JOIN open_invoice oi ON oi.customer_id=c.id AND oi.outstanding>0
+        WHERE c.active=1
+        GROUP BY c.id, c.name
+        HAVING COALESCE(SUM(oi.outstanding),0)>0
+        ORDER BY total_due DESC"
     )?;
     let items = stmt.query_map([], |r| {
         Ok(CustomerAgingItem {
@@ -177,7 +186,8 @@ pub fn owner_summary(state: State<'_, DbState>, date_from: String, date_to: Stri
         params![date_from, date_to], |r| r.get(0),
     ).unwrap_or(0);
     let expenses: i64 = conn.query_row(
-        "SELECT COALESCE(SUM(amount_milli), 0) FROM expenses WHERE date >= ?1 AND date <= ?2",
+        "SELECT COALESCE(SUM(amount_milli), 0) FROM expenses
+         WHERE date >= ?1 AND date <= ?2 AND LOWER(COALESCE(approval_status,''))='approved'",
         params![date_from, date_to], |r| r.get(0),
     ).unwrap_or(0);
     let production: f64 = conn.query_row(
@@ -630,12 +640,281 @@ pub fn get_comprehensive_daily_report(state: State<'_, DbState>, date: String) -
         [], |r| r.get(0),
     ).unwrap_or(0);
 
-    let net_profit_milli = sales_total_milli - sales_vat_milli;
+    // Derive daily profit from posted GL revenue and expense movements.
+    let net_profit_milli: i64 = conn.query_row(
+        "SELECT COALESCE(SUM(CASE
+            WHEN LOWER(a.type)='revenue' THEN jel.credit_milli - jel.debit_milli
+            WHEN LOWER(a.type)='expense' THEN jel.credit_milli - jel.debit_milli
+            ELSE 0 END),0)
+         FROM journal_entry_lines jel
+         JOIN journal_entries je ON je.id=jel.entry_id
+         JOIN accounts a ON a.code=jel.account_code
+         WHERE je.date=?1",
+        params![date], |r| r.get(0),
+    ).unwrap_or(0);
 
     Ok(ComprehensiveDailyReport {
         date, production_cartons, production_cups, production_waste,
         morning_cartons, evening_cartons, production_lines,
         sales_count, sales_total_milli, sales_vat_milli, top_products,
         low_stock_items, inventory_value_milli, net_profit_milli,
+    })
+}
+
+
+// ============================================================
+// Operational KPI / averages — derived from posted operational data
+// ============================================================
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EntityProductionKpi {
+    pub entity_id: i64,
+    pub name: String,
+    pub shifts: i64,
+    pub total_cartons: f64,
+    pub total_cups: f64,
+    pub waste_cartons: f64,
+    pub waste_pct: f64,
+    pub avg_cartons_per_shift: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ExpenseCategoryKpi {
+    pub category: String,
+    pub total_milli: i64,
+    pub avg_per_day_milli: i64,
+    pub transaction_count: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OperationalKpiReport {
+    pub from_date: String,
+    pub to_date: String,
+    pub period_days: i64,
+    pub production_days: i64,
+    pub shift_count: i64,
+    pub total_cartons: f64,
+    pub total_cups: f64,
+    pub waste_cartons: f64,
+    pub waste_pct: f64,
+    pub avg_cartons_per_day: f64,
+    pub avg_cartons_per_shift: f64,
+    pub net_sales_milli: i64,
+    pub avg_daily_sales_milli: i64,
+    pub approved_expenses_milli: i64,
+    pub avg_daily_expenses_milli: i64,
+    pub collections_milli: i64,
+    pub avg_daily_collections_milli: i64,
+    pub invoice_count: i64,
+    pub avg_invoice_milli: i64,
+    pub workers: Vec<EntityProductionKpi>,
+    pub machines: Vec<EntityProductionKpi>,
+    pub supervisors: Vec<EntityProductionKpi>,
+    pub expense_categories: Vec<ExpenseCategoryKpi>,
+}
+
+fn entity_kpi(
+    id: i64,
+    name: String,
+    shifts: i64,
+    cartons: f64,
+    cups: f64,
+    waste: f64,
+) -> EntityProductionKpi {
+    let denom = cartons + waste;
+    EntityProductionKpi {
+        entity_id: id,
+        name,
+        shifts,
+        total_cartons: cartons,
+        total_cups: cups,
+        waste_cartons: waste,
+        waste_pct: if denom > 0.0 { waste / denom * 100.0 } else { 0.0 },
+        avg_cartons_per_shift: if shifts > 0 { cartons / shifts as f64 } else { 0.0 },
+    }
+}
+
+#[tauri::command]
+pub fn get_operational_kpis(
+    state: State<'_, DbState>,
+    from_date: String,
+    to_date: String,
+) -> Result<OperationalKpiReport, AppError> {
+    let conn = state.0.lock()?;
+
+    let period_days: i64 = conn.query_row(
+        "SELECT CASE
+            WHEN date(?1) IS NULL OR date(?2) IS NULL OR date(?1) > date(?2) THEN 0
+            ELSE CAST(julianday(date(?2)) - julianday(date(?1)) AS INTEGER) + 1
+         END",
+        params![from_date, to_date],
+        |r| r.get(0),
+    )?;
+    if period_days <= 0 {
+        return Err(AppError::validation("الفترة المطلوبة غير صحيحة"));
+    }
+
+    let (production_days, shift_count, total_cartons, total_cups, waste_cartons):
+        (i64, i64, f64, f64, f64) = conn.query_row(
+        "SELECT COUNT(DISTINCT ods.date),
+                COUNT(DISTINCT ods.id),
+                COALESCE(SUM(psl.cartons_produced),0),
+                COALESCE(SUM(psl.cartons_produced * psl.cups_per_carton),0),
+                COALESCE(SUM(psl.waste_cartons),0)
+         FROM production_shift_lines psl
+         JOIN operations_daily_sheets ods ON ods.id=psl.sheet_id
+         WHERE ods.date BETWEEN ?1 AND ?2",
+        params![from_date, to_date],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+    )?;
+
+    let net_sales_milli: i64 = conn.query_row(
+        "SELECT COALESCE(SUM(net_milli),0)
+         FROM sales_invoices
+         WHERE date BETWEEN ?1 AND ?2
+           AND LOWER(status) IN ('posted','issued')",
+        params![from_date, to_date],
+        |r| r.get(0),
+    ).unwrap_or(0);
+
+    let approved_expenses_milli: i64 = conn.query_row(
+        "SELECT COALESCE(SUM(amount_milli),0)
+         FROM expenses
+         WHERE date BETWEEN ?1 AND ?2
+           AND LOWER(COALESCE(approval_status,''))='approved'",
+        params![from_date, to_date],
+        |r| r.get(0),
+    ).unwrap_or(0);
+
+    let collections_milli: i64 = conn.query_row(
+        "SELECT COALESCE(SUM(amount_milli),0)
+         FROM customer_payments
+         WHERE date BETWEEN ?1 AND ?2",
+        params![from_date, to_date],
+        |r| r.get(0),
+    ).unwrap_or(0);
+
+    let invoice_count: i64 = conn.query_row(
+        "SELECT COUNT(*)
+         FROM sales_invoices
+         WHERE date BETWEEN ?1 AND ?2
+           AND LOWER(status) IN ('posted','issued')",
+        params![from_date, to_date],
+        |r| r.get(0),
+    ).unwrap_or(0);
+
+    let workers: Vec<EntityProductionKpi> = {
+        let mut stmt = conn.prepare(
+            "SELECT psl.worker_id, COALESCE(e.name,'عامل غير معروف'),
+                    COUNT(DISTINCT psl.sheet_id),
+                    COALESCE(SUM(psl.cartons_produced),0),
+                    COALESCE(SUM(psl.cartons_produced * psl.cups_per_carton),0),
+                    COALESCE(SUM(psl.waste_cartons),0)
+             FROM production_shift_lines psl
+             JOIN operations_daily_sheets ods ON ods.id=psl.sheet_id
+             LEFT JOIN employees e ON e.id=psl.worker_id
+             WHERE ods.date BETWEEN ?1 AND ?2 AND psl.worker_id IS NOT NULL
+             GROUP BY psl.worker_id, e.name
+             ORDER BY SUM(psl.cartons_produced) DESC"
+        )?;
+        let rows = stmt.query_map(params![from_date, to_date], |r| {
+            Ok(entity_kpi(
+                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?
+            ))
+        })?;
+        rows.filter_map(|r| r.ok()).collect()
+    };
+
+    let machines: Vec<EntityProductionKpi> = {
+        let mut stmt = conn.prepare(
+            "SELECT psl.machine_id, COALESCE(m.name,'ماكينة غير معروفة'),
+                    COUNT(DISTINCT psl.sheet_id),
+                    COALESCE(SUM(psl.cartons_produced),0),
+                    COALESCE(SUM(psl.cartons_produced * psl.cups_per_carton),0),
+                    COALESCE(SUM(psl.waste_cartons),0)
+             FROM production_shift_lines psl
+             JOIN operations_daily_sheets ods ON ods.id=psl.sheet_id
+             LEFT JOIN machines m ON m.id=psl.machine_id
+             WHERE ods.date BETWEEN ?1 AND ?2 AND psl.machine_id IS NOT NULL
+             GROUP BY psl.machine_id, m.name
+             ORDER BY SUM(psl.cartons_produced) DESC"
+        )?;
+        let rows = stmt.query_map(params![from_date, to_date], |r| {
+            Ok(entity_kpi(
+                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?
+            ))
+        })?;
+        rows.filter_map(|r| r.ok()).collect()
+    };
+
+    let supervisors: Vec<EntityProductionKpi> = {
+        let mut stmt = conn.prepare(
+            "SELECT ods.supervisor_employee_id, COALESCE(e.name, ods.supervisor_name, 'مشرف غير معروف'),
+                    COUNT(DISTINCT ods.id),
+                    COALESCE(SUM(psl.cartons_produced),0),
+                    COALESCE(SUM(psl.cartons_produced * psl.cups_per_carton),0),
+                    COALESCE(SUM(psl.waste_cartons),0)
+             FROM operations_daily_sheets ods
+             JOIN production_shift_lines psl ON psl.sheet_id=ods.id
+             LEFT JOIN employees e ON e.id=ods.supervisor_employee_id
+             WHERE ods.date BETWEEN ?1 AND ?2 AND ods.supervisor_employee_id IS NOT NULL
+             GROUP BY ods.supervisor_employee_id, e.name, ods.supervisor_name
+             ORDER BY SUM(psl.cartons_produced) DESC"
+        )?;
+        let rows = stmt.query_map(params![from_date, to_date], |r| {
+            Ok(entity_kpi(
+                r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?
+            ))
+        })?;
+        rows.filter_map(|r| r.ok()).collect()
+    };
+
+    let expense_categories: Vec<ExpenseCategoryKpi> = {
+        let mut stmt = conn.prepare(
+            "SELECT COALESCE(NULLIF(trim(category),''),'أخرى'),
+                    COALESCE(SUM(amount_milli),0), COUNT(*)
+             FROM expenses
+             WHERE date BETWEEN ?1 AND ?2
+               AND LOWER(COALESCE(approval_status,''))='approved'
+             GROUP BY COALESCE(NULLIF(trim(category),''),'أخرى')
+             ORDER BY SUM(amount_milli) DESC"
+        )?;
+        let rows = stmt.query_map(params![from_date, to_date], |r| {
+            let total: i64 = r.get(1)?;
+            Ok(ExpenseCategoryKpi {
+                category: r.get(0)?,
+                total_milli: total,
+                avg_per_day_milli: total / period_days,
+                transaction_count: r.get(2)?,
+            })
+        })?;
+        rows.filter_map(|r| r.ok()).collect()
+    };
+
+    let production_denom = total_cartons + waste_cartons;
+    Ok(OperationalKpiReport {
+        from_date,
+        to_date,
+        period_days,
+        production_days,
+        shift_count,
+        total_cartons,
+        total_cups,
+        waste_cartons,
+        waste_pct: if production_denom > 0.0 { waste_cartons / production_denom * 100.0 } else { 0.0 },
+        avg_cartons_per_day: if production_days > 0 { total_cartons / production_days as f64 } else { 0.0 },
+        avg_cartons_per_shift: if shift_count > 0 { total_cartons / shift_count as f64 } else { 0.0 },
+        net_sales_milli,
+        avg_daily_sales_milli: net_sales_milli / period_days,
+        approved_expenses_milli,
+        avg_daily_expenses_milli: approved_expenses_milli / period_days,
+        collections_milli,
+        avg_daily_collections_milli: collections_milli / period_days,
+        invoice_count,
+        avg_invoice_milli: if invoice_count > 0 { net_sales_milli / invoice_count } else { 0 },
+        workers,
+        machines,
+        supervisors,
+        expense_categories,
     })
 }

@@ -12,7 +12,7 @@ interface Expense {
   amount_milli: number; vat_milli: number; method: string; vendor: string; reference: string;
   notes: string; approval_status: string;
   paid_by_employee_id: number | null; paid_by_name: string | null;
-  paid_from_source: string | null; petty_id: number | null; petty_name: string | null;
+  paid_from_source: string | null; source_account_code: string | null; petty_id: number | null; petty_name: string | null;
   custody_txn_id: number | null; reimbursement_status: string | null;
   reimbursement_date: string | null; reimbursed_by: string | null;
   created_by: string | null; created_at: string | null;
@@ -20,12 +20,32 @@ interface Expense {
 
 interface EmployeeSelect { id: number; name: string; code: string | null; }
 
-const CATEGORIES = ["أجر", "إيجار", "مواصلات", "كهرباء", "مياه", "صيانة", "مكاتب", "اتصالات", "تأمين", "أخرى"];
+const CATEGORIES = [
+  { label: "إيجار", account: "5210" },
+  { label: "كهرباء", account: "5220" },
+  { label: "مياه", account: "5221" },
+  { label: "اتصالات وإنترنت", account: "5222" },
+  { label: "وقود وزيوت", account: "5230" },
+  { label: "نقل وتوصيل", account: "5231" },
+  { label: "صيانة وإصلاح", account: "5240" },
+  { label: "قطع غيار", account: "5241" },
+  { label: "تعبئة ومواد تشغيل", account: "5250" },
+  { label: "رسوم حكومية / تأشيرات / فحوصات", account: "5260" },
+  { label: "رسوم بنكية وتحويلات", account: "5270" },
+  { label: "جمارك وتخليص", account: "5280" },
+  { label: "رواتب وأجور", account: "5300" },
+  { label: "أوفر تايم / تحميل", account: "5310" },
+  { label: "سكن العاملين والإدارة", account: "5320" },
+  { label: "تأمين وعلاج العاملين", account: "5330" },
+  { label: "مصروف إداري آخر", account: "5290" },
+];
 
 const PAYMENT_SOURCES = [
-  { value: "company", label: "company (من حساب الشركة)", icon: "🏢" },
-  { value: "custody", label: "عهدة (من رصيد العهدة)", icon: "💼" },
-  { value: "personal", label: "شخصي (من جيب الموظف)", icon: "👤" },
+  { value: "company", label: "حساب الشركة", icon: "🏢" },
+  { value: "custody", label: "عهدتي / عهدة موظف", icon: "💼" },
+  { value: "owner_saif", label: "سيف محمد دفع / موّل", icon: "👤" },
+  { value: "owner_abu_saif", label: "أبو سيف دفع / موّل", icon: "👤" },
+  { value: "personal", label: "موظف دفع من ماله", icon: "🧾" },
 ];
 
 const METHODS = [
@@ -44,8 +64,8 @@ export default function ExpensesPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const [category, setCategory] = useState(CATEGORIES[0]);
-  const [accountCode, setAccountCode] = useState("");
+  const [category, setCategory] = useState(CATEGORIES[0].label);
+  const [accountCode, setAccountCode] = useState(CATEGORIES[0].account);
   const [amountMilli, setAmountMilli] = useState(0);
   const [vatMilli, setVatMilli] = useState(0);
   const [method, setMethod] = useState("cash");
@@ -78,7 +98,7 @@ export default function ExpensesPage() {
 
   const resetForm = () => {
     setDate(new Date().toISOString().split("T")[0]);
-    setCategory(CATEGORIES[0]); setAccountCode(""); setAmountMilli(0); setVatMilli(0);
+    setCategory(CATEGORIES[0].label); setAccountCode(CATEGORIES[0].account); setAmountMilli(0); setVatMilli(0);
     setMethod("cash"); setVendor(""); setReference(""); setNotes("");
     setPaidFromSource("company"); setPaidByEmployeeId(null); setPettyId(null);
   };
@@ -117,7 +137,7 @@ export default function ExpensesPage() {
 
   const handleReimburse = async (id: number) => {
     try {
-      await invoke("reimburse_expense", { expenseId: id, reimbursedBy: "النظام" });
+      await invoke("reimburse_expense", { expenseId: id, reimbursedBy: "الشركة", method: "cash", cashbankId: null });
       loadExpenses();
       addNotification({ id: crypto.randomUUID(), type: "success", title: "تم", message: "تم رد المبلغ بنجاح" });
     } catch {
@@ -129,17 +149,21 @@ export default function ExpensesPage() {
   const companyExpenses = expenses.filter(e => !e.paid_from_source || e.paid_from_source === "company").reduce((s, e) => s + (e.amount_milli || 0), 0);
   const custodyExpenses = expenses.filter(e => e.paid_from_source === "custody").reduce((s, e) => s + (e.amount_milli || 0), 0);
   const personalExpenses = expenses.filter(e => e.paid_from_source === "personal").reduce((s, e) => s + (e.amount_milli || 0), 0);
+  const ownerExpenses = expenses.filter(e => e.paid_from_source === "owner_saif" || e.paid_from_source === "owner_abu_saif").reduce((s, e) => s + (e.amount_milli || 0), 0);
   const pendingReimburse = expenses.filter(e => e.reimbursement_status === "pending").length;
 
   const methodLabel = (m: string) => METHODS.find((x) => x.value === m)?.label || m;
   const sourceLabel = (s: string | null) => {
     if (s === "custody") return "عهدة";
-    if (s === "personal") return "شخصي";
+    if (s === "personal") return "موظف من ماله";
+    if (s === "owner_saif") return "سيف محمد";
+    if (s === "owner_abu_saif") return "أبو سيف";
     return "الشركة";
   };
   const sourceColor = (s: string | null) => {
     if (s === "custody") return "bg-blue-500/20 text-blue-400";
     if (s === "personal") return "bg-amber-500/20 text-amber-400";
+    if (s === "owner_saif" || s === "owner_abu_saif") return "bg-violet-500/20 text-violet-300";
     return "bg-emerald-500/20 text-emerald-400";
   };
 
@@ -191,11 +215,12 @@ export default function ExpensesPage() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 xl:grid-cols-5 gap-4">
         <StatCard title="إجمالي المصروفات" value={formatOMR(totalExpenses)} icon={<Receipt className="w-6 h-6" />} />
         <StatCard title="من حساب الشركة" value={formatOMR(companyExpenses)} icon={<Wallet className="w-6 h-6" />} />
         <StatCard title="من العهد" value={formatOMR(custodyExpenses)} icon={<Wallet className="w-6 h-6" />} />
-        <StatCard title="شخصي (ينتظر رد)" value={`${formatOMR(personalExpenses)} — ${pendingReimburse} قيد`} icon={<UserCheck className="w-6 h-6" />} />
+        <StatCard title="دفعه الملاك" value={formatOMR(ownerExpenses)} icon={<UserCheck className="w-6 h-6" />} />
+        <StatCard title="موظفون ينتظرون رد" value={`${formatOMR(personalExpenses)} — ${pendingReimburse} قيد`} icon={<UserCheck className="w-6 h-6" />} />
       </div>
 
       {showForm && (
@@ -210,8 +235,17 @@ export default function ExpensesPage() {
             </div>
             <div className="input-group">
               <label className="input-label">التصنيف *</label>
-              <select className="input-field" value={category} onChange={(e) => setCategory(e.target.value)} aria-label="التصنيف">
-                {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              <select
+                className="input-field"
+                value={category}
+                onChange={(e) => {
+                  const picked = CATEGORIES.find((x) => x.label === e.target.value);
+                  setCategory(e.target.value);
+                  if (picked) setAccountCode(picked.account);
+                }}
+                aria-label="التصنيف"
+              >
+                {CATEGORIES.map((x) => <option key={x.label} value={x.label}>{x.label}</option>)}
               </select>
             </div>
             <div className="input-group">
@@ -223,15 +257,15 @@ export default function ExpensesPage() {
 
             {/* Amount */}
             <div className="input-group">
-              <label className="input-label">المبلغ (ملي) *</label>
-              <input type="number" className="input-field font-mono text-gold-400 font-bold" min={0} value={amountMilli} onChange={(e) => setAmountMilli(Number(e.target.value))} aria-label="المبلغ" />
+              <label className="input-label">صافي المصروف قبل الضريبة (ر.ع) *</label>
+              <input type="number" step="0.001" className="input-field font-mono text-gold-400 font-bold" min={0} value={amountMilli ? amountMilli / 1000 : ""} onChange={(e) => setAmountMilli(Math.round(Number(e.target.value || 0) * 1000))} aria-label="صافي المصروف بالريال العماني" />
             </div>
             <div className="input-group">
-              <label className="input-label">الضريبة (ملي)</label>
-              <input type="number" className="input-field" min={0} value={vatMilli} onChange={(e) => setVatMilli(Number(e.target.value))} aria-label="الضريبة" />
+              <label className="input-label">ضريبة القيمة المضافة (ر.ع)</label>
+              <input type="number" step="0.001" className="input-field" min={0} value={vatMilli ? vatMilli / 1000 : ""} onChange={(e) => setVatMilli(Math.round(Number(e.target.value || 0) * 1000))} aria-label="ضريبة القيمة المضافة بالريال العماني" />
             </div>
             <div className="input-group">
-              <label className="input-label">رمز الحساب</label>
+              <label className="input-label">الحساب المحاسبي (تلقائي)</label>
               <input type="text" className="input-field" value={accountCode} onChange={(e) => setAccountCode(e.target.value)} placeholder="اختياري" aria-label="رمز الحساب" />
             </div>
 
@@ -241,12 +275,12 @@ export default function ExpensesPage() {
                 <Wallet className="w-4 h-4 text-gold-400" />
                 مصدر الدفع *
               </label>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
                 {PAYMENT_SOURCES.map((src) => (
                   <button
                     key={src.value}
                     type="button"
-                    onClick={() => { setPaidFromSource(src.value); if (src.value !== "custody") setPettyId(null); if (src.value === "company") setPaidByEmployeeId(null); }}
+                    onClick={() => { setPaidFromSource(src.value); if (src.value !== "custody") setPettyId(null); if (src.value !== "personal" && src.value !== "custody") setPaidByEmployeeId(null); }}
                     className={`p-4 rounded-xl border-2 text-center transition-all ${
                       paidFromSource === src.value
                         ? "border-gold-400/50 bg-gold-400/5 text-white shadow-[0_0_15px_rgba(212,175,55,0.1)]"
@@ -254,7 +288,7 @@ export default function ExpensesPage() {
                     }`}
                   >
                     <span className="text-2xl block mb-2">{src.icon}</span>
-                    <span className="text-sm font-medium block">{src.label.split("(")[0].trim()}</span>
+                    <span className="text-sm font-medium block">{src.label}</span>
                   </button>
                 ))}
               </div>
@@ -277,6 +311,10 @@ export default function ExpensesPage() {
                     </select>
                   </div>
                 </div>
+              )}
+
+              {(paidFromSource === "owner_saif" || paidFromSource === "owner_abu_saif") && (
+                <p className="text-xs text-violet-300 mt-3">سيُرحّل المصروف على الحساب الجاري للمالك المحدد، ولا يُسجّل كدفع من حساب الشركة.</p>
               )}
 
               {/* Personal payment - employee selector */}

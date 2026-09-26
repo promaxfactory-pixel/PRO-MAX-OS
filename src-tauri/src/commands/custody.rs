@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::commands::rbac;
-use crate::db::DbState;
+use crate::db::{next_sequence, DbState};
 use crate::error::AppError;
 
 #[derive(Debug, Deserialize)]
@@ -54,6 +54,14 @@ pub struct CustodyTransaction {
     pub journal_id: Option<i64>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CustodyReconciliation {
+    pub subledger_balance_milli: i64,
+    pub gl_balance_milli: i64,
+    pub difference_milli: i64,
+    pub is_reconciled: bool,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct CreateFundInput {
     pub name: String,
@@ -68,10 +76,25 @@ pub struct CreateFundInput {
 pub struct CreateSpendInput {
     pub petty_id: i64,
     pub amount_milli: i64,
+    pub vat_milli: Option<i64>,
+    pub account_code: Option<String>,
     pub category: Option<String>,
+    pub vendor: Option<String>,
     pub reference: Option<String>,
     pub notes: Option<String>,
     pub date: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AddFundInput {
+    pub petty_id: i64,
+    pub amount_milli: i64,
+    pub date: String,
+    pub source_type: Option<String>,
+    pub cashbank_id: Option<i64>,
+    pub method: Option<String>,
+    pub reference: Option<String>,
+    pub notes: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -149,50 +172,134 @@ pub fn create_custody_fund(
 ) -> Result<CustodyAccount, AppError> {
     let mut conn = state.0.lock()?;
     rbac::require_role(&conn, user_id, &["admin", "accountant"])?;
-
-    let seq: i64 = conn
-        .query_row(
-            "SELECT COALESCE(MAX(id), 0) + 1 FROM petty_cash_accounts",
-            [],
-            |row| row.get(0),
-        )?;
-    let code = format!("PC-{:04}", seq);
-
     let opening = input.opening_balance_milli.unwrap_or(0);
+    if opening < 0 {
+        return Err(AppError::validation("الرصيد الافتتاحي لا يمكن أن يكون سالبًا"));
+    }
 
+    let seq: i64 = conn.query_row(
+        "SELECT COALESCE(MAX(id), 0) + 1 FROM petty_cash_accounts", [], |row| row.get(0)
+    )?;
+    let code = format!("PC-{:04}", seq);
     let tx = conn.transaction()?;
+
     tx.execute(
-        "INSERT INTO petty_cash_accounts (code, name, responsible, employee_id, spending_limit_milli, balance_milli, notes, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, datetime('now'))",
+        "INSERT INTO petty_cash_accounts
+         (code, name, responsible, employee_id, spending_limit_milli, balance_milli,
+          account_code, notes, created_at)
+         VALUES (?1,?2,?3,?4,?5,?6,'1110',?7,datetime('now'))",
         params![
-            code,
-            input.name,
-            input.responsible,
-            input.employee_id,
-            input.spending_limit_milli.unwrap_or(0),
-            opening,
-            input.notes,
+            code, input.name, input.responsible, input.employee_id,
+            input.spending_limit_milli.unwrap_or(0), opening, input.notes
         ],
     )?;
-
     let id = tx.last_insert_rowid();
 
     if opening > 0 {
+        // Opening balance is a controlled migration/opening entry, not operating income.
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        let lines = vec![
+            ("1110".to_string(), opening, 0, Some("رصيد افتتاحي للعهدة".to_string())),
+            ("3000".to_string(), 0, opening, Some("حقوق ملكية/رصيد افتتاحي".to_string())),
+        ];
+        let journal_id = crate::commands::accounting::post_to_journal(
+            &tx, "custody_opening", id, &today,
+            &format!("رصيد افتتاحي {}", code), &lines, &user_id.to_string()
+        )?;
         tx.execute(
-            "INSERT INTO petty_cash_transactions (ts, petty_id, ttype, debit_milli, credit_milli, balance_milli, notes)
-             VALUES (datetime('now'), ?1, 'Fund', ?2, 0, ?2, 'Opening balance')",
-            params![id, opening],
+            "INSERT INTO petty_cash_transactions
+             (ts, petty_id, ttype, debit_milli, credit_milli, balance_milli,
+              account_code, notes, journal_id, user_id)
+             VALUES(datetime('now'),?1,'Opening',?2,0,?2,'3000','Opening balance',?3,?4)",
+            params![id, opening, journal_id, user_id],
         )?;
     }
 
+    let _ = rbac::log_audit(
+        &tx, Some(user_id), None, "create_custody_fund", "petty_cash_accounts",
+        Some(id), None, Some(&code), None
+    );
     tx.commit()?;
-    let _ = rbac::log_audit(&conn, None, None, "create_custody_fund", "petty_cash_accounts", Some(id), None, Some(&input.name), None);
 
     Ok(conn.query_row(
-        "SELECT id, code, name, responsible, employee_id, spending_limit_milli, balance_milli, active, notes, created_at FROM petty_cash_accounts WHERE id=?1",
-        params![id],
-        |row| Ok(CustodyAccount { id: row.get(0)?, code: row.get(1)?, name: row.get(2)?, responsible: row.get(3)?, employee_id: row.get(4)?, spending_limit_milli: row.get(5)?, balance_milli: row.get(6)?, active: row.get(7)?, notes: row.get(8)?, created_at: row.get(9)? }),
+        "SELECT id, code, name, responsible, employee_id, spending_limit_milli,
+                balance_milli, active, notes, created_at
+         FROM petty_cash_accounts WHERE id=?1",
+        [id],
+        |row| Ok(CustodyAccount {
+            id: row.get(0)?, code: row.get(1)?, name: row.get(2)?,
+            responsible: row.get(3)?, employee_id: row.get(4)?,
+            spending_limit_milli: row.get(5)?, balance_milli: row.get(6)?,
+            active: row.get(7)?, notes: row.get(8)?, created_at: row.get(9)?
+        }),
     )?)
+}
+
+#[tauri::command]
+pub fn add_custody_funding(
+    state: State<'_, DbState>,
+    user_id: i64,
+    input: AddFundInput,
+) -> Result<CustodyAccount, AppError> {
+    let mut conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
+    if input.amount_milli <= 0 {
+        return Err(AppError::validation("مبلغ تمويل العهدة يجب أن يكون أكبر من صفر"));
+    }
+    let tx = conn.transaction()?;
+
+    let (current_balance, custody_account): (i64, String) = tx.query_row(
+        "SELECT balance_milli, COALESCE(NULLIF(trim(account_code),''),'1110')
+         FROM petty_cash_accounts WHERE id=?1 AND active=1",
+        [input.petty_id],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    ).map_err(|_| AppError::not_found("حساب العهدة غير موجود"))?;
+
+    let source_type = input.source_type.unwrap_or_else(|| "company".to_string()).to_lowercase();
+    let method = input.method.unwrap_or_else(|| "cash".to_string());
+    let source_account = match source_type.as_str() {
+        "company" => crate::commands::accounting::resolve_cash_account(&tx, input.cashbank_id, &method)?,
+        "owner_saif" => "2310".to_string(),
+        "owner_abu_saif" => "2320".to_string(),
+        _ => return Err(AppError::validation("مصدر تمويل العهدة غير معروف")),
+    };
+
+    let new_balance = current_balance.checked_add(input.amount_milli)
+        .ok_or_else(|| AppError::validation("رصيد العهدة يتجاوز الحد المسموح"))?;
+    let lines = vec![
+        (custody_account.clone(), input.amount_milli, 0, Some("تمويل عهدة".to_string())),
+        (source_account.clone(), 0, input.amount_milli, Some(format!("مصدر التمويل: {}", source_type))),
+    ];
+    let journal_id = crate::commands::accounting::post_to_journal(
+        &tx, "custody_funding", input.petty_id, &input.date,
+        "تمويل عهدة / صرف نثري", &lines, &user_id.to_string()
+    )?;
+
+    tx.execute(
+        "UPDATE petty_cash_accounts SET balance_milli=?1 WHERE id=?2",
+        params![new_balance, input.petty_id],
+    )?;
+    tx.execute(
+        "INSERT INTO petty_cash_transactions
+         (ts, petty_id, ttype, debit_milli, credit_milli, balance_milli,
+          account_code, cashbank_id, reference, notes, journal_id, user_id)
+         VALUES(?1,?2,'Fund',?3,0,?4,?5,?6,?7,?8,?9,?10)",
+        params![
+            format!("{} 12:00:00", input.date), input.petty_id, input.amount_milli,
+            new_balance, source_account, input.cashbank_id, input.reference,
+            input.notes, journal_id, user_id
+        ],
+    )?;
+
+    let _ = rbac::log_audit(
+        &tx, Some(user_id), None, "add_custody_funding", "petty_cash_accounts",
+        Some(input.petty_id), None,
+        Some(&format!("source={} amount={}", source_type, input.amount_milli)), None
+    );
+    tx.commit()?;
+    drop(conn);
+
+    get_custody_account(state, input.petty_id)
 }
 
 #[tauri::command]
@@ -202,50 +309,103 @@ pub fn create_custody_spend(
     input: CreateSpendInput,
 ) -> Result<CustodyAccount, AppError> {
     let mut conn = state.0.lock()?;
-    rbac::require_role(&conn, user_id, &["admin", "accountant"])?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
+    if input.amount_milli <= 0 {
+        return Err(AppError::validation("صافي المصروف يجب أن يكون أكبر من صفر"));
+    }
+    let vat = input.vat_milli.unwrap_or(0);
+    if vat < 0 {
+        return Err(AppError::validation("قيمة الضريبة لا يمكن أن تكون سالبة"));
+    }
+    let total = input.amount_milli.checked_add(vat)
+        .ok_or_else(|| AppError::validation("إجمالي المصروف يتجاوز الحد المسموح"))?;
     let tx = conn.transaction()?;
 
-    let current_balance: i64 = tx
-        .query_row(
-            "SELECT balance_milli FROM petty_cash_accounts WHERE id = ?1",
-            params![input.petty_id],
-            |row| row.get(0),
-        )?;
-
-    if current_balance < input.amount_milli {
-        return Err(AppError::validation("الرصيد غير كافٍ"));
+    let (current_balance, custody_account): (i64, String) = tx.query_row(
+        "SELECT balance_milli, COALESCE(NULLIF(trim(account_code),''),'1110')
+         FROM petty_cash_accounts WHERE id=?1 AND active=1",
+        [input.petty_id],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    ).map_err(|_| AppError::not_found("حساب العهدة غير موجود"))?;
+    if current_balance < total {
+        return Err(AppError::validation("رصيد العهدة غير كافٍ"));
     }
 
-    let new_balance = current_balance - input.amount_milli;
+    let expense_account = input.account_code.clone()
+        .filter(|x| !x.trim().is_empty())
+        .unwrap_or_else(|| "5200".to_string());
+    let acct_type: String = tx.query_row(
+        "SELECT type FROM accounts WHERE code=?1", [&expense_account], |r| r.get(0)
+    ).map_err(|_| AppError::validation("حساب المصروف غير موجود"))?;
+    if acct_type.to_lowercase() != "expense" {
+        return Err(AppError::validation("الحساب المحدد ليس حساب مصروف"));
+    }
+
+    let date = input.date.clone()
+        .filter(|x| !x.trim().is_empty())
+        .unwrap_or_else(|| chrono::Local::now().format("%Y-%m-%d").to_string());
+    let date_only = date.get(..10).unwrap_or(&date).to_string();
+    let year = date_only.get(..4).unwrap_or("0000").to_string();
+    let seq = next_sequence(&tx, "EXP", &year)?;
+    let exp_no = format!("EXP-{}-{:04}", year, seq);
 
     tx.execute(
-        "UPDATE petty_cash_accounts SET balance_milli = ?1 WHERE id = ?2",
-        params![new_balance, input.petty_id],
-    )?;
-
-    let ts = input.date.unwrap_or_else(|| chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string());
-    tx.execute(
-        "INSERT INTO petty_cash_transactions (ts, petty_id, ttype, debit_milli, credit_milli, balance_milli, category, reference, notes)
-         VALUES (?1, ?2, 'Spend', 0, ?3, ?4, ?5, ?6, ?7)",
+        "INSERT INTO expenses
+         (exp_no, date, category, account_code, amount_milli, vat_milli, method,
+          vendor, reference, notes, approval_status, paid_from_source,
+          source_account_code, petty_id, reimbursement_status, created_by, created_at)
+         VALUES(?1,?2,?3,?4,?5,?6,'cash',?7,?8,?9,'approved','custody',?10,?11,'none',?12,datetime('now'))",
         params![
-            ts,
-            input.petty_id,
-            input.amount_milli,
-            new_balance,
-            input.category,
-            input.reference,
-            input.notes,
+            exp_no, date_only, input.category, expense_account, input.amount_milli,
+            vat, input.vendor, input.reference, input.notes, custody_account,
+            input.petty_id, user_id.to_string()
         ],
     )?;
+    let expense_id = tx.last_insert_rowid();
 
+    let mut lines = vec![
+        (expense_account.clone(), input.amount_milli, 0, Some("صافي مصروف من العهدة".to_string())),
+    ];
+    if vat > 0 {
+        lines.push(("2100".to_string(), vat, 0, Some("ضريبة مدخلات".to_string())));
+    }
+    lines.push((custody_account.clone(), 0, total, Some("صرف من العهدة".to_string())));
+    let journal_id = crate::commands::accounting::post_to_journal(
+        &tx, "expense", expense_id, &date_only, &format!("مصروف عهدة {}", exp_no),
+        &lines, &user_id.to_string()
+    )?;
+
+    let new_balance = current_balance - total;
+    tx.execute(
+        "UPDATE petty_cash_accounts SET balance_milli=?1 WHERE id=?2",
+        params![new_balance, input.petty_id],
+    )?;
+    tx.execute(
+        "INSERT INTO petty_cash_transactions
+         (ts, petty_id, ttype, debit_milli, credit_milli, balance_milli, category,
+          account_code, expense_id, reference, notes, journal_id, user_id)
+         VALUES(?1,?2,'Spend',0,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
+        params![
+            format!("{} 12:00:00", date_only), input.petty_id, total, new_balance,
+            input.category, expense_account, expense_id, input.reference, input.notes,
+            journal_id, user_id
+        ],
+    )?;
+    let custody_txn_id = tx.last_insert_rowid();
+    tx.execute(
+        "UPDATE expenses SET journal_id=?1, custody_txn_id=?2 WHERE id=?3",
+        params![journal_id, custody_txn_id, expense_id],
+    )?;
+
+    let _ = rbac::log_audit(
+        &tx, Some(user_id), None, "create_custody_spend", "expenses",
+        Some(expense_id), None,
+        Some(&format!("custody={} total={}", input.petty_id, total)), None
+    );
     tx.commit()?;
-    let _ = rbac::log_audit(&conn, None, None, "create_custody_spend", "petty_cash_accounts", Some(input.petty_id), None, None, None);
+    drop(conn);
 
-    Ok(conn.query_row(
-        "SELECT id, code, name, responsible, employee_id, spending_limit_milli, balance_milli, active, notes, created_at FROM petty_cash_accounts WHERE id=?1",
-        params![input.petty_id],
-        |row| Ok(CustodyAccount { id: row.get(0)?, code: row.get(1)?, name: row.get(2)?, responsible: row.get(3)?, employee_id: row.get(4)?, spending_limit_milli: row.get(5)?, balance_milli: row.get(6)?, active: row.get(7)?, notes: row.get(8)?, created_at: row.get(9)? }),
-    )?)
+    get_custody_account(state, input.petty_id)
 }
 
 #[tauri::command]
@@ -256,6 +416,12 @@ pub fn create_custody_transfer(
 ) -> Result<Vec<CustodyAccount>, AppError> {
     let mut conn = state.0.lock()?;
     rbac::require_role(&conn, user_id, &["admin", "accountant"])?;
+    if input.amount_milli <= 0 {
+        return Err(AppError::validation("مبلغ التحويل يجب أن يكون أكبر من صفر"));
+    }
+    if input.from_petty_id == input.to_petty_id {
+        return Err(AppError::validation("لا يمكن التحويل من العهدة إلى نفسها"));
+    }
     let tx = conn.transaction()?;
 
     let from_balance: i64 = tx
@@ -329,6 +495,30 @@ pub fn create_custody_transfer(
 }
 
 #[tauri::command]
+pub fn get_custody_reconciliation(
+    state: State<'_, DbState>,
+) -> Result<CustodyReconciliation, AppError> {
+    let conn = state.0.lock()?;
+    let subledger: i64 = conn.query_row(
+        "SELECT COALESCE(SUM(balance_milli),0) FROM petty_cash_accounts WHERE active=1",
+        [], |r| r.get(0)
+    ).unwrap_or(0);
+    let (debit, credit): (i64, i64) = conn.query_row(
+        "SELECT COALESCE(SUM(debit_milli),0), COALESCE(SUM(credit_milli),0)
+         FROM journal_entry_lines WHERE account_code='1110'",
+        [], |r| Ok((r.get(0)?, r.get(1)?))
+    ).unwrap_or((0,0));
+    let gl = debit - credit;
+    let difference = subledger - gl;
+    Ok(CustodyReconciliation {
+        subledger_balance_milli: subledger,
+        gl_balance_milli: gl,
+        difference_milli: difference,
+        is_reconciled: difference == 0,
+    })
+}
+
+#[tauri::command]
 pub fn get_custody_statement(
     state: State<'_, DbState>,
     petty_id: i64,
@@ -385,24 +575,41 @@ pub fn update_custody_spend(
 ) -> Result<(), AppError> {
     let conn = state.0.lock()?;
     rbac::require_role(&conn, user_id, &["admin", "accountant"])?;
-    if let Some(ref date) = input.date {
+
+    if input.amount_milli.is_some() || input.date.is_some() {
+        return Err(AppError::validation(
+            "لا يمكن تغيير قيمة أو تاريخ حركة عهدة مالية؛ استخدم تصحيح/عكس موثق حتى يظل الأستاذ متطابقًا"
+        ));
+    }
+
+    let expense_id: Option<i64> = conn.query_row(
+        "SELECT expense_id FROM petty_cash_transactions WHERE id=?1",
+        [input.txn_id],
+        |r| r.get(0),
+    ).unwrap_or(None);
+
+    conn.execute(
+        "UPDATE petty_cash_transactions
+         SET category=COALESCE(?1,category), reference=COALESCE(?2,reference),
+             notes=COALESCE(?3,notes)
+         WHERE id=?4",
+        params![input.category, input.reference, input.notes, input.txn_id],
+    )?;
+
+    if let Some(exp_id) = expense_id {
         conn.execute(
-            "UPDATE petty_cash_transactions SET ts = ?1, category = COALESCE(?2, category), reference = COALESCE(?3, reference), notes = COALESCE(?4, notes) WHERE id = ?5",
-            params![date, input.category, input.reference, input.notes, input.txn_id],
-        )?;
-    } else {
-        conn.execute(
-            "UPDATE petty_cash_transactions SET category = COALESCE(?1, category), reference = COALESCE(?2, reference), notes = COALESCE(?3, notes) WHERE id = ?4",
-            params![input.category, input.reference, input.notes, input.txn_id],
+            "UPDATE expenses
+             SET category=COALESCE(?1,category), reference=COALESCE(?2,reference),
+                 notes=COALESCE(?3,notes)
+             WHERE id=?4",
+            params![input.category, input.reference, input.notes, exp_id],
         )?;
     }
-    if let Some(amt) = input.amount_milli {
-        conn.execute(
-            "UPDATE petty_cash_transactions SET credit_milli = ?1 WHERE id = ?2",
-            params![amt, input.txn_id],
-        )?;
-    }
-    let _ = rbac::log_audit(&conn, Some(user_id), None, "update_custody_spend", "petty_cash_transactions", Some(input.txn_id), None, None, None);
+
+    let _ = rbac::log_audit(
+        &conn, Some(user_id), None, "update_custody_spend",
+        "petty_cash_transactions", Some(input.txn_id), None, None, None
+    );
     Ok(())
 }
 

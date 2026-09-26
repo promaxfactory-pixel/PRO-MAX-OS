@@ -21,7 +21,9 @@ export default function EmployeeFormPage() {
     transport_allowance_milli: 0, food_allowance_milli: 0, other_allowances_milli: 0,
     allowances_milli: 0, overtime_rate_milli: 0,
     passport_no: "", passport_expiry: "", residence_expiry: "", visa_expiry: "",
-    workpermit_expiry: "", insurance_expiry: "", insurance_policy_no: "",
+    civil_id_expiry: "", visa_no: "", workpermit_no: "",
+    workpermit_expiry: "", driving_license_no: "", driving_license_expiry: "",
+    medical_expiry: "", insurance_expiry: "", insurance_policy_no: "",
     insurance_premium_milli: 0, ticket_allowance_milli: 0,
     contract_end: "", joining_date: "",
     bank_name: "", bank_account_no: "", sponsor_name: "", sponsor_id: "",
@@ -45,7 +47,10 @@ export default function EmployeeFormPage() {
           allowances_milli: d.allowances_milli || 0, overtime_rate_milli: d.overtime_rate_milli || 0,
           passport_no: d.passport_no || "", passport_expiry: d.passport_expiry || "",
           residence_expiry: d.residence_expiry || "", visa_expiry: d.visa_expiry || "",
-          workpermit_expiry: d.workpermit_expiry || "", insurance_expiry: d.insurance_expiry || "",
+          civil_id_expiry: d.civil_id_expiry || "", visa_no: d.visa_no || "",
+          workpermit_no: d.workpermit_no || "", workpermit_expiry: d.workpermit_expiry || "",
+          driving_license_no: d.driving_license_no || "", driving_license_expiry: d.driving_license_expiry || "",
+          medical_expiry: d.medical_expiry || "", insurance_expiry: d.insurance_expiry || "",
           insurance_policy_no: d.insurance_policy_no || "",
           insurance_premium_milli: d.insurance_premium_milli || 0,
           ticket_allowance_milli: d.ticket_allowance_milli || 0,
@@ -210,8 +215,32 @@ export default function EmployeeFormPage() {
               <input className="input-field" type="date" value={form.visa_expiry} onChange={(e) => set("visa_expiry", e.target.value)} aria-label="انتهاء التأشيرة" />
             </div>
             <div className="input-group">
+              <label className="input-label">انتهاء البطاقة المدنية / الإقامة</label>
+              <input className="input-field" type="date" value={form.civil_id_expiry} onChange={(e) => set("civil_id_expiry", e.target.value)} aria-label="انتهاء البطاقة المدنية" />
+            </div>
+            <div className="input-group">
+              <label className="input-label">رقم التأشيرة</label>
+              <input className="input-field" value={form.visa_no} onChange={(e) => set("visa_no", e.target.value)} aria-label="رقم التأشيرة" />
+            </div>
+            <div className="input-group">
+              <label className="input-label">رقم تصريح العمل</label>
+              <input className="input-field" value={form.workpermit_no} onChange={(e) => set("workpermit_no", e.target.value)} aria-label="رقم تصريح العمل" />
+            </div>
+            <div className="input-group">
               <label className="input-label">انتهاء تصريح العمل</label>
               <input className="input-field" type="date" value={form.workpermit_expiry} onChange={(e) => set("workpermit_expiry", e.target.value)} aria-label="انتهاء تصريح العمل" />
+            </div>
+            <div className="input-group">
+              <label className="input-label">رقم رخصة القيادة</label>
+              <input className="input-field" value={form.driving_license_no} onChange={(e) => set("driving_license_no", e.target.value)} aria-label="رقم رخصة القيادة" />
+            </div>
+            <div className="input-group">
+              <label className="input-label">انتهاء رخصة القيادة</label>
+              <input className="input-field" type="date" value={form.driving_license_expiry} onChange={(e) => set("driving_license_expiry", e.target.value)} aria-label="انتهاء رخصة القيادة" />
+            </div>
+            <div className="input-group">
+              <label className="input-label">انتهاء الفحص الطبي / البطاقة الصحية</label>
+              <input className="input-field" type="date" value={form.medical_expiry} onChange={(e) => set("medical_expiry", e.target.value)} aria-label="انتهاء الفحص الطبي" />
             </div>
             <div className="input-group">
               <label className="input-label">انتهاء التأمين</label>

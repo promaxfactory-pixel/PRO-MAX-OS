@@ -16,6 +16,12 @@ interface Product {
   code: string | null;
 }
 
+interface Machine { id: number; name: string; code: string | null; active: number; }
+interface ShiftInfo {
+  id: number; date: string; shift: string; status: string;
+  supervisor_employee_id: number | null; supervisor_name: string | null;
+}
+
 interface ShiftLine {
   id: number;
   sheet_id: number;
@@ -27,6 +33,10 @@ interface ShiftLine {
   waste_cartons: number;
   ts: string;
   recorded_by: string | null;
+  worker_id?: number | null;
+  worker_name?: string | null;
+  machine_id?: number | null;
+  machine_name?: string | null;
 }
 
 interface DashboardData {
@@ -55,6 +65,10 @@ export default function LiveProductionPage() {
   const [deletingLine, setDeletingLine] = useState<number | null>(null);
   const [closingShift, setClosingShift] = useState(false);
   const [workerId, setWorkerId] = useState<number | null>(null);
+  const [supervisorId, setSupervisorId] = useState<number | null>(null);
+  const [machineId, setMachineId] = useState<number | null>(null);
+  const [shiftInfo, setShiftInfo] = useState<ShiftInfo | null>(null);
+  const [machines, setMachines] = useState<Machine[]>([]);
   const [workers, setWorkers] = useState<{id: number; name: string; code: string | null; job: string | null}[]>([]);
   const { addNotification } = useUIStore();
   const currentUser = useAuthStore((s) => s.user);
@@ -80,16 +94,30 @@ export default function LiveProductionPage() {
       const w = await invoke<{id: number; name: string; code: string | null; job: string | null}[]>("list_employees_for_production");
       setWorkers(w);
     } catch {
-      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "فشل تحميل بيانات الإنتاج" });
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "فشل تحميل بيانات العمال" });
     }
-  }, []);
+  }, [addNotification]);
+
+  const loadMachines = useCallback(async () => {
+    try {
+      const m = await invoke<Machine[]>("list_machines");
+      setMachines(m.filter((x) => x.active !== 0));
+    } catch {
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "فشل تحميل بيانات الماكينات" });
+    }
+  }, [addNotification]);
 
   const initShift = useCallback(async () => {
     try {
       const id = await invoke<number>("get_shift_sheet", { date: today, shift });
       setSheetId(id);
-      const shiftLines = await invoke<ShiftLine[]>("get_shift_lines", { sheetId: id });
+      const [shiftLines, info] = await Promise.all([
+        invoke<ShiftLine[]>("get_shift_lines", { sheetId: id }),
+        invoke<ShiftInfo>("get_shift_sheet_info", { sheetId: id }),
+      ]);
       setLines(shiftLines);
+      setShiftInfo(info);
+      setSupervisorId(info.supervisor_employee_id);
     } catch (e) {
       addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ", message: "فشل تهيئة الوردية: " + String(e) });
     }
@@ -107,7 +135,8 @@ export default function LiveProductionPage() {
   useEffect(() => {
     loadProducts();
     loadWorkers();
-  }, [loadProducts, loadWorkers]);
+    loadMachines();
+  }, [loadProducts, loadWorkers, loadMachines]);
 
   useEffect(() => {
     if (today && shift) {
@@ -122,8 +151,22 @@ export default function LiveProductionPage() {
     return () => clearInterval(interval);
   }, [refreshDashboard]);
 
+  const handleSupervisorChange = async (value: number | null) => {
+    if (!sheetId || !value || shiftInfo?.status !== "Draft") return;
+    try {
+      await invoke("update_shift_supervisor", { sheetId, supervisorEmployeeId: value });
+      setSupervisorId(value);
+      const info = await invoke<ShiftInfo>("get_shift_sheet_info", { sheetId });
+      setShiftInfo(info);
+    } catch (e) {
+      addNotification({ id: crypto.randomUUID(), type: "error", title: "تعذر تحديد المشرف", message: String(e) });
+    }
+  };
+
   const handleRecord = async () => {
-    if (!sheetId || !entryForm.product_id || entryForm.cartons_produced <= 0) return;
+    if (!sheetId || shiftInfo?.status !== "Draft" || !supervisorId || !workerId ||
+        !entryForm.product_id || entryForm.cartons_produced <= 0 ||
+        (machines.length > 0 && !machineId)) return;
     setSaving(true);
     try {
       await invoke("record_production", {
@@ -135,6 +178,7 @@ export default function LiveProductionPage() {
         wasteCartons: entryForm.waste_cartons || null,
         recordedBy: currentUser?.full_name || null,
         workerId: workerId,
+        machineId: machineId,
       });
       setEntryForm({ product_id: 0, customer_brand: "", cartons_produced: 0, waste_cartons: 0 });
       setWorkerId(null);
@@ -167,8 +211,8 @@ export default function LiveProductionPage() {
     setClosingShift(true);
     try {
       await invoke("complete_shift", { sheetId, completedBy: currentUser?.full_name || "operator" });
-      setSheetId(null);
-      setLines([]);
+      const info = await invoke<ShiftInfo>("get_shift_sheet_info", { sheetId });
+      setShiftInfo(info);
       await refreshDashboard();
       addNotification({ id: crypto.randomUUID(), type: "success", title: "تم", message: "تم إقفال الوردية وتحديث المخزون" });
     } catch (e) {
@@ -212,7 +256,7 @@ export default function LiveProductionPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {sheetId && lines.length > 0 && (
+          {sheetId && shiftInfo?.status === "Draft" && lines.length > 0 && (
             <>
               <button onClick={async () => {
                 try { await invoke("print_shift_report_thermal", { sheetId, printerName: null }); addNotification({ id: crypto.randomUUID(), type: "success", title: "طباعة", message: "تم إرسال تقرير الوردية إلى الطابعة" }); } catch (e) { addNotification({ id: crypto.randomUUID(), type: "error", title: "خطأ في الطباعة", message: String(e) }); }
@@ -315,11 +359,26 @@ export default function LiveProductionPage() {
             </div>
 
             {sheetId && (
-              <div className="flex items-center gap-2 text-xs text-emerald-400 bg-emerald-500/10 rounded-lg px-3 py-2">
+              <div className={`flex items-center gap-2 text-xs rounded-lg px-3 py-2 ${shiftInfo?.status === "Draft" ? "text-emerald-400 bg-emerald-500/10" : "text-surface-300 bg-surface-800"}`}>
                 <CheckCircle2 className="w-3 h-3" />
-                الوردية مفتوحة — رقم {sheetId}
+                {shiftInfo?.status === "Draft" ? "الوردية مفتوحة" : "الوردية مقفلة"} — رقم {sheetId}
               </div>
             )}
+
+            <div className="mt-4">
+              <label className="form-label">مشرف الوردية *</label>
+              <select
+                className="input-field"
+                value={supervisorId || ""}
+                onChange={(e) => handleSupervisorChange(Number(e.target.value) || null)}
+                disabled={shiftInfo?.status !== "Draft"}
+                aria-label="مشرف الوردية"
+              >
+                <option value="">— اختر المشرف —</option>
+                {workers.map((w) => <option key={w.id} value={w.id}>{w.name} ({w.code || w.job || "موظف"})</option>)}
+              </select>
+              {shiftInfo?.supervisor_name && <p className="text-xs text-surface-500 mt-1">المسؤول: {shiftInfo.supervisor_name}</p>}
+            </div>
           </div>
 
           {/* Quick Entry Form */}
@@ -335,6 +394,7 @@ export default function LiveProductionPage() {
                   value={entryForm.product_id}
                   onChange={(e) => setEntryForm({ ...entryForm, product_id: Number(e.target.value) })}
                   className="input-field"
+                  disabled={shiftInfo?.status !== "Draft"}
                   aria-label="المنتج"
                 >
                   <option value={0}>— اختر المنتج —</option>
@@ -363,6 +423,7 @@ export default function LiveProductionPage() {
                   className="input-field"
                   value={workerId || ""}
                   onChange={(e) => setWorkerId(Number(e.target.value) || null)}
+                  disabled={shiftInfo?.status !== "Draft"}
                   aria-label="اختر العامل"
                 >
                   <option value="">اختر العامل...</option>
@@ -371,6 +432,21 @@ export default function LiveProductionPage() {
                   ))}
                 </select>
               </div>
+              {machines.length > 0 && (
+                <div>
+                  <label className="form-label">الماكينة *</label>
+                  <select
+                    className="input-field"
+                    value={machineId || ""}
+                    onChange={(e) => setMachineId(Number(e.target.value) || null)}
+                    disabled={shiftInfo?.status !== "Draft"}
+                    aria-label="الماكينة"
+                  >
+                    <option value="">— اختر الماكينة —</option>
+                    {machines.map((m) => <option key={m.id} value={m.id}>{m.name}{m.code ? ` (${m.code})` : ""}</option>)}
+                  </select>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="form-label">كرتون منتج</label>
@@ -399,7 +475,7 @@ export default function LiveProductionPage() {
               </div>
               <motion.button
                 onClick={handleRecord}
-                disabled={saving || !entryForm.product_id || entryForm.cartons_produced <= 0}
+                disabled={saving || shiftInfo?.status !== "Draft" || !supervisorId || !workerId || !entryForm.product_id || entryForm.cartons_produced <= 0 || (machines.length > 0 && !machineId)}
                 className="w-full bg-gradient-to-l from-brand-800 to-brand-700 text-pure-white font-bold py-3 rounded-xl hover:from-brand-700 hover:to-brand-600 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                 whileHover={{ scale: 1.01 }}
                 whileTap={{ scale: 0.98 }}
@@ -459,6 +535,9 @@ export default function LiveProductionPage() {
                           {line.customer_brand && (
                             <p className="text-xs text-gold-400/80">{line.customer_brand}</p>
                           )}
+                          <p className="text-[11px] text-surface-500">
+                            {line.worker_name || "عامل غير محدد"}{line.machine_name ? ` • ${line.machine_name}` : ""}
+                          </p>
                         </div>
                       </div>
 
@@ -481,8 +560,8 @@ export default function LiveProductionPage() {
                               />
                             ) : (
                               <span
-                                className="cursor-pointer hover:text-brand-400 transition-colors"
-                                onClick={() => setEditingQty({ id: line.id, val: line.cartons_produced })}
+                                className={shiftInfo?.status === "Draft" ? "cursor-pointer hover:text-brand-400 transition-colors" : ""}
+                                onClick={() => shiftInfo?.status === "Draft" && setEditingQty({ id: line.id, val: line.cartons_produced })}
                               >
                                 {line.cartons_produced.toFixed(0)}
                               </span>
@@ -502,7 +581,7 @@ export default function LiveProductionPage() {
                         </div>
                         <button
                           onClick={() => handleDeleteLine(line.id)}
-                          disabled={deletingLine === line.id}
+                          disabled={deletingLine === line.id || shiftInfo?.status !== "Draft"}
                           className="p-1.5 text-red-400/50 hover:text-red-400 transition-colors disabled:opacity-30"
                         >
                           {deletingLine === line.id ? (

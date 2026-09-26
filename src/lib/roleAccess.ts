@@ -28,7 +28,7 @@ const rolePathPrefixes: Record<string, string[]> = {
     "/tools/qayd",
     "/tools/backup",
   ],
-  hr: ["/dashboard", "/alerts", "/hr", "/payroll", "/overtime", "/employee-advances", "/renewals"],
+  hr: ["/dashboard", "/daily-operations", "/alerts", "/hr", "/payroll", "/overtime", "/employee-advances", "/renewals"],
   operator: [
     "/dashboard",
     "/alerts",

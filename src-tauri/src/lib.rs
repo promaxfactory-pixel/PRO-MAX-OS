@@ -46,6 +46,8 @@ pub fn run() {
             // Dashboard
             commands::dashboard::get_dashboard_stats,
             commands::dashboard::get_daily_brief,
+            commands::dashboard::get_control_balances,
+            commands::reconciliation::get_financial_reconciliation,
             // Customers
             commands::customers::list_customers,
             commands::customers::get_customer,
@@ -113,9 +115,11 @@ pub fn run() {
             commands::custody::list_custody_accounts,
             commands::custody::get_custody_account,
             commands::custody::create_custody_fund,
+            commands::custody::add_custody_funding,
             commands::custody::create_custody_spend,
             commands::custody::create_custody_transfer,
             commands::custody::get_custody_statement,
+            commands::custody::get_custody_reconciliation,
             commands::custody::update_custody_spend,
             commands::custody::update_custody_fund,
             // HR
@@ -203,8 +207,17 @@ pub fn run() {
             // Payroll
             commands::payroll::list_payroll_runs,
             commands::payroll::create_payroll_run,
+            commands::payroll::prepare_payroll_run,
+            commands::payroll::list_payroll_run_lines,
+            commands::payroll::approve_payroll_run,
+            commands::payroll::record_payroll_payment,
+            commands::payroll::list_payroll_payments,
             commands::payroll::list_employee_advances,
             commands::payroll::create_employee_advance,
+            commands::payroll_adjustments::list_payroll_adjustments,
+            commands::payroll_adjustments::create_payroll_adjustment,
+            commands::payroll_adjustments::approve_payroll_adjustment,
+            commands::payroll_adjustments::reject_payroll_adjustment,
             // Overtime
             commands::overtime::list_overtime_records,
             commands::overtime::create_overtime_record,
@@ -233,6 +246,7 @@ pub fn run() {
             commands::reports::inventory_margin_report,
             commands::reports::sales_by_customer_report,
             commands::reports::unpaid_invoices_report,
+            commands::reports::get_operational_kpis,
             // RBAC & Audit
             commands::rbac::list_audit_logs,
             // Settings
@@ -351,6 +365,8 @@ pub fn run() {
             commands::device::scan_document,
             // Live Production Shift
             commands::production_shift::get_shift_sheet,
+            commands::production_shift::get_shift_sheet_info,
+            commands::production_shift::update_shift_supervisor,
             commands::production_shift::record_production,
             commands::production_shift::get_shift_lines,
             commands::production_shift::complete_shift,

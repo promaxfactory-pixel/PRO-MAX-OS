@@ -149,6 +149,8 @@ CREATE TABLE IF NOT EXISTS employees (
     phone TEXT, passport_no TEXT,
     passport_expiry TEXT, residence_expiry TEXT, visa_expiry TEXT,
     workpermit_expiry TEXT, insurance_expiry TEXT, contract_end TEXT,
+    civil_id_expiry TEXT, visa_no TEXT, workpermit_no TEXT,
+    driving_license_no TEXT, driving_license_expiry TEXT, medical_expiry TEXT,
     joining_date TEXT, active INTEGER NOT NULL DEFAULT 1, notes TEXT
 );
 
@@ -195,7 +197,8 @@ CREATE TABLE IF NOT EXISTS production_lines (
 CREATE TABLE IF NOT EXISTS operations_daily_sheets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sheet_no TEXT, date TEXT NOT NULL, shift TEXT,
-    supervisor_name TEXT, worker_name TEXT, attendance TEXT,
+    supervisor_name TEXT, supervisor_employee_id INTEGER REFERENCES employees(id),
+    worker_name TEXT, attendance TEXT,
     start_time TEXT, end_time TEXT, normal_hours REAL DEFAULT 0,
     overtime_hours REAL DEFAULT 0, overtime_reason TEXT, overtime_approved INTEGER DEFAULT 0,
     product_id INTEGER REFERENCES products(id), customer_brand_name TEXT,
@@ -263,6 +266,8 @@ CREATE TABLE IF NOT EXISTS customer_payments (
     rec_no TEXT, date TEXT NOT NULL, customer_id INTEGER NOT NULL REFERENCES customers(id),
     amount_milli INTEGER NOT NULL DEFAULT 0, method TEXT DEFAULT 'cash',
     cashbank_id INTEGER REFERENCES cashbank_accounts(id), reference TEXT, notes TEXT,
+    source_type TEXT DEFAULT 'company', source_account_code TEXT REFERENCES accounts(code),
+    custody_id INTEGER REFERENCES petty_cash_accounts(id),
     created_by TEXT, created_at TEXT, journal_id INTEGER REFERENCES journal_entries(id)
 );
 
@@ -311,6 +316,7 @@ CREATE TABLE IF NOT EXISTS expenses (
     attachment_required INTEGER DEFAULT 0, approval_status TEXT DEFAULT 'posted',
     created_by TEXT, created_at TEXT, journal_id INTEGER REFERENCES journal_entries(id),
     paid_by_employee_id INTEGER, custody_txn_id INTEGER,
+    source_account_code TEXT REFERENCES accounts(code),
     reimbursement_status TEXT DEFAULT 'none', reimbursement_date TEXT, reimbursed_by TEXT
 );
 
@@ -358,8 +364,12 @@ CREATE TABLE IF NOT EXISTS payroll_payments (
     payment_date TEXT NOT NULL,
     source_type TEXT NOT NULL,
     source_id INTEGER,
+    employee_id INTEGER REFERENCES employees(id),
     amount_milli INTEGER NOT NULL,
+    method TEXT DEFAULT 'bank_transfer', reference TEXT, notes TEXT,
     journal_id INTEGER REFERENCES journal_entries(id),
+    source_account_code TEXT REFERENCES accounts(code),
+    wps_status TEXT DEFAULT 'pending', wps_reference TEXT,
     reversed INTEGER DEFAULT 0,
     reversal_journal_id INTEGER REFERENCES journal_entries(id),
     reversed_by TEXT, reversed_at TEXT,
@@ -415,7 +425,8 @@ CREATE TABLE IF NOT EXISTS petty_cash_accounts (
     code TEXT, name TEXT NOT NULL, responsible TEXT, role TEXT, employee_id INTEGER REFERENCES employees(id),
     spending_limit_milli INTEGER DEFAULT 0, requires_approval INTEGER DEFAULT 0,
     balance_milli INTEGER DEFAULT 0, status TEXT DEFAULT 'open',
-    active INTEGER DEFAULT 1, notes TEXT, created_at TEXT
+    active INTEGER DEFAULT 1, notes TEXT, created_at TEXT,
+    account_code TEXT DEFAULT '1110' REFERENCES accounts(code)
 );
 
 CREATE TABLE IF NOT EXISTS petty_cash_transactions (
@@ -610,7 +621,7 @@ CREATE TABLE IF NOT EXISTS payroll_run_lines (
     overtime_milli INTEGER DEFAULT 0, bonus_milli INTEGER DEFAULT 0,
     deduction_milli INTEGER DEFAULT 0, advance_deduction_milli INTEGER DEFAULT 0,
     insurance_deduction_milli INTEGER DEFAULT 0, tax_deduction_milli INTEGER DEFAULT 0,
-    net_milli INTEGER DEFAULT 0, notes TEXT
+    net_milli INTEGER DEFAULT 0, paid_milli INTEGER NOT NULL DEFAULT 0, notes TEXT
 );
 
 CREATE TABLE IF NOT EXISTS employee_advances (
@@ -679,6 +690,7 @@ CREATE TABLE IF NOT EXISTS production_shift_lines (
     waste_cartons REAL NOT NULL DEFAULT 0,
     unit_cost_milli INTEGER NOT NULL DEFAULT 0,
     material_cost_milli INTEGER NOT NULL DEFAULT 0,
+    machine_id INTEGER REFERENCES machines(id),
     ts TEXT NOT NULL DEFAULT (datetime('now')),
     recorded_by TEXT
 );
@@ -814,6 +826,7 @@ CREATE TABLE IF NOT EXISTS overtime_records (
     rate_multiplier REAL NOT NULL DEFAULT 1.5,
     reason TEXT,
     status TEXT NOT NULL DEFAULT 'Pending',
+    overtime_type TEXT NOT NULL DEFAULT 'normal_day_day',
     approved INTEGER NOT NULL DEFAULT 0,
     approved_by TEXT,
     approved_at TEXT,
