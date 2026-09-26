@@ -2,7 +2,8 @@ name: One-shot migration test repair
 
 on:
   push:
-    branches: [work/accountant-daily-ops-20260925]
+    branches:
+      - work/accountant-daily-ops-20260925
 
 permissions:
   contents: write
@@ -17,8 +18,9 @@ jobs:
           fetch-depth: 0
 
       - name: Apply verified repair
-        shell: python
+        shell: bash
         run: |
+          python - <<'PY'
           from pathlib import Path
 
           db = Path("src-tauri/src/db.rs")
@@ -26,10 +28,10 @@ jobs:
 
           module_anchor = "}\n\n#[cfg(test)]\nmod tests {"
           helper = """    #[cfg(test)]
-    pub(super) fn apply_migration_for_test(conn: &Connection, version: i32) -> Result<()> {
-        apply_migration(conn, version)
-    }
-}\n\n#[cfg(test)]\nmod tests {"""
+              pub(super) fn apply_migration_for_test(conn: &Connection, version: i32) -> Result<()> {
+                  apply_migration(conn, version)
+              }
+          }\n\n#[cfg(test)]\nmod tests {"""
           if module_anchor not in text:
               raise SystemExit("db.rs migrations-module anchor not found")
           text = text.replace(module_anchor, helper, 1)
@@ -54,16 +56,17 @@ jobs:
           exp = Path("src-tauri/src/commands/expenses.rs")
           etext = exp.read_text(encoding="utf-8")
           unused = '''    let source: Option<String> = tx
-        .query_row("SELECT paid_from_source FROM expenses WHERE id=?1", [expense_id], |r| r.get(0))
-        .unwrap_or_default();
+              .query_row("SELECT paid_from_source FROM expenses WHERE id=?1", [expense_id], |r| r.get(0))
+              .unwrap_or_default();
 
-'''
+          '''
           if unused not in etext:
               raise SystemExit("expenses unused-source anchor not found")
           etext = etext.replace(unused, "", 1)
           exp.write_text(etext, encoding="utf-8")
 
           Path(".github/workflows/one-shot-repair-112.yml").unlink()
+          PY
 
       - name: Commit repair
         shell: bash
