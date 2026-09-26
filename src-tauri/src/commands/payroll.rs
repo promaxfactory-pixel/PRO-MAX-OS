@@ -211,7 +211,19 @@ pub fn prepare_payroll_run(
 
     tx.execute("DELETE FROM payroll_run_lines WHERE run_id=?1", [run_id])?;
 
-    let employees: Vec<(i64, i64, i64, i64, i64, i64, i64, i64)> = {
+    #[derive(Debug)]
+    struct EmployeePayConfig {
+        employee_id: i64,
+        salary: i64,
+        basic_configured: i64,
+        allowances_fallback: i64,
+        housing: i64,
+        transport: i64,
+        food: i64,
+        other: i64,
+    }
+
+    let employees: Vec<EmployeePayConfig> = {
         let mut stmt = tx.prepare(
             "SELECT id, COALESCE(salary_milli,0), COALESCE(basic_salary_milli,0),
                     COALESCE(allowances_milli,0), COALESCE(housing_allowance_milli,0),
@@ -221,10 +233,16 @@ pub fn prepare_payroll_run(
              WHERE active=1
              ORDER BY id",
         )?;
-        let rows = stmt.query_map([], |r| Ok((
-            r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?,
-            r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?
-        )))?;
+        let rows = stmt.query_map([], |r| Ok(EmployeePayConfig {
+            employee_id: r.get(0)?,
+            salary: r.get(1)?,
+            basic_configured: r.get(2)?,
+            allowances_fallback: r.get(3)?,
+            housing: r.get(4)?,
+            transport: r.get(5)?,
+            food: r.get(6)?,
+            other: r.get(7)?,
+        }))?;
         rows.collect::<Result<Vec<_>, _>>()?
     };
 
@@ -236,7 +254,16 @@ pub fn prepare_payroll_run(
     let mut total_deductions = 0_i64;
     let mut total_net = 0_i64;
 
-    for (employee_id, salary, basic_configured, allowances_fallback, housing, transport, food, other) in employees {
+    for EmployeePayConfig {
+        employee_id,
+        salary,
+        basic_configured,
+        allowances_fallback,
+        housing,
+        transport,
+        food,
+        other,
+    } in employees {
         // Avoid double-counting when legacy records store salary_milli as the full salary:
         // detailed allowances are used only when a separate basic salary is configured.
         let basic = if basic_configured > 0 { basic_configured } else { salary };
