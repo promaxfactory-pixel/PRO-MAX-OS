@@ -640,7 +640,18 @@ pub fn get_comprehensive_daily_report(state: State<'_, DbState>, date: String) -
         [], |r| r.get(0),
     ).unwrap_or(0);
 
-    let net_profit_milli = sales_total_milli - sales_vat_milli;
+    // Derive daily profit from posted GL revenue and expense movements.
+    let net_profit_milli: i64 = conn.query_row(
+        "SELECT COALESCE(SUM(CASE
+            WHEN LOWER(a.type)='revenue' THEN jel.credit_milli - jel.debit_milli
+            WHEN LOWER(a.type)='expense' THEN jel.credit_milli - jel.debit_milli
+            ELSE 0 END),0)
+         FROM journal_entry_lines jel
+         JOIN journal_entries je ON je.id=jel.entry_id
+         JOIN accounts a ON a.code=jel.account_code
+         WHERE je.date=?1",
+        params![date], |r| r.get(0),
+    ).unwrap_or(0);
 
     Ok(ComprehensiveDailyReport {
         date, production_cartons, production_cups, production_waste,
