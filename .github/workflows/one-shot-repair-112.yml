@@ -22,6 +22,7 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
 
           db = Path("src-tauri/src/db.rs")
           text = db.read_text(encoding="utf-8")
@@ -32,8 +33,8 @@ jobs:
                   apply_migration(conn, version)
               }
           }\n\n#[cfg(test)]\nmod tests {"""
-          if module_anchor not in text:
-              raise SystemExit("db.rs migrations-module anchor not found")
+          if text.count(module_anchor) != 1:
+              raise SystemExit(f"unexpected migrations-module anchor count: {text.count(module_anchor)}")
           text = text.replace(module_anchor, helper, 1)
 
           test_marker = "fn test_migration_35_adds_company_profile_columns()"
@@ -43,8 +44,8 @@ jobs:
           before, tail = text[:idx], text[idx:]
           old_comment = "// profile columns, then run the migration chain and verify they appear."
           new_comment = "// profile columns, then apply migration 35 directly and verify they appear."
-          if old_comment not in tail:
-              raise SystemExit("migration 35 comment anchor not found")
+          if tail.count(old_comment) != 1:
+              raise SystemExit(f"unexpected migration 35 comment count: {tail.count(old_comment)}")
           tail = tail.replace(old_comment, new_comment, 1)
           old_call = 'super::migrations::run(&conn).expect("migrations must apply");'
           new_call = 'super::migrations::apply_migration_for_test(&conn, 35).expect("migration 35 must apply");'
@@ -55,14 +56,14 @@ jobs:
 
           exp = Path("src-tauri/src/commands/expenses.rs")
           etext = exp.read_text(encoding="utf-8")
-          unused = '''    let source: Option<String> = tx
-              .query_row("SELECT paid_from_source FROM expenses WHERE id=?1", [expense_id], |r| r.get(0))
-              .unwrap_or_default();
-
-          '''
-          if unused not in etext:
-              raise SystemExit("expenses unused-source anchor not found")
-          etext = etext.replace(unused, "", 1)
+          pattern = re.compile(
+              r'\n    let source: Option<String> = tx\n'
+              r'\s*\.query_row\("SELECT paid_from_source FROM expenses WHERE id=\?1", \[expense_id\], \|r\| r\.get\(0\)\)\n'
+              r'\s*\.unwrap_or_default\(\);\n'
+          )
+          etext, count = pattern.subn("\n", etext, count=1)
+          if count != 1:
+              raise SystemExit(f"unexpected expenses unused-source match count: {count}")
           exp.write_text(etext, encoding="utf-8")
 
           Path(".github/workflows/one-shot-repair-112.yml").unlink()
