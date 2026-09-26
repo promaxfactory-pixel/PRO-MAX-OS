@@ -87,9 +87,6 @@ pub fn create_overtime_record(
     if input.hours <= 0.0 {
         return Err(AppError::validation("عدد ساعات العمل الإضافي يجب أن يكون أكبر من صفر"));
     }
-    if input.hours > 12.0 {
-        return Err(AppError::validation("عدد ساعات العمل الإضافي في السجل الواحد غير منطقي؛ راجع ساعات العمل الأصلية والإضافية قبل الحفظ"));
-    }
 
     let employee_exists: i64 = conn.query_row(
         "SELECT COUNT(*) FROM employees WHERE id=?1 AND active=1",
