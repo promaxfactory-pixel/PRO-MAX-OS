@@ -48,6 +48,9 @@ fn gl_liability_balance(conn: &Connection, account_code: &str) -> i64 {
     .unwrap_or(0)
 }
 
+// The arguments intentionally mirror every displayed reconciliation column.
+// Keeping them explicit makes each control-account check auditable at the call site.
+#[allow(clippy::too_many_arguments)]
 fn check(
     key: &str,
     account_code: &str,
