@@ -341,9 +341,6 @@ pub fn approve_expense(state: State<'_, DbState>, user_id: i64, expense_id: i64)
     let journal_id: Option<i64> = tx
         .query_row("SELECT journal_id FROM expenses WHERE id=?1", [expense_id], |r| r.get(0))
         .unwrap_or(None);
-    let source: Option<String> = tx
-        .query_row("SELECT paid_from_source FROM expenses WHERE id=?1", [expense_id], |r| r.get(0))
-        .unwrap_or_default();
 
     if journal_id.is_none() {
         let (amount_milli, vat_milli, account_code, source_account_code, date, exp_no):

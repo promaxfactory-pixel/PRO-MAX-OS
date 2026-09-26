@@ -1332,6 +1332,10 @@ mod migrations {
         }
         Ok(())
     }
+    #[cfg(test)]
+    pub(super) fn apply_migration_for_test(conn: &Connection, version: i32) -> Result<()> {
+        apply_migration(conn, version)
+    }
 }
 
 #[cfg(test)]
@@ -1461,7 +1465,7 @@ mod tests {
     #[test]
     fn test_migration_35_adds_company_profile_columns() {
         // Simulate a v34 install: app_settings + company_settings WITHOUT the
-        // profile columns, then run the migration chain and verify they appear.
+        // profile columns, then apply migration 35 directly and verify they appear.
         let db_path = std::env::temp_dir().join(format!("promax_m35_{}.db", uuid::Uuid::new_v4()));
         let conn = Connection::open(&db_path).expect("open");
         conn.execute_batch(
@@ -1479,7 +1483,7 @@ mod tests {
              CREATE TABLE sales_invoices (id INTEGER PRIMARY KEY AUTOINCREMENT, inv_no TEXT, date TEXT, customer_id INTEGER, net_milli INTEGER DEFAULT 0, vat_milli INTEGER DEFAULT 0, total_milli INTEGER DEFAULT 0, status TEXT DEFAULT 'Draft');",
         ).unwrap();
 
-        super::migrations::run(&conn).expect("migrations must apply");
+        super::migrations::apply_migration_for_test(&conn, 35).expect("migration 35 must apply");
 
         let cols: Vec<String> = conn
             .prepare("SELECT name FROM pragma_table_info('company_settings')")
