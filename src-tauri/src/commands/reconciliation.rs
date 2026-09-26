@@ -1,3 +1,4 @@
+use crate::commands::rbac;
 use crate::db::DbState;
 use crate::error::AppError;
 use rusqlite::Connection;
@@ -252,8 +253,10 @@ pub(crate) fn build_financial_reconciliation(
 #[tauri::command]
 pub fn get_financial_reconciliation(
     state: State<'_, DbState>,
+    user_id: i64,
 ) -> Result<FinancialReconciliation, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &["admin", "accountant", "manager"])?;
     build_financial_reconciliation(&conn)
 }
 
