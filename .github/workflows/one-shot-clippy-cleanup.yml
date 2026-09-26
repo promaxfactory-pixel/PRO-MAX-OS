@@ -1,3 +1,4 @@
+# Temporary cleanup workflow; self-deletes after a successful patch.
 name: One-shot payroll Clippy cleanup
 on:
   push:
