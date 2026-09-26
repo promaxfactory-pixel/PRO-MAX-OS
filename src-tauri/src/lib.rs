@@ -47,6 +47,7 @@ pub fn run() {
             commands::dashboard::get_dashboard_stats,
             commands::dashboard::get_daily_brief,
             commands::dashboard::get_control_balances,
+            commands::reconciliation::get_financial_reconciliation,
             // Customers
             commands::customers::list_customers,
             commands::customers::get_customer,
