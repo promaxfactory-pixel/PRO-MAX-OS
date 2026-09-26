@@ -1,6 +1,7 @@
 use crate::db::DbState;
 use crate::error::AppError;
-use serde::Serialize;
+use rusqlite::params;
+use serde::{Deserialize, Serialize};
 use tauri::State;
 
 #[derive(Debug, Serialize)]
@@ -103,8 +104,8 @@ pub fn get_dashboard_stats(state: State<'_, DbState>) -> Result<DashboardStats, 
         [], |r| r.get(0)
     ).unwrap_or(0);
     let low_stock_count: i64 = conn.query_row("SELECT COUNT(*) FROM inventory_items WHERE reorder_level > 0 AND qty_on_hand <= reorder_level", [], |r| r.get(0)).unwrap_or(0);
-    let production_today: i64 = conn.query_row("SELECT COALESCE(SUM(cartons_good),0) FROM production_lines pl JOIN production_orders po ON pl.order_id=po.id WHERE po.date = date('now')", [], |r| r.get(0)).unwrap_or(0);
-    let waste_today: i64 = conn.query_row("SELECT COALESCE(SUM(cartons_waste),0) FROM production_lines pl JOIN production_orders po ON pl.order_id=po.id WHERE po.date = date('now')", [], |r| r.get(0)).unwrap_or(0);
+    let production_today: i64 = conn.query_row("SELECT COALESCE(SUM(cartons_good),0) FROM production_lines pl JOIN production_orders po ON pl.order_id=po.id WHERE po.date = date('now','localtime')", [], |r| r.get(0)).unwrap_or(0);
+    let waste_today: i64 = conn.query_row("SELECT COALESCE(SUM(cartons_waste),0) FROM production_lines pl JOIN production_orders po ON pl.order_id=po.id WHERE po.date = date('now','localtime')", [], |r| r.get(0)).unwrap_or(0);
     // Petty-cash subledger is the operational source of truth for custody.
     let custody_total: i64 = conn.query_row(
         "SELECT COALESCE(SUM(balance_milli),0) FROM petty_cash_accounts WHERE active=1",
@@ -139,7 +140,7 @@ pub fn get_dashboard_stats(state: State<'_, DbState>) -> Result<DashboardStats, 
         let mut stmt = conn.prepare(
             "SELECT po.date, COALESCE(SUM(pl.cartons_good),0) as good, COALESCE(SUM(pl.cartons_waste),0) as waste 
              FROM production_orders po LEFT JOIN production_lines pl ON pl.order_id=po.id 
-             WHERE po.date >= date('now','-30 days') GROUP BY po.date ORDER BY po.date"
+             WHERE po.date >= date('now','localtime','-30 days') GROUP BY po.date ORDER BY po.date"
         )?;
         let rows = stmt.query_map([], |row| {
             Ok(ProductionTrendPoint { date: row.get(0)?, good: row.get(1)?, waste: row.get(2)? })
@@ -152,7 +153,7 @@ pub fn get_dashboard_stats(state: State<'_, DbState>) -> Result<DashboardStats, 
         let mut stmt = conn.prepare(
             "SELECT strftime('%Y-%m', po.date) as month, COALESCE(SUM(pl.cartons_good),0) as cartons, COALESCE(SUM(pl.cups_good),0) as cups
              FROM production_orders po LEFT JOIN production_lines pl ON pl.order_id=po.id
-             WHERE po.date >= date('now','-6 months') GROUP BY month ORDER BY month"
+             WHERE po.date >= date('now','localtime','-6 months') GROUP BY month ORDER BY month"
         )?;
         let rows = stmt.query_map([], |row| {
             Ok(MonthlyProductionPoint { month: row.get(0)?, cartons: row.get(1)?, cups: row.get(2)? })
@@ -188,8 +189,8 @@ pub fn get_dashboard_stats(state: State<'_, DbState>) -> Result<DashboardStats, 
 #[tauri::command]
 pub fn get_daily_brief(state: State<'_, DbState>) -> Result<DailyBrief, AppError> {
     let conn = state.0.lock()?;
-    let unpaid_count: i64 = conn.query_row("SELECT COUNT(*) FROM sales_invoices WHERE status IN ('Posted','Issued','Partially Paid') AND total_milli > paid_milli", [], |r| r.get(0)).unwrap_or(0);
-    let unpaid_total: i64 = conn.query_row("SELECT COALESCE(SUM(total_milli - paid_milli),0) FROM sales_invoices WHERE status IN ('Posted','Issued','Partially Paid') AND total_milli > paid_milli", [], |r| r.get(0)).unwrap_or(0);
+    let unpaid_count: i64 = conn.query_row("SELECT COUNT(*) FROM sales_invoices WHERE LOWER(status) IN ('posted','issued','partially paid') AND total_milli > paid_milli", [], |r| r.get(0)).unwrap_or(0);
+    let unpaid_total: i64 = conn.query_row("SELECT COALESCE(SUM(total_milli - paid_milli),0) FROM sales_invoices WHERE LOWER(status) IN ('posted','issued','partially paid') AND total_milli > paid_milli", [], |r| r.get(0)).unwrap_or(0);
     let overdue_total: i64 = conn.query_row(
         "SELECT COALESCE(SUM(
             MAX(0, si.total_milli - si.paid_milli
@@ -198,14 +199,13 @@ pub fn get_daily_brief(state: State<'_, DbState>) -> Result<DailyBrief, AppError
          ),0)
          FROM sales_invoices si
          JOIN customers c ON c.id=si.customer_id
-         WHERE LOWER(si.status) IN ('posted','issued')
+         WHERE LOWER(si.status) IN ('posted','issued','partially paid')
            AND date(si.date, '+' || COALESCE(c.payment_terms_days,30) || ' days') < date('now','localtime')",
         [], |r| r.get(0)
     ).unwrap_or(0);
-    let waste_yesterday: i64 = conn.query_row("SELECT COALESCE(SUM(cartons_waste),0) FROM production_lines pl JOIN production_orders po ON pl.order_id=po.id WHERE po.date = date('now', '-1 day')", [], |r| r.get(0)).unwrap_or(0);
+    let waste_yesterday: i64 = conn.query_row("SELECT COALESCE(SUM(cartons_waste),0) FROM production_lines pl JOIN production_orders po ON pl.order_id=po.id WHERE po.date = date('now','localtime','-1 day')", [], |r| r.get(0)).unwrap_or(0);
     Ok(DailyBrief { unpaid_count, unpaid_total, overdue_total, waste_yesterday, last_backup_days: 0, backup_status: "amber".to_string() })
 }
-
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ControlBalance {
