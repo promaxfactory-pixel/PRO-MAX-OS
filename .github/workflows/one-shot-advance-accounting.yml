@@ -1,0 +1,281 @@
+name: One-shot employee advance accounting repair
+
+on:
+  push:
+    branches:
+      - work/accountant-daily-ops-20260925
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/accountant-daily-ops-20260925
+          fetch-depth: 0
+
+      - name: Apply verified accounting changes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          payroll = Path("src-tauri/src/commands/payroll.rs")
+          text = payroll.read_text(encoding="utf-8")
+
+          old_struct = '''#[derive(Debug, Serialize, Deserialize)]
+          pub struct EmployeeAdvance {
+              pub id: i64,
+              pub employee_id: i64,
+              pub employee_name: Option<String>,
+              pub amount_milli: i64,
+              pub date: String,
+              pub reason: Option<String>,
+              pub status: Option<String>,
+              pub remaining_milli: i64,
+              pub deduction_per_payroll_milli: i64,
+          }
+
+          #[derive(Debug, Deserialize)]
+          pub struct CreateAdvanceInput {
+              pub employee_id: i64,
+              pub amount_milli: i64,
+              pub date: String,
+              pub reason: Option<String>,
+              pub deduction_per_payroll_milli: Option<i64>,
+          }
+'''
+          new_struct = '''#[derive(Debug, Serialize, Deserialize)]
+          pub struct EmployeeAdvance {
+              pub id: i64,
+              pub employee_id: i64,
+              pub employee_name: Option<String>,
+              pub amount_milli: i64,
+              pub date: String,
+              pub reason: Option<String>,
+              pub status: Option<String>,
+              pub remaining_milli: i64,
+              pub deduction_per_payroll_milli: i64,
+              pub source_type: Option<String>,
+              pub source_id: Option<i64>,
+              pub journal_id: Option<i64>,
+          }
+
+          #[derive(Debug, Deserialize)]
+          pub struct CreateAdvanceInput {
+              pub employee_id: i64,
+              pub amount_milli: i64,
+              pub date: String,
+              pub reason: Option<String>,
+              pub deduction_per_payroll_milli: Option<i64>,
+              pub source_type: Option<String>,
+              pub cashbank_id: Option<i64>,
+              pub custody_id: Option<i64>,
+              pub method: Option<String>,
+          }
+'''
+          old_struct = old_struct.replace("          ", "")
+          new_struct = new_struct.replace("          ", "")
+          if text.count(old_struct) != 1:
+              raise SystemExit(f"employee advance struct anchor count={text.count(old_struct)}")
+          text = text.replace(old_struct, new_struct, 1)
+
+          list_start = text.index("#[tauri::command]\npub fn list_employee_advances(")
+          create_start = text.index("#[tauri::command]\npub fn create_employee_advance(", list_start)
+          old_list = text[list_start:create_start]
+          new_list = '''#[tauri::command]
+          pub fn list_employee_advances(
+              state: State<'_, DbState>,
+          ) -> Result<Vec<EmployeeAdvance>, AppError> {
+              let conn = state.0.lock()?;
+              let mut stmt = conn.prepare(
+                  "SELECT ea.id, ea.employee_id, e.name, ea.amount_milli, ea.date, ea.reason,
+                          ea.status, ea.remaining_milli, ea.deduction_per_payroll_milli,
+                          ea.source_type, ea.source_id, ea.journal_id
+                   FROM employee_advances ea
+                   LEFT JOIN employees e ON ea.employee_id=e.id
+                   ORDER BY ea.id DESC",
+              )?;
+              let rows = stmt.query_map([], |row| {
+                  Ok(EmployeeAdvance {
+                      id: row.get(0)?,
+                      employee_id: row.get(1)?,
+                      employee_name: row.get(2)?,
+                      amount_milli: row.get(3)?,
+                      date: row.get(4)?,
+                      reason: row.get(5)?,
+                      status: row.get(6)?,
+                      remaining_milli: row.get(7)?,
+                      deduction_per_payroll_milli: row.get(8)?,
+                      source_type: row.get(9)?,
+                      source_id: row.get(10)?,
+                      journal_id: row.get(11)?,
+                  })
+              })?;
+              Ok(rows.collect::<Result<Vec<_>, _>>()?)
+          }
+
+          '''.replace("          ", "")
+          text = text[:list_start] + new_list + text[create_start:]
+
+          create_start = text.index("#[tauri::command]\npub fn create_employee_advance(")
+          old_create = text[create_start:]
+          new_create = '''#[tauri::command]
+          pub fn create_employee_advance(
+              state: State<'_, DbState>,
+              user_id: i64,
+              input: CreateAdvanceInput,
+          ) -> Result<i64, AppError> {
+              let mut conn = state.0.lock()?;
+              rbac::require_role(&conn, user_id, &["admin", "accountant", "hr", "manager"])?;
+              if input.amount_milli <= 0 {
+                  return Err(AppError::validation("قيمة السلفة يجب أن تكون أكبر من صفر"));
+              }
+              let deduction = input.deduction_per_payroll_milli.unwrap_or(0);
+              if deduction < 0 || deduction > input.amount_milli {
+                  return Err(AppError::validation("قيمة خصم السلفة غير صحيحة"));
+              }
+
+              let tx = conn.transaction()?;
+              let employee_name: String = tx.query_row(
+                  "SELECT name FROM employees WHERE id=?1 AND active=1",
+                  [input.employee_id],
+                  |r| r.get(0),
+              ).map_err(|_| AppError::not_found("العامل غير موجود أو غير نشط"))?;
+
+              let source_type = input.source_type.clone().unwrap_or_else(|| "company".to_string()).to_lowercase();
+              let method = input.method.clone().unwrap_or_else(|| "cash".to_string());
+              let (source_account, source_id): (String, Option<i64>) = match source_type.as_str() {
+                  "company" => (
+                      crate::commands::accounting::resolve_cash_account(&tx, input.cashbank_id, &method)?,
+                      input.cashbank_id,
+                  ),
+                  "custody" => {
+                      let pid = input.custody_id.ok_or_else(|| AppError::validation("حدد العهدة التي صُرفت منها السلفة"))?;
+                      let account = tx.query_row(
+                          "SELECT COALESCE(NULLIF(trim(account_code),''),'1110') FROM petty_cash_accounts WHERE id=?1 AND active=1",
+                          [pid],
+                          |r| r.get::<_, String>(0),
+                      ).map_err(|_| AppError::not_found("حساب العهدة غير موجود"))?;
+                      (account, Some(pid))
+                  }
+                  "owner_saif" => ("2310".to_string(), None),
+                  "owner_abu_saif" => ("2320".to_string(), None),
+                  _ => return Err(AppError::validation("مصدر صرف السلفة غير معروف")),
+              };
+
+              tx.execute(
+                  "INSERT INTO employee_advances
+                   (employee_id, amount_milli, date, reason, status, remaining_milli,
+                    deduction_per_payroll_milli, journal_id, source_type, source_id, created_by, created_at)
+                   VALUES(?1,?2,?3,?4,'open',?5,?6,NULL,?7,?8,?9,datetime('now'))",
+                  params![
+                      input.employee_id, input.amount_milli, input.date, input.reason,
+                      input.amount_milli, deduction, source_type, source_id, user_id.to_string()
+                  ],
+              )?;
+              let adv_id = tx.last_insert_rowid();
+
+              let mut custody_txn_id: Option<i64> = None;
+              if source_type == "custody" {
+                  let pid = input.custody_id.ok_or_else(|| AppError::validation("حدد العهدة"))?;
+                  let old_balance: i64 = tx.query_row(
+                      "SELECT balance_milli FROM petty_cash_accounts WHERE id=?1 AND active=1",
+                      [pid], |r| r.get(0)
+                  ).map_err(|_| AppError::not_found("حساب العهدة غير موجود"))?;
+                  if old_balance < input.amount_milli {
+                      return Err(AppError::validation("رصيد العهدة غير كافٍ لصرف السلفة"));
+                  }
+                  let new_balance = old_balance - input.amount_milli;
+                  tx.execute(
+                      "UPDATE petty_cash_accounts SET balance_milli=?1 WHERE id=?2",
+                      params![new_balance, pid],
+                  )?;
+                  tx.execute(
+                      "INSERT INTO petty_cash_transactions
+                       (ts, petty_id, ttype, debit_milli, credit_milli, balance_milli, category,
+                        account_code, reference, notes, user_id)
+                       VALUES(?1,?2,'Employee Advance',0,?3,?4,'سلفة موظف','1320',?5,?6,?7)",
+                      params![
+                          format!("{} 12:00:00", input.date), pid, input.amount_milli, new_balance,
+                          format!("ADV-{}", adv_id), input.reason, user_id
+                      ],
+                  )?;
+                  custody_txn_id = Some(tx.last_insert_rowid());
+              }
+
+              let lines = vec![
+                  ("1320".to_string(), input.amount_milli, 0, Some(format!("سلفة العامل {}", employee_name))),
+                  (source_account.clone(), 0, input.amount_milli, Some("مصدر صرف سلفة الموظف".to_string())),
+              ];
+              let journal_id = crate::commands::accounting::post_to_journal(
+                  &tx,
+                  "employee_advance",
+                  adv_id,
+                  &input.date,
+                  &format!("سلفة موظف - {}", employee_name),
+                  &lines,
+                  &user_id.to_string(),
+              )?;
+              tx.execute(
+                  "UPDATE employee_advances SET journal_id=?1 WHERE id=?2",
+                  params![journal_id, adv_id],
+              )?;
+              if let Some(txn_id) = custody_txn_id {
+                  tx.execute(
+                      "UPDATE petty_cash_transactions SET journal_id=?1 WHERE id=?2",
+                      params![journal_id, txn_id],
+                  )?;
+              }
+
+              let _ = rbac::log_audit(
+                  &tx, Some(user_id), None, "create_employee_advance", "employee_advances",
+                  Some(adv_id), None,
+                  Some(&format!("employee={} amount={} source={} journal={}", input.employee_id, input.amount_milli, source_type, journal_id)),
+                  None,
+              );
+              tx.commit()?;
+              Ok(adv_id)
+          }
+          '''.replace("          ", "")
+          if not old_create.strip().endswith("Ok(adv_id)\n}"):
+              raise SystemExit("unexpected payroll.rs tail")
+          text = text[:create_start] + new_create
+          payroll.write_text(text, encoding="utf-8")
+
+          reports = Path("src-tauri/src/commands/reports.rs")
+          rtext = reports.read_text(encoding="utf-8")
+          old_profit = "    let net_profit_milli = sales_total_milli - sales_vat_milli;"
+          new_profit = '''    // Daily profit is derived from the posted general ledger, not from invoice VAT arithmetic.
+              // Revenue contributes credit-debit; expenses contribute credit-debit (normally negative).
+              let net_profit_milli: i64 = conn.query_row(
+                  "SELECT COALESCE(SUM(CASE
+                      WHEN LOWER(a.type)='revenue' THEN jel.credit_milli - jel.debit_milli
+                      WHEN LOWER(a.type)='expense' THEN jel.credit_milli - jel.debit_milli
+                      ELSE 0 END),0)
+                   FROM journal_entry_lines jel
+                   JOIN journal_entries je ON je.id=jel.entry_id
+                   JOIN accounts a ON a.code=jel.account_code
+                   WHERE je.date=?1",
+                  params![date], |r| r.get(0),
+              ).unwrap_or(0);'''.replace("              ", "")
+          if rtext.count(old_profit) != 1:
+              raise SystemExit(f"daily profit anchor count={rtext.count(old_profit)}")
+          rtext = rtext.replace(old_profit, new_profit, 1)
+          reports.write_text(rtext, encoding="utf-8")
+
+          Path(".github/workflows/one-shot-advance-accounting.yml").unlink()
+          PY
+
+      - name: Commit changes
+        shell: bash
+        run: |
+          git config user.name "pro-max-ci-repair"
+          git config user.email "promaxfactory@gmail.com"
+          git add src-tauri/src/commands/payroll.rs src-tauri/src/commands/reports.rs .github/workflows/one-shot-advance-accounting.yml
+          git diff --cached --check
+          git commit -m "fix: post employee advances and derive daily profit from GL"
+          git push origin HEAD:work/accountant-daily-ops-20260925
