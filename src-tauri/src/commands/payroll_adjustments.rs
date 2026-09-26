@@ -531,6 +531,12 @@ mod tests {
         conn.execute_batch(include_str!("../schema.sql"))
             .expect("schema");
         ensure_schema(&conn).expect("adjustment schema");
+        conn.execute(
+            "INSERT INTO journal_entries(id, entry_no, date, memo, created_by, created_at)
+             VALUES(1, 'JE-TEST-0001', '2026-09-01', 'test payroll advance fixture', 'test', datetime('now'))",
+            [],
+        )
+        .expect("seed test journal");
         conn
     }
 
