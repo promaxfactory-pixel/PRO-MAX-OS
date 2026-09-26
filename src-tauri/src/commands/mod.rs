@@ -26,6 +26,7 @@ pub mod purchases;
 pub mod expenses;
 pub mod petty_cash;
 pub mod payroll;
+pub mod payroll_adjustments;
 pub mod cashbank;
 pub mod cheques;
 pub mod renewals;
