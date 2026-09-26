@@ -7,6 +7,7 @@ use tauri::State;
 
 const DEDUCTION_TYPES: [&str; 3] = ["absence", "disciplinary_penalty", "other_deduction"];
 const ADDITION_TYPES: [&str; 2] = ["bonus", "allowance"];
+const PAYROLL_ROLES: [&str; 4] = ["admin", "accountant", "hr", "manager"];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PayrollAdjustment {
@@ -91,7 +92,7 @@ pub(crate) fn ensure_schema(conn: &Connection) -> Result<(), AppError> {
         CREATE INDEX IF NOT EXISTS idx_payroll_adv_app_run
             ON payroll_advance_applications(run_id);
         CREATE INDEX IF NOT EXISTS idx_payroll_adv_app_advance
-            ON payroll_advance_applications(advance_id);"
+            ON payroll_advance_applications(advance_id);",
     )?;
     Ok(())
 }
@@ -107,19 +108,22 @@ fn validate_adjustment_type(value: &str) -> Result<(), AppError> {
 #[tauri::command]
 pub fn list_payroll_adjustments(
     state: State<'_, DbState>,
+    user_id: i64,
     employee_id: Option<i64>,
 ) -> Result<Vec<PayrollAdjustment>, AppError> {
     let conn = state.0.lock()?;
+    rbac::require_role(&conn, user_id, &PAYROLL_ROLES)?;
     ensure_schema(&conn)?;
-    let sql = "SELECT pa.id, pa.employee_id, e.name, pa.adjustment_type, pa.amount_milli,
-                      pa.effective_date, pa.reason, pa.reference, pa.notes, pa.status,
-                      pa.approved_by, pa.approved_at, pa.applied_run_id, pa.applied_at,
-                      pa.created_by, pa.created_at
-               FROM payroll_adjustments pa
-               LEFT JOIN employees e ON e.id=pa.employee_id
-               WHERE (?1 IS NULL OR pa.employee_id=?1)
-               ORDER BY pa.effective_date DESC, pa.id DESC";
-    let mut stmt = conn.prepare(sql)?;
+    let mut stmt = conn.prepare(
+        "SELECT pa.id, pa.employee_id, e.name, pa.adjustment_type, pa.amount_milli,
+                pa.effective_date, pa.reason, pa.reference, pa.notes, pa.status,
+                pa.approved_by, pa.approved_at, pa.applied_run_id, pa.applied_at,
+                pa.created_by, pa.created_at
+         FROM payroll_adjustments pa
+         LEFT JOIN employees e ON e.id=pa.employee_id
+         WHERE (?1 IS NULL OR pa.employee_id=?1)
+         ORDER BY pa.effective_date DESC, pa.id DESC",
+    )?;
     let rows = stmt.query_map(params![employee_id], |row| {
         Ok(PayrollAdjustment {
             id: row.get(0)?,
@@ -150,13 +154,15 @@ pub fn create_payroll_adjustment(
     input: CreatePayrollAdjustmentInput,
 ) -> Result<i64, AppError> {
     let conn = state.0.lock()?;
-    rbac::require_role(&conn, user_id, &["admin", "accountant", "hr", "manager"])?;
+    rbac::require_role(&conn, user_id, &PAYROLL_ROLES)?;
     ensure_schema(&conn)?;
 
     let adjustment_type = input.adjustment_type.trim().to_lowercase();
     validate_adjustment_type(&adjustment_type)?;
     if input.amount_milli <= 0 {
-        return Err(AppError::validation("قيمة تسوية الراتب يجب أن تكون أكبر من صفر"));
+        return Err(AppError::validation(
+            "قيمة تسوية الراتب يجب أن تكون أكبر من صفر",
+        ));
     }
     let date_ok: i64 = conn.query_row(
         "SELECT CASE WHEN date(?1) IS NOT NULL THEN 1 ELSE 0 END",
@@ -213,7 +219,7 @@ pub fn approve_payroll_adjustment(
     id: i64,
 ) -> Result<String, AppError> {
     let conn = state.0.lock()?;
-    rbac::require_role(&conn, user_id, &["admin", "accountant", "hr", "manager"])?;
+    rbac::require_role(&conn, user_id, &PAYROLL_ROLES)?;
     ensure_schema(&conn)?;
     let changed = conn.execute(
         "UPDATE payroll_adjustments
@@ -222,7 +228,9 @@ pub fn approve_payroll_adjustment(
         params![user_id.to_string(), id],
     )?;
     if changed == 0 {
-        return Err(AppError::validation("التسوية غير موجودة أو تمت معالجتها مسبقًا"));
+        return Err(AppError::validation(
+            "التسوية غير موجودة أو تمت معالجتها مسبقًا",
+        ));
     }
     let _ = rbac::log_audit(
         &conn,
@@ -245,7 +253,7 @@ pub fn reject_payroll_adjustment(
     id: i64,
 ) -> Result<String, AppError> {
     let conn = state.0.lock()?;
-    rbac::require_role(&conn, user_id, &["admin", "accountant", "hr", "manager"])?;
+    rbac::require_role(&conn, user_id, &PAYROLL_ROLES)?;
     ensure_schema(&conn)?;
     let changed = conn.execute(
         "UPDATE payroll_adjustments
@@ -254,7 +262,9 @@ pub fn reject_payroll_adjustment(
         [id],
     )?;
     if changed == 0 {
-        return Err(AppError::validation("التسوية غير موجودة أو تمت معالجتها مسبقًا"));
+        return Err(AppError::validation(
+            "التسوية غير موجودة أو تمت معالجتها مسبقًا",
+        ));
     }
     let _ = rbac::log_audit(
         &conn,
@@ -355,6 +365,7 @@ pub(crate) fn validate_and_apply_run(
         ))
     })?;
     let lines = line_rows.collect::<Result<Vec<_>, _>>()?;
+
     for (employee_id, stored_bonus, stored_deduction, stored_advance) in &lines {
         let expected = employee_adjustments_for_run(
             conn,
@@ -394,27 +405,37 @@ pub(crate) fn validate_and_apply_run(
         || stored_deduction_total != expected_deduction
         || stored_advance_total != expected_advance
     {
-        return Err(AppError::validation("إجماليات تسويات الرواتب تغيرت؛ أعد تحضير المسير"));
+        return Err(AppError::validation(
+            "إجماليات تسويات الرواتب تغيرت؛ أعد تحضير المسير",
+        ));
     }
 
     let (absence_deductions_milli, withholding_deductions_milli): (i64, i64) = conn.query_row(
         "SELECT
-            COALESCE(SUM(CASE WHEN adjustment_type='absence' THEN amount_milli ELSE 0 END),0),
-            COALESCE(SUM(CASE WHEN adjustment_type IN ('disciplinary_penalty','other_deduction') THEN amount_milli ELSE 0 END),0)
-         FROM payroll_adjustments
-         WHERE effective_date BETWEEN ?1 AND ?2
-           AND LOWER(status)='approved'
-           AND applied_run_id IS NULL",
-        params![period_start, period_end],
+            COALESCE(SUM(CASE WHEN pa.adjustment_type='absence' THEN pa.amount_milli ELSE 0 END),0),
+            COALESCE(SUM(CASE WHEN pa.adjustment_type IN ('disciplinary_penalty','other_deduction') THEN pa.amount_milli ELSE 0 END),0)
+         FROM payroll_adjustments pa
+         WHERE pa.effective_date BETWEEN ?1 AND ?2
+           AND LOWER(pa.status)='approved'
+           AND pa.applied_run_id IS NULL
+           AND EXISTS (
+               SELECT 1 FROM payroll_run_lines prl
+               WHERE prl.run_id=?3 AND prl.employee_id=pa.employee_id
+           )",
+        params![period_start, period_end, run_id],
         |r| Ok((r.get(0)?, r.get(1)?)),
     )?;
 
     conn.execute(
-        "UPDATE payroll_adjustments
+        "UPDATE payroll_adjustments AS pa
          SET status='Applied', applied_run_id=?1, applied_at=datetime('now')
-         WHERE effective_date BETWEEN ?2 AND ?3
-           AND LOWER(status)='approved'
-           AND applied_run_id IS NULL",
+         WHERE pa.effective_date BETWEEN ?2 AND ?3
+           AND LOWER(pa.status)='approved'
+           AND pa.applied_run_id IS NULL
+           AND EXISTS (
+               SELECT 1 FROM payroll_run_lines prl
+               WHERE prl.run_id=?1 AND prl.employee_id=pa.employee_id
+           )",
         params![run_id, period_start, period_end],
     )?;
 
@@ -440,9 +461,14 @@ pub(crate) fn validate_and_apply_run(
              ORDER BY date, id",
         )?;
         let adv_rows = adv_stmt.query_map(params![employee_id, period_end], |r| {
-            Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?, r.get::<_, i64>(2)?))
+            Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, i64>(1)?,
+                r.get::<_, i64>(2)?,
+            ))
         })?;
         let advances = adv_rows.collect::<Result<Vec<_>, _>>()?;
+
         for (advance_id, remaining, scheduled) in advances {
             if remaining_to_apply <= 0 {
                 break;
@@ -466,6 +492,7 @@ pub(crate) fn validate_and_apply_run(
             )?;
             remaining_to_apply -= scheduled_amount;
         }
+
         if remaining_to_apply != 0 {
             return Err(AppError::validation(
                 "تعذر توزيع خصم السلفة على أرصدة السلف الحالية؛ أعد تحضير المسير",
@@ -501,7 +528,8 @@ mod tests {
 
     fn conn() -> Connection {
         let conn = Connection::open_in_memory().expect("memory db");
-        conn.execute_batch(include_str!("../schema.sql")).expect("schema");
+        conn.execute_batch(include_str!("../schema.sql"))
+            .expect("schema");
         ensure_schema(&conn).expect("adjustment schema");
         conn
     }
@@ -509,19 +537,31 @@ mod tests {
     #[test]
     fn approved_adjustments_and_scheduled_advance_are_in_snapshot() {
         let conn = conn();
-        conn.execute("INSERT INTO employees(code,name,active) VALUES('E1','Worker',1)", []).unwrap();
+        conn.execute(
+            "INSERT INTO employees(code,name,active) VALUES('E1','Worker',1)",
+            [],
+        )
+        .unwrap();
         let employee_id = conn.last_insert_rowid();
         conn.execute(
             "INSERT INTO payroll_adjustments(employee_id,adjustment_type,amount_milli,effective_date,status)
              VALUES(?1,'absence',5000,'2026-09-24','Approved')",
             [employee_id],
-        ).unwrap();
+        )
+        .unwrap();
         conn.execute(
             "INSERT INTO employee_advances(employee_id,amount_milli,date,status,remaining_milli,deduction_per_payroll_milli,journal_id)
              VALUES(?1,40000,'2026-09-01','open',40000,10000,1)",
             [employee_id],
-        ).unwrap();
-        let snap = employee_adjustments_for_run(&conn, employee_id, "2026-09-01", "2026-09-30").unwrap();
+        )
+        .unwrap();
+        let snap = employee_adjustments_for_run(
+            &conn,
+            employee_id,
+            "2026-09-01",
+            "2026-09-30",
+        )
+        .unwrap();
         assert_eq!(snap.deduction_milli, 5000);
         assert_eq!(snap.advance_deduction_milli, 10000);
     }
@@ -529,14 +569,118 @@ mod tests {
     #[test]
     fn pending_adjustment_is_not_applied_to_snapshot() {
         let conn = conn();
-        conn.execute("INSERT INTO employees(code,name,active) VALUES('E1','Worker',1)", []).unwrap();
+        conn.execute(
+            "INSERT INTO employees(code,name,active) VALUES('E1','Worker',1)",
+            [],
+        )
+        .unwrap();
         let employee_id = conn.last_insert_rowid();
         conn.execute(
             "INSERT INTO payroll_adjustments(employee_id,adjustment_type,amount_milli,effective_date,status)
              VALUES(?1,'disciplinary_penalty',10000,'2026-09-20','Pending')",
             [employee_id],
-        ).unwrap();
-        let snap = employee_adjustments_for_run(&conn, employee_id, "2026-09-01", "2026-09-30").unwrap();
+        )
+        .unwrap();
+        let snap = employee_adjustments_for_run(
+            &conn,
+            employee_id,
+            "2026-09-01",
+            "2026-09-30",
+        )
+        .unwrap();
         assert_eq!(snap.deduction_milli, 0);
+    }
+
+    #[test]
+    fn apply_run_marks_only_included_employee_and_reduces_advance_once() {
+        let conn = conn();
+        conn.execute(
+            "INSERT INTO employees(code,name,active) VALUES('E1','Included',1)",
+            [],
+        )
+        .unwrap();
+        let included = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO employees(code,name,active) VALUES('E2','Excluded',0)",
+            [],
+        )
+        .unwrap();
+        let excluded = conn.last_insert_rowid();
+
+        conn.execute(
+            "INSERT INTO payroll_runs(run_no,period_start,period_end,status,total_gross_milli,total_deductions_milli,total_net_milli)
+             VALUES('PR-T','2026-09-01','2026-09-30','Prepared',130000,15000,115000)",
+            [],
+        )
+        .unwrap();
+        let run_id = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO payroll_run_lines(run_id,employee_id,basic_milli,bonus_milli,deduction_milli,advance_deduction_milli,net_milli)
+             VALUES(?1,?2,130000,0,5000,10000,115000)",
+            params![run_id, included],
+        )
+        .unwrap();
+
+        conn.execute(
+            "INSERT INTO payroll_adjustments(employee_id,adjustment_type,amount_milli,effective_date,status)
+             VALUES(?1,'absence',5000,'2026-09-24','Approved')",
+            [included],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO payroll_adjustments(employee_id,adjustment_type,amount_milli,effective_date,status)
+             VALUES(?1,'disciplinary_penalty',7000,'2026-09-24','Approved')",
+            [excluded],
+        )
+        .unwrap();
+        let excluded_adjustment = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO employee_advances(employee_id,amount_milli,date,status,remaining_milli,deduction_per_payroll_milli,journal_id)
+             VALUES(?1,40000,'2026-09-01','open',40000,10000,1)",
+            [included],
+        )
+        .unwrap();
+        let advance_id = conn.last_insert_rowid();
+
+        let breakdown = validate_and_apply_run(&conn, run_id, 1).unwrap();
+        assert_eq!(breakdown.absence_deductions_milli, 5000);
+        assert_eq!(breakdown.advance_deductions_milli, 10000);
+
+        let remaining: i64 = conn
+            .query_row(
+                "SELECT remaining_milli FROM employee_advances WHERE id=?1",
+                [advance_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(remaining, 30000);
+
+        let applications: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM payroll_advance_applications WHERE run_id=?1",
+                [run_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(applications, 1);
+
+        let excluded_status: String = conn
+            .query_row(
+                "SELECT status FROM payroll_adjustments WHERE id=?1",
+                [excluded_adjustment],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(excluded_status, "Approved");
+
+        assert!(validate_and_apply_run(&conn, run_id, 1).is_err());
+        let remaining_after_retry: i64 = conn
+            .query_row(
+                "SELECT remaining_milli FROM employee_advances WHERE id=?1",
+                [advance_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(remaining_after_retry, 30000);
     }
 }
