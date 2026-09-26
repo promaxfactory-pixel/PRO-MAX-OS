@@ -4,8 +4,8 @@ import Card from "@/components/ui/Card";
 import { invoke } from "@/lib/tauri";
 import { formatOMR } from "@/lib/utils";
 import {
-  Wallet, Landmark, Receipt, Users, Truck, Factory, Package,
-  Clock, Banknote, FileText, AlertTriangle, ShoppingCart, UserCog,
+  Wallet, Receipt, Users, Truck, Factory, Package,
+  Clock, Banknote, FileText, AlertTriangle, UserCog,
   Wrench, ClipboardCheck, RefreshCw, ArrowLeft
 } from "lucide-react";
 
